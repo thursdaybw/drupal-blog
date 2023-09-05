@@ -1,0 +1,185 @@
+_meta:
+  bundle: article
+  default_langcode: en
+  entity_type: node
+  uuid: c2bd8807-d7e2-44d8-8cbe-fda900999a91
+  version: '1.0'
+default:
+  body:
+  - format: markdown
+    summary: ''
+    value: "Before we start, we had some more work to do:\n\nSo, we're at this point\
+      \ where we need a solid IDE to make our development process smoother. We could've\
+      \ gone with PHPStorm, it's familiar territory. But, considering the React learning\
+      \ curve and the open-source charm, Visual Studio Code seems like the way to\
+      \ go. Yes, it's a Microsoft product, but let's not hold that against it. We've\
+      \ got a plan in place - update the system packages and then install Visual Studio\
+      \ Code. We're yet to get started, but we'll keep you posted on the journey.\n\
+      - Sat 05 Aug 2023 20:12:30 AEST See: [Virtual Studio Code](rabbits/Virtual_Studio_Code.md)\n\
+      \n---\n\nSure, here's a summary of the guide from the [Basiq API Quickstart\
+      \ Part 1](https://api.basiq.io/docs/quickstart-part-1)\n\n1. **Have an API key**:\
+      \ We have an API key for the Demo Application\n\n2. **Authenticate**: Trade\
+      \ your new API key for an access token. The response will contain an access\
+      \ token which will allow you to make secure calls to the Basiq API. They expire\
+      \ every 60 minutes so it's recommended to store it globally and refresh 2-3\
+      \ times an hour. For this quick start, the scope used is 'serveraccess'.\n\n\
+      Here's a sample code snippet for authentication:\n\n```bash\ncurl --location\
+      \ --request POST 'https://au-api.basiq.io/token' \\\n  --header 'Authorization:\
+      \ Basic $YOUR_API_KEY' \\\n  --header 'Content-Type: application/x-www-form-urlencoded'\
+      \ \\\n  --header 'basiq-version: 2.0' \\\n  --data-urlencode 'scope=SERVER_ACCESS'\n\
+      ```\n\nWe need to turn this into PHP code. I have tried this and am having some\
+      \ issues.\n\nBefore we go any futher, we may want to make sure we understand\
+      \ all the concepts involved.\n\nI learned about the following concepts we read\
+      \ about on the Basiq getting started guide.\n\n**Authentication Process:** When\
+      \ you want to use Basiq APIs, you need to authenticate your application first.\
+      \ The authentication process involves exchanging your API key for an access\
+      \ token. This token is like a special pass that allows your application to make\
+      \ secure calls to the Basiq API.\n\n**Access Token:** Once you trade your API\
+      \ key for an access token, you receive the access token in the response. You\
+      \ should save this access token somewhere so that you can use it later to make\
+      \ API requests. The access token is like a ticket that allows your application\
+      \ to access the Basiq API securely. Keep in mind that access tokens have a limited\
+      \ lifespan, and they expire every 60 minutes. So, it's essential to keep track\
+      \ of the token's expiration time and refresh it when needed.\n\n**Store it Globally:**\
+      \ Storing the access token \"globally\" means that you should keep it in a place\
+      \ that is accessible throughout your application, not tied to a specific user's\
+      \ session. A common approach is to store it in a configuration file or environment\
+      \ variable that can be accessed by different parts of your application.\n\n\
+      **Scope:** In the context of Basiq API, \"scope\" refers to the level of access\
+      \ or permissions that your access token has. It determines what actions your\
+      \ application is allowed to perform. There are two types of scopes mentioned:\
+      \ CLIENT_ACCESS and SERVER_ACCESS.\n\n**SERVER_ACCESS Scope:** The SERVER_ACCESS\
+      \ scope is more powerful and should be used for server-side requests. It grants\
+      \ full access to create resources and retrieve data from the Basiq API. It should\
+      \ never be exposed on the client side because it carries more privileges and\
+      \ could be a security risk if leaked.\n\nClient-Side Requests: If you need to\
+      \ make requests from the client-side (e.g., in a web browser or mobile app),\
+      \ you should use the CLIENT_ACCESS scope, which is more restricted for security\
+      \ reasons. It allows access to specific requests like accessing the Consent\
+      \ UI and checking job status.\n\n\n## Debugging the Basiq API Connection: A\
+      \ Deeper Dive\n\nAs we delved deeper into the issue of connecting to the Basiq\
+      \ API, we enhanced our PHP script to provide more detailed information about\
+      \ the cURL request being made. This was achieved by enabling verbose output\
+      \ for debugging purposes. Here's the relevant code snippet:\n\n```php\n// Enable\
+      \ verbose output for debugging\ncurl_setopt($ch, CURLOPT_VERBOSE, true);\n$verbose\
+      \ = fopen('php://temp', 'w+');\ncurl_setopt($ch, CURLOPT_STDERR, $verbose);\n\
+      ```\n\nThis code tells cURL to output detailed information about the request,\
+      \ which is then captured in a temporary stream. After the cURL request is executed,\
+      \ we rewind the stream and output its contents:\n\n```php\n// Output verbose\
+      \ data for debugging\nrewind($verbose);\n$verboseLog = stream_get_contents($verbose);\n\
+      echo \"Verbose information:\\n\", htmlspecialchars($verboseLog), \"\\n\";\n\
+      ```\n\nThis verbose output confirmed that our Authorization header was being\
+      \ sent correctly. Here's the relevant section of the verbose output:\n\n```php\n\
+      > POST /token HTTP/2\nHost: au-api.basiq.io\naccept: */*\nauthorization: Basic\
+      \ ************************\ncontent-type: application/x-www-form-urlencoded\n\
+      basiq-version: 2.0\ncontent-length: 19\n```\n\nDespite this, the server was\
+      \ still returning a `400 Bad Request` response. The error message was contained\
+      \ within the JSON response from the server. We can extract this error message\
+      \ with the following PHP code:\n\n```php\n$responseData = json_decode($response,\
+      \ true);\n$errorDetail = $responseData['data'][0]['detail'] ?? null;\necho 'Error\
+      \ detail: ' . $errorDetail;\n```\n\nThis code decodes the JSON response and\
+      \ extracts the `detail` field from the first item in the `data` array, which\
+      \ contains the error message. In our case, the error message was \"Invalid authorization\
+      \ header\".\n\nDespite our best efforts, the issue remains unresolved. We're\
+      \ considering several possibilities, including issues with the API key activation,\
+      \ permissions, or type. We're also considering reaching out to Basiq support\
+      \ for further assistance. This experience underscores the importance of a methodical\
+      \ approach to debugging and the value of detailed logging and error reporting.\n\
+      \n## Debugging the Basiq API Connection - Resolution\n\nAfter a series of debugging\
+      \ steps and hypotheses, we found the root cause of the issue. It turned out\
+      \ that the API key was already base64 encoded and we were inadvertently encoding\
+      \ it again in our PHP script. \n\nThe line of code that was causing the issue\
+      \ was:\n\n```php\n'Authorization: Basic ' . base64_encode($apiKey . ':'),\n\
+      ```\n\nWe were base64 encoding the API key again before sending it in the Authorization\
+      \ header. However, since the API key was already base64 encoded, this additional\
+      \ encoding was causing the server to reject our request with an \"Invalid authorization\
+      \ header\" error.\n\nThe solution was to use the API key directly in the Authorization\
+      \ header, without encoding it again:\n\n```php\n'Authorization: Basic ' . $apiKey,\n\
+      ```\n\nAfter making this change, the PHP script was able to successfully connect\
+      \ to the Basiq API and we received a valid access token in response.\n\nThis\
+      \ experience has underscored the importance of understanding the data we're\
+      \ working with. In this case, knowing that the API key was already base64 encoded\
+      \ would have saved us from the confusion. However, it's all part of the learning\
+      \ process and we're glad to have resolved the issue. We'll continue to share\
+      \ our experiences and learnings as we progress with the integration of the Basiq\
+      \ API into our web application.\n\n\nHere is our resulting PHP file\n\nweb/generate_and_output_token.php\n\
+      ```\n<?php\n$currentDirectory = __DIR__;\n\ndefine('BASIQ_CURL_VERBOSE', FALSE);\n\
+      \n// Config contains our define('BASIQ_API_KEY', '********');\n// config.php\
+      \ is outside the webroot, so it keeps the API Key safe.\n// Do not commit config.php\
+      \ to your repo.\nrequire_once(\"{$currentDirectory}/../config.php\");\n\n$apiKey\
+      \ = BASIQ_API_KEY;\n\n// Endpoint URL\n$url = 'https://au-api.basiq.io/token';\n\
+      \n// Data to be sent as part of the request\n$data = [\n    'scope' => 'SERVER_ACCESS',\
+      \ // Use SERVER_ACCESS for full access\n];\n\n// Set up the cURL request\n$ch\
+      \ = curl_init();\n\ncurl_setopt($ch, CURLOPT_URL, $url);\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER,\
+      \ 1);\ncurl_setopt($ch, CURLOPT_POST, 1);\n\n$httpQueryResult = http_build_query($data);\n\
+      \ncurl_setopt($ch, CURLOPT_POSTFIELDS, $httpQueryResult);\ncurl_setopt($ch,\
+      \ CURLOPT_HTTPHEADER, [\n    // Add the API key as a Basic Authorization header\n\
+      \    'Authorization: Basic ' . $apiKey,\n    'Content-Type: application/x-www-form-urlencoded',\n\
+      \    'basiq-version: 2.0',\n]);\n\n// Enable verbose output for debugging\n\
+      if (!empty(BASIQ_CURL_VERBOSE)) {\n    curl_setopt($ch, CURLOPT_VERBOSE, true);\n\
+      \    $verbose = fopen('php://temp', 'w+');\n    curl_setopt($ch, CURLOPT_STDERR,\
+      \ $verbose);\n}\n\n// Execute the cURL request\n$response = curl_exec($ch);\n\
+      \n// Check for errors\nif (curl_errno($ch)) {\n    echo 'Error: ' . curl_error($ch);\n\
+      }\n\n// Close cURL session\ncurl_close($ch);\n\n// Output verbose data for debugging\n\
+      if (!empty(BASIQ_CURL_VERBOSE)) {\n    rewind($verbose);\n    $verboseLog =\
+      \ stream_get_contents($verbose);\n    echo \"Verbose information:\\n\", htmlspecialchars($verboseLog),\
+      \ \"\\n\";\n}\n\n// Decode the response JSON to extract the access token\n$responseData\
+      \ = json_decode($response, true);\n\n$accessToken = $responseData['access_token']\
+      \ ?? null;\n\n// You now have the access token that you can use for further\
+      \ API calls\nif ($accessToken) {\n    echo $accessToken;\n} else {\n    echo\
+      \ 'No access token received.';\n}\n?>\n```\n\nconfig.php\n```\n<?php\n// Define\
+      \ your Basiq API key here\ndefine('BASIQ_API_KEY', '********');\n\n// You can\
+      \ define other configuration settings here if needed\n// define('ANOTHER_SETTING',\
+      \ 'some_value');\n?>\n```\n\nWhen figuring out why I was getting configuration\
+      \ errors from the API I created a new application via Basiq's dashboard, and\
+      \ use that API key.\nSoon after I discovered the Base64 double encoding issue\
+      \ and I could connect to the API.\nThat left the question, was there an issue\
+      \ with my Demo Application? I generated a new API Key for the Demo Application\
+      \ and inserted that into my script.\nAnd successfully generated an access token\
+      \ with that API Key. So looks like the Demo Application is ago, but now I have\
+      \ a second application hanging around.\n\nI have just clicked around and disovered\
+      \ that I can delete the application on the left hand menu click All Applications,\
+      \ the menu is little finicky, it will take you to [The application screen](https://dashboard.basiq.io/applications),\
+      \ you can click on you application and disable it or delete it from this screen.\n\
+      \nI noticed also that when I created the new application, I created it as \"\
+      Payments disabled\", there were two other options for \"Sandbox\" and \"Production\"\
+      , I don't know sandbox\nallows payments, a bit scary. So I chose \"Payments\
+      \ disabled\" for now, it's permanent choice, so I was sure to name my Application\
+      \ with \"Payments disabled\" in it's name.. I found that confusing too because\
+      \ later I thought the application was disabled.. I assume that the Demo Application\
+      \ has \"Payments Disabled\" too.\n\nI went ahead and deleted my created application,\
+      \ and then I discovered on that the title of the Application was editable too.\
+      \ Looks like the Demo Application is literally\njust your first application\
+      \ already created with the immutable \"Payments disabled\" setting already applied.\n\
+      \nI have also just discovered that I can remove users, so we can get on to the\
+      \ next Phase of creating a user via the API. I would prefer to make a call on\
+      \ my existing user in existing application but I'm going to follow the quick\
+      \ start guide and pass the milestone of using the access token to connect.\n\
+      \nSee you in Phase 6!"
+  comment:
+  - cid: 0
+    comment_count: 0
+    last_comment_name: ''
+    last_comment_timestamp: 1693811801
+    last_comment_uid: 1
+    status: 2
+  created:
+  - value: 1693811782
+  path:
+  - alias: ''
+    langcode: en
+  promote:
+  - value: true
+  revision_translation_affected:
+  - value: true
+  revision_uid:
+  - target_id: 1
+  status:
+  - value: true
+  sticky:
+  - value: false
+  title:
+  - value: 'Blog: BasicVoyager - Establishing and Debugging Basiq API Connection in
+      PHP'
+  uid:
+  - target_id: 1

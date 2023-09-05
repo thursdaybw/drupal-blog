@@ -1,0 +1,14 @@
+{
+    "repositories": [
+      {
+        "type": "path",
+        "url": "./develop/rename_module",
+        "options": {
+          "symlink": true
+        }
+      }
+    ],
+    "require-dev": {
+        "drupal/rename_module": "dev-dev"
+    }
+}

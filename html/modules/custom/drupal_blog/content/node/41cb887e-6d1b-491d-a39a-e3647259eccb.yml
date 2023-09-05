@@ -1,0 +1,97 @@
+_meta:
+  bundle: article
+  default_langcode: en
+  entity_type: node
+  uuid: 41cb887e-6d1b-491d-a39a-e3647259eccb
+  version: '1.0'
+default:
+  body:
+  - format: markdown
+    summary: ''
+    value: "In today's adventure with the Basiq API, we embarked on the mission to\
+      \ generate a user token for initiating the consent process. PHP, being our trusty\
+      \ tool, was at the forefront of this journey.\n\n## The Initial Approach\n\n\
+      We started with a straightforward PHP script that aimed to generate a user token\
+      \ by making a POST request to the Basiq API. The initial code looked something\
+      \ like this:\n\n```php\n// Initial code block...\n```\n\n## Challenge 1: Invalid\
+      \ Request Body\n\nOur first attempt was met with an error indicating an \"Invalid\
+      \ request body\". The verbose logs from cURL provided insights into the request\
+      \ and response, but the error message was a bit vague.\n\n### Resolution:\n\n\
+      After diving into the Basiq documentation, we realized that the `scope` and\
+      \ `userid` parameters were crucial. We initially set the `scope` to `SERVER_ACCESS`,\
+      \ thinking our PHP script, being server-side, would fit this category. However,\
+      \ this led us to our next challenge.\n\n## Challenge 2: Invalid Scope Specified\n\
+      \nDespite our best efforts, we were met with another error, this time indicating\
+      \ an \"Invalid scope specified\". The error pointed towards the `scope` parameter\
+      \ in the request body.\n\n### Resolution:\n\nA deeper dive into the Basiq documentation\
+      \ revealed that for generating a user token, the `scope` should be set to `CLIENT_ACCESS`.\
+      \ This was a bit counterintuitive since our PHP script was server-side, but\
+      \ it made sense in the context of Basiq's API expectations. The API expects\
+      \ the token generation request to come from a browser, hence the name \"CLIENT_ACCESS\"\
+      .\n\n## The Final Code\n\nAfter making the necessary adjustments, our final\
+      \ code looked like this:\n\n```php\n<?php\n\n// Include the config file for\
+      \ API key and other configurations\nrequire_once('config.php');\n\n// Data to\
+      \ be sent as part of the request\n$data = [\n    /** \n     * CLIENT_ACCESS\
+      \ is required for user token generation.\n     * \n     * BasiqAPI expects a\
+      \ token generation request to come from\n     * a browser, hence the name \"\
+      CLIENT_ACCESS\", but for our\n     * purposes we are performing the client action\
+      \ ahead of time,\n     * client side.\n     */\n    'scope' => 'CLIENT_ACCESS',\
+      \ // or 'SERVER_ACCESS' depending on your use case\n    'userid' => '******************'\
+      \  // Replace with the correct userid value\n];\n\n$apiKey = BASIQ_API_KEY;\n\
+      \n// Set up the cURL request to Basiq's API\n$ch = curl_init();\n\ncurl_setopt($ch,\
+      \ CURLOPT_URL, 'https://au-api.basiq.io/token');\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER,\
+      \ 1);\ncurl_setopt($ch, CURLOPT_POST, 1);\ncurl_setopt($ch, CURLOPT_POSTFIELDS,\
+      \ http_build_query($data));\ncurl_setopt($ch, CURLOPT_HTTPHEADER, [\n    'Authorization:\
+      \ Basic ' . $apiKey,\n    'Content-Type: application/x-www-form-urlencoded',\n\
+      \    'basiq-version: 3.0'\n]);\n\n// Enable verbose mode\ncurl_setopt($ch, CURLOPT_VERBOSE,\
+      \ true);\n$verbose = fopen('php://temp', 'w+');\ncurl_setopt($ch, CURLOPT_STDERR,\
+      \ $verbose);\n\n$response = curl_exec($ch);\n\nif (curl_errno($ch)) {\n    echo\
+      \ 'Error:' . curl_error($ch);\n    exit;\n}\n\n// If verbose mode is enabled,\
+      \ print the verbose output\nif ($verbose) {\n    rewind($verbose);\n    $verboseLog\
+      \ = stream_get_contents($verbose);\n    echo \"Verbose information:\\n<pre>\"\
+      , htmlspecialchars($verboseLog), \"</pre>\\n\";\n}\n\ncurl_close($ch);\n\n//\
+      \ Decode the response\n$responseData = json_decode($response, true);\n\n// Print\
+      \ the response\necho \"<pre>\";\nprint_r($responseData);\necho \"</pre>\";\n\
+      \n// Check if the token and redirect URL are present in the response\nif (isset($responseData['token'])\
+      \ && isset($responseData['redirect_url'])) {\n    $token = $responseData['token'];\n\
+      \    $redirectUrl = $responseData['redirect_url'];\n\n    // Store the token\
+      \ and redirect URL in user_token.txt\n    $fileContent = \"token={$token}\\\
+      nredirect_url={$redirectUrl}\";\n    file_put_contents('user_token.txt', $fileContent);\n\
+      } else {\n    echo \"Failed to retrieve token or redirect URL.\";\n    exit;\n\
+      }\n\n?>]\n```\n\n## Conclusion\n\nToday's journey with the Basiq API was filled\
+      \ with challenges and learning opportunities. We faced errors, dove deep into\
+      \ documentation, and came out victorious with a working solution. The key takeaways\
+      \ from this experience are:\n\n1. Always refer to the official documentation\
+      \ when in doubt.\n2. Understand the context in which the API expects requests.\
+      \ In our case, even though our script was server-side, the Basiq API expected\
+      \ a client-side context for token generation.\n3. Verbose logs are invaluable.\
+      \ They provide insights into the request and response flow, helping diagnose\
+      \ issues.\n\nWe hope this post helps others who might face similar challenges\
+      \ with the Basiq API or any other API integration. Remember, every error is\
+      \ a stepping stone to a solution. Happy coding!"
+  comment:
+  - cid: 0
+    comment_count: 0
+    last_comment_name: ''
+    last_comment_timestamp: 1693811801
+    last_comment_uid: 1
+    status: 2
+  created:
+  - value: 1693811782
+  path:
+  - alias: ''
+    langcode: en
+  promote:
+  - value: true
+  revision_translation_affected:
+  - value: true
+  revision_uid:
+  - target_id: 1
+  status:
+  - value: true
+  sticky:
+  - value: false
+  title:
+  - value: 'Blog: BasiqVoyager - Crafting a PHP Script for User Token Retrieval'
+  uid:
+  - target_id: 1

@@ -1,0 +1,22 @@
+uuid: dd122cc1-5b32-4899-aa7a-f8adf3174f4e
+langcode: en
+status: true
+dependencies:
+  module:
+    - system
+  theme:
+    - vani
+_core:
+  default_config_hash: EAPpof-OFVhvV9Xi5WsRB827n9EceoSDSXG8EFSjhGM
+id: vani_messages
+theme: vani
+region: highlighted
+weight: 0
+provider: null
+plugin: system_messages_block
+settings:
+  id: system_messages_block
+  label: 'Status messages'
+  label_display: '0'
+  provider: system
+visibility: {  }

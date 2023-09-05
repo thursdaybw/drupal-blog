@@ -1,0 +1,25 @@
+uuid: 2ac932d3-3fc9-46f8-89b5-52555fd0472e
+langcode: en
+status: true
+dependencies:
+  module:
+    - system
+  theme:
+    - vani
+_core:
+  default_config_hash: 2YUPWPauivlBm8V4mmJDoS2L2y-An184JKejfBOdOEs
+id: vani_branding
+theme: vani
+region: site_branding
+weight: 0
+provider: null
+plugin: system_branding_block
+settings:
+  id: system_branding_block
+  label: 'Site branding'
+  label_display: '0'
+  provider: system
+  use_site_logo: true
+  use_site_name: false
+  use_site_slogan: false
+visibility: {  }

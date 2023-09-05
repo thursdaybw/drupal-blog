@@ -1,0 +1,27 @@
+uuid: e3786c4d-9ad3-4f1d-98a3-042a7bd5d192
+langcode: en
+status: true
+dependencies:
+  config:
+    - system.menu.footer
+  module:
+    - system
+  theme:
+    - vani
+_core:
+  default_config_hash: nH3hJAahvynclvGrWk9pESqZWU34iqcwMos58BR49Hw
+id: vani_footer
+theme: vani
+region: hidden_blocks
+weight: -9
+provider: null
+plugin: 'system_menu_block:footer'
+settings:
+  id: 'system_menu_block:footer'
+  label: 'Footer menu'
+  label_display: '0'
+  provider: system
+  level: 1
+  depth: 0
+  expand_all_items: false
+visibility: {  }

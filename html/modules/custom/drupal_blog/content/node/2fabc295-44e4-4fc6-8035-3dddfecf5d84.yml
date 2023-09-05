@@ -1,0 +1,250 @@
+_meta:
+  bundle: article
+  default_langcode: en
+  entity_type: node
+  uuid: 2fabc295-44e4-4fc6-8035-3dddfecf5d84
+  version: '1.0'
+default:
+  body:
+  - format: markdown
+    summary: ''
+    value: "In the ever-evolving world of fintech, integrating with platforms like\
+      \ Basiq can be a daunting task. The documentation, while comprehensive, often\
+      \ assumes a certain level of prior knowledge. As developers, we're no strangers\
+      \ to diving deep into documentation, piecing together information, and formulating\
+      \ a plan of action. After extensive research, we've managed to craft a PHP solution\
+      \ that aims to streamline the Basiq integration process. But as with all code,\
+      \ the real test lies in its execution. In this section of our blog, we'll walk\
+      \ you through our journey of understanding, the challenges we faced, and the\
+      \ PHP code we've formulated. It's time to roll up our sleeves and put our code\
+      \ to the test!\n\n**3. Log of our journey:**\n\n**a. Initial Understanding:**\n\
+      - We began by examining the Basiq documentation to understand the flow of integrating\
+      \ with their platform.\n- Identified what we initially comprehended the steps\
+      \ to be (the details evolved as we progressed). These steps included registering\
+      \ the application, configuring it, generating an API key, authenticating, and\
+      \ creating a user.\n\n**b. Delving into the \"Consent\" Step:**\n- The \"Consent\"\
+      \ step was initially perplexing because the documentation seemed to imply that\
+      \ after creating a user, there was an immediate need to retrieve their financial\
+      \ data. However, it wasn't clear how or when the user's explicit consent was\
+      \ obtained.\n- [Basiq's Quickstart Guide](https://api.basiq.io/docs/quickstart-part-1)\
+      \ mentioned the need for consent but didn't delve into the specifics, which\
+      \ led to our initial confusion.\n  \n  > \"Before you can retrieve a user's\
+      \ financial data, you first need to link to their financial institutions by\
+      \ creating a connection. This can only be done once a user has explicitly consented\
+      \ to share their data.\"\n  \n- After further exploration, we realized that\
+      \ after creating a user, they need to be redirected to the Basiq Consent UI\
+      \ to give their consent. This was a pivotal moment in our understanding.\n\n\
+      **d. Muddles with \"Consent\":**\n- Initially, there was confusion about where\
+      \ the consent data is stored and how to retrieve it. The Quickstart guide assumed\
+      \ prior knowledge about this step, which we didn't have at the outset.\n- We\
+      \ had to delve deeper into the 'consent' documentation, specifically the [Consents\
+      \ Endpoint](https://api.basiq.io/reference#getconsents), to get clarity.\n \
+      \ \n  > \"Retrieve a list of consents for a user. A consent is created when\
+      \ a user connects an institution.\"\n  \n  This snippet clarified that a user's\
+      \ consents are stored against their user object in Basiq and can be retrieved\
+      \ using the API.\n\n**e. PHP Implementation:**\n- We used PHP's cURL functions\
+      \ to make API requests to Basiq. For example:\n  ```php\n  $ch = curl_init();\n\
+      \  curl_setopt($ch, CURLOPT_URL, \"https://au-api.basiq.io/users/$userId/consents\"\
+      );\n  ```\n  \n**f. `index.php` Overview:**\n- `index.php` is the main entry\
+      \ point for our application. Its primary purpose is to allow a user to check\
+      \ their consent status.\n- Dependencies: The script depends on `getConsents.php`\
+      \ to retrieve the user's consents from Basiq.\n- Data Requirements: The script\
+      \ requires the user's ID and the Application JWT token. These are injected directly\
+      \ into the script.\n- Flow: When the \"Check Consent Status\" button is clicked,\
+      \ the script checks if the user has given any consents and displays the appropriate\
+      \ message.\n\n**g. `getConsents.php` Overview:**\n- This script contains the\
+      \ `getBasiqUserConsents` function, which retrieves the user's consents from\
+      \ Basiq.\n- Interaction with `index.php`: The function can be called directly\
+      \ from `index.php` to check the user's consent status.\n- Usage:\n  - **CLI**:\
+      \ Run the script using `php getConsents.php [USER_ID] [JWT_TOKEN]`.\n  - **Include\
+      \ in another PHP file**: Use `include 'getConsents.php';` and then call the\
+      \ function with the required parameters.\n\n**h. Final Understanding:**\n- We\
+      \ believe we've gained clarity on the importance of the \"Consent\" step in\
+      \ the Basiq integration flow.\n- We have an untested idea of how to retrieve\
+      \ a user's consents using the Basiq API and reflect that in the PHP code.\n\n\
+      Our untested code.\n\n**1. `index.php`:**\n```php\n<?php\ninclude 'getConsents.php';\n\
+      \n$userId = 'YOUR_USER_ID'; // Replace with the actual user ID\n$jwtToken =\
+      \ 'YOUR_APPLICATION_JWT_TOKEN'; // Replace with your Application JWT token\n\
+      \nif (isset($_POST['connectBank'])) {\n    $consents = getBasiqUserConsents($userId,\
+      \ $jwtToken);\n    if (isset($consents['data']) && !empty($consents['data']))\
+      \ {\n        echo \"User has given consent.\";\n        // Process the consents\
+      \ as needed\n    } else {\n        echo \"No consents found for the user.\"\
+      ;\n    }\n}\n?>\n\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"\
+      UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"\
+      >\n    <title>Basiq Consent Flow</title>\n</head>\n<body>\n\n<form action=\"\
+      index.php\" method=\"post\">\n    <button type=\"submit\" name=\"connectBank\"\
+      >Check Consent Status</button>\n</form>\n\n</body>\n</html>\n```\n\n**2. `getConsents.php`:**\n\
+      ```php\n<?php\n\nfunction getBasiqUserConsents($userId, $jwtToken) {\n    $ch\
+      \ = curl_init();\n\n    curl_setopt($ch, CURLOPT_URL, \"https://au-api.basiq.io/users/$userId/consents\"\
+      );\n    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);\n    curl_setopt($ch, CURLOPT_CUSTOMREQUEST,\
+      \ \"GET\");\n\n    $headers = array();\n    $headers[] = \"Authorization: Bearer\
+      \ $jwtToken\";\n    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);\n\n    $result\
+      \ = curl_exec($ch);\n    if (curl_errno($ch)) {\n        echo 'Error:' . curl_error($ch);\n\
+      \        return null;\n    }\n    curl_close($ch);\n\n    // Decode the result\
+      \ to get the consents\n    return json_decode($result, true);\n}\n?>\n```\n\n\
+      **Next Steps**:\n- The next logical step is to integrate this code into a live\
+      \ environment, test the flow, and ensure that the user's consents are correctly\
+      \ retrieved and processed.\n\nAs we wrap up this section, it's evident that\
+      \ the journey of integration is filled with twists and turns. The path from\
+      \ initial confusion to a clearer understanding has been enlightening, to say\
+      \ the least. But this is just the beginning. As we move forward, we'll continue\
+      \ to log our experiences, challenges, and solutions right here. So, stay tuned\
+      \ as we execute our plan, test our code, and delve deeper into the world of\
+      \ Basiq integration. Until next time, happy coding!\n\n\n## Continuing Our Journey\
+      \ with Basiq's API\n\n### Running the PHP Code:\n\nBefore diving into the Basiq\
+      \ dashboard, we first attempted to run the PHP code we had crafted. We were\
+      \ eager to see it in action and to verify if our understanding was correctly\
+      \ translated into code. However, as with many first attempts, we hit a snag.\n\
+      \n1. **Executing the PHP Script**: We ran our PHP script, hoping to see a successful\
+      \ interaction with the Basiq API. I resolved a few issues wtih file paths and\
+      \ variables names, until I hit a \"Route Not Found\" from the API, this is where\
+      \ things got interesting for a while.\n\n2. **Encountering the \"Route Not Found\"\
+      \ Error**: To our surprise, the script returned a \"Route Not Found\" error.\
+      \ This was puzzling, as we had followed the documentation closely.\n\n3. **Discovering\
+      \ the Interactive API Tool**: In our quest to understand the error, we stumbled\
+      \ upon Basiq's [Interactive API Tool](https://api.basiq.io/reference/getconsents).\
+      \ This tool allows users to test API endpoints directly from the browser, which\
+      \ seemed like a perfect way to debug our issue.\n\n4. **Testing with the Interactive\
+      \ API Tool**: Hoping to gain clarity, we tested the same endpoint using the\
+      \ Interactive API Tool. To our astonishment, we received the same \"Route Not\
+      \ Found\" error, indicating that the issue might not be with our code but with\
+      \ the API or its configuration.\n\n### Generating the Consent Link via Basiq\
+      \ Dashboard:\n\nGiven the error, we decided to take a different approach. We\
+      \ did not have enough information to determine if the \"Route not found\" was\n\
+      a legitimate response to retrieving consents that do not yet exist. It's abnormal\
+      \ behavior for an API to do so however it's possible. So, we need to test against\
+      \ a user that has consents, we need to create one manually. I navigated to the\
+      \ Basiq dashboard to manually generate a consent link.\n\n1. **Accessing the\
+      \ Users Section**: We went to the users section of our Basiq application in\
+      \ the dashboard.\n\n2. **Clicking on \"Generate Link\"**: In the top menu, we\
+      \ found and clicked on the \"generate link\" option.\n\n3. **Receiving the Consent\
+      \ Link**: The dashboard provided us with a link: `https://connect.basiq.io/0b23510d-2638-44f8-bef1-b430ca3e2987`.\
+      \ We copied this link and opened it in a new browser tab.\n\n### Walking Through\
+      \ the Consent Form:\n\nWith the consent link in hand, we proceeded to give our\
+      \ consent via the form.\n\n1. **Opening the Consent Form**: Clicking on the\
+      \ generated link opened the Basiq consent form.\n\n2. **Filling in Personal\
+      \ Details**: The form prompted us for some personal details. We filled these\
+      \ in, which triggered an SMS ID check for identity verification.\n\n3. **Selecting\
+      \ the Bank**: After verifying our identity, the form presented us with a list\
+      \ of banks. We selected our bank from the available options.\n\n4. **Entering\
+      \ Account Details**: Post bank selection, a new form appeared, asking for our\
+      \ bank account details. We entered the necessary information and hit the submit\
+      \ button.\n\n5. **Encountering the \"Access Denied\" Error**: Instead of a confirmation,\
+      \ we were presented with an error message: \"Connections not enabled. Error:\
+      \ access-denied.\" This was unexpected, and we deduced that the \"Payments environment\"\
+      \ setting in our Basiq application might be the cause.\n\n### Reflections:\n\
+      \nOur hands-on experience with the Basiq API and dashboard provided valuable\
+      \ insights. While we encountered errors, each one offered a learning opportunity.\
+      \ The \"Route Not Found\" error from both our script and the Interactive API\
+      \ Tool was particularly enlightening, suggesting potential issues on Basiq's\
+      \ end or with their CloudFront configuration.\n\n\n### Next Steps:\n\nOur journey\
+      \ isn't over. We aim to check the user's consents using the API next as it now\
+      \ likely has a consent attached. Even if we couldn't establish a bank connection,\
+      \ the user might still have given their consent. We're eager to see if this\
+      \ is reflected in the API's response.\n\n## Continuing Our Journey with Basiq's\
+      \ API\n\n### Blog: BasiqVoyager - Navigating API Challenges and Discovering\
+      \ CloudFront Issues\n\nAfter our initial journey with the Basiq API, where we\
+      \ delved deep into the \"Consent\" step and tried to integrate it into our PHP\
+      \ application, we encountered several challenges. Here's a continuation of our\
+      \ experiences and the insights we've gathered:\n\n#### Exploring the User's\
+      \ Dashboard\n\nWhile navigating through the user's area of the Basiq dashboard,\
+      \ we made a significant discovery. We found that we could directly view and\
+      \ manage consents for a user. This feature allowed us to:\n\n- View the status\
+      \ and scopes of any consents.\n- Remove consents if needed.\n\nThis direct access\
+      \ provided us with a clearer picture of the user's interactions with the platform\
+      \ and their consent status.\n\n#### Encountering the 403 Error\n\nOur next step\
+      \ was to use the interactive API form provided by Basiq. Upon entering the user's\
+      \ ID, we were met with a 403 error. This error, which typically indicates a\
+      \ permissions issue, hinted at \"insufficient rights to a resource.\" This led\
+      \ us to believe that our Application JWT access token might have expired. JWT\
+      \ tokens are time-sensitive, and their expiration can lead to such errors.\n\
+      \nTo address this, we used our `generate_and_output_token.php` script to generate\
+      \ a fresh JWT token, ensuring that our subsequent API requests would have the\
+      \ necessary permissions.\n\n#### The Recurring \"Route Not Found\" Error\n\n\
+      Even with a new JWT token, we faced the \"Route not found for this API version.\"\
+      \ error again. This recurring issue was puzzling, especially since we were following\
+      \ the Basiq documentation closely.\n\n## The Suspicion Around CloudFront\n\n\
+      CloudFront, Amazon's content delivery network (CDN) service, came into the spotlight.\
+      \ If Basiq is using CloudFront for their API, any misconfigurations or issues\
+      \ with CloudFront could lead to the errors we were experiencing. The \"Route\
+      \ not found\" error, which is atypical for an API endpoint that should exist,\
+      \ suggested a potential issue with how CloudFront was routing the requests to\
+      \ the Basiq API.\n\nGiven this observation, we began to suspect that the root\
+      \ cause of our challenges might lie with CloudFront. It's possible that there's\
+      \ a misconfiguration on Basiq's end or that CloudFront is caching an older version\
+      \ of the API.\n\n## Reflections and Next Steps\n\nOur journey with the Basiq\
+      \ API has been filled with learning opportunities. Each challenge, from understanding\
+      \ the \"Consent\" step to navigating API errors, has provided us with valuable\
+      \ insights. The discovery around CloudFront, in particular, has given us a direction\
+      \ to explore further.\n\nAs we move forward, our plan is to:\n\n- Reach out\
+      \ to Basiq's support with our findings to gain more clarity.\n- Explore potential\
+      \ solutions or workarounds for the CloudFront issue.\n- Continue to document\
+      \ our experiences, challenges, and solutions to provide a comprehensive guide\
+      \ for others navigating the Basiq integration.\n\n## BasiqVoyager Integration\
+      \ - The Journey Continues\n\n### Addressing the \"Route not found for this API\
+      \ version\" Error\n\nDespite our best efforts, the \"Route not found for this\
+      \ API version.\" error persisted. We initially thought that adding the `basiq-version`\
+      \ to the request headers would resolve the issue. However, even after including\
+      \ the version string in the header, the error remained.\n\n### The User ID Mismatch\n\
+      \nA crucial realization dawned upon us. The user for whom we had created consent\
+      \ was not the same user we were trying to retrieve consent for in our PHP script.\
+      \ This mismatch was likely a result of switching users when testing consent\
+      \ via the Basiq Dashboard. To address this, we updated the user ID in our `get_user_token.php`\
+      \ script.\n\n### Generating a New Token\n\nWith the updated user ID in place,\
+      \ the next step was to generate a new token. We ran the script to generate a\
+      \ fresh token and saved it in the `token.txt` file. This file serves as a reference\
+      \ for our script to read the token.\n\n### A Breakthrough!\n\nAfter making these\
+      \ changes, we tested the integration again, and voil\xE0! We received an actual\
+      \ result. The returned JSON was extensive and contained a wealth of information:\n\
+      \n```json\n{\n  \"type\": \"list\",\n  \"size\": 1,\n  \"data\": [\n    {\n\
+      \      \"type\": \"consent\",\n      \"id\": \"b90cb14e-e2bc-47a5-939d-9c9ac70a7c88\"\
+      ,\n      \"created\": \"2023-08-05T16:08:38Z\",\n      \"updated\": \"2023-08-05T16:08:38Z\"\
+      ,\n      \"expiryDate\": \"2024-08-05T07:27:00Z\",\n      \"origin\": \"user\"\
+      ,\n      \"status\": \"active\",\n      \"purpose\": \"...\",\n      ...\n \
+      \   }\n  ]\n}\n```\n\n### Double checking our assumptions\n\n1. **'basiq-version:\
+      \ 2.0'**\n    - I removed the basiq-version: 2.0 string from the header sent\
+      \ by `getBasiqUserConsents()` and confirm I can retieve a valid response now.\n\
+      \n2. **[The Interactive API tool](https://api.basiq.io/reference/getconsents)**\n\
+      \    - I entered the User ID of the user and the newish Application JWT Access\
+      \ token to the form once more. I noticed this time that when I double clicked\
+      \ in the \"Bearer/JST\" box to select the existing value it did not highlight\
+      \ the entire string but rather identified characters in that token as an end\
+      \ of word, so a 'double click' > `ctrl+v` action was likely resulting in an\
+      \ invalid token in my previous attempts.\n\n3. **Response for user's with no\
+      \ consents**\n    - Having got both my PHP script and the Interactive API Tool\
+      \ to give valid responses, I grabbed the ID from the dashboard of the user with\
+      \ no consents, tested via the Interacgice API tool and was able to retrieve\
+      \ a response then too.\n    ```json\n    {\n      \"type\": \"list\",\n    \
+      \  \"correlationId\": \"9db99f4a-a733-4237-a4e3-90adbf8dcf55\",\n      \"data\"\
+      : [\n        {\n          \"type\": \"error\",\n          \"code\": \"access-denied\"\
+      ,\n          \"title\": \"Access denied.\",\n          \"detail\": \"\",\n \
+      \         \"source\": null\n        }\n      ]\n    }\n    ``` \n\n### What's\
+      \ Next?\n\nOur immediate next step is to analyze the content to help us understand\
+      \ the details of the consent and any other relevant information the JSON might\
+      \ hold.\n\n[Here is the the first successful consent response](assets/first_successful_consent_response.json)"
+  comment:
+  - cid: 0
+    comment_count: 0
+    last_comment_name: ''
+    last_comment_timestamp: 1693811801
+    last_comment_uid: 1
+    status: 2
+  created:
+  - value: 1693811782
+  path:
+  - alias: ''
+    langcode: en
+  promote:
+  - value: true
+  revision_translation_affected:
+  - value: true
+  revision_uid:
+  - target_id: 1
+  status:
+  - value: true
+  sticky:
+  - value: false
+  title:
+  - value: 'Blog: BasiqVoyager - Consent UI Flow & Redirect URL Setup'
+  uid:
+  - target_id: 1

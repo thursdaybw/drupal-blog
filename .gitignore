@@ -1,0 +1,42 @@
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore Lando configuration
+.lando.yml
+
+# Ignore configuration files that may contain sensitive information.
+html/sites/*/settings*.php
+
+# Ignore paths that contain user-generated content.
+html/sites/*/files
+html/sites/*/private
+
+# Ignore PhpStorm project files
+.idea/
+
+# Ignore Visual Studio Code settings
+.vscode/
+
+# Ignore contributed modules, themes, and libraries, since those should be handled by composer or drush
+html/sites/all/modules/contrib/
+html/modules/contrib/
+html/modules/devel/
+html/themes/contrib/
+html/libraries/contrib/
+html/sites/all/themes/contrib/
+html/sites/all/libraries/
+
+# Ignore core since you'd typically manage that with composer or drush as well
+/html/core/
+
+# Custom folders you might want to ignore
+custom-folder/
+
+# Composer managed dependencies
+/vendor/
+
+# Ignore SASS, LESS, etc., compiled files
+*.css.map
+*.js.map
+

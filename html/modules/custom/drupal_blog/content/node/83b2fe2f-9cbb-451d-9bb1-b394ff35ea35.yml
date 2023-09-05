@@ -1,0 +1,37 @@
+_meta:
+  bundle: article
+  default_langcode: en
+  entity_type: node
+  uuid: 83b2fe2f-9cbb-451d-9bb1-b394ff35ea35
+  version: '1.0'
+default:
+  body:
+  - format: markdown
+    summary: ''
+    value: ''
+  comment:
+  - cid: 0
+    comment_count: 0
+    last_comment_name: ''
+    last_comment_timestamp: 1693811801
+    last_comment_uid: 1
+    status: 2
+  created:
+  - value: 1693811782
+  path:
+  - alias: ''
+    langcode: en
+  promote:
+  - value: true
+  revision_translation_affected:
+  - value: true
+  revision_uid:
+  - target_id: 1
+  status:
+  - value: true
+  sticky:
+  - value: false
+  title:
+  - value: Untitled
+  uid:
+  - target_id: 1

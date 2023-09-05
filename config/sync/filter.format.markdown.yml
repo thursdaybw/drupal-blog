@@ -1,0 +1,35 @@
+uuid: d8a57fe8-98da-400b-ada0-de92f695cfa9
+langcode: en
+status: true
+dependencies:
+  module:
+    - markdown
+_core:
+  default_config_hash: GEl9I0qOSvjk4UcwdZZDpBvUtrFfQHiTD1bV9ZnaKSE
+name: Markdown
+format: markdown
+weight: 0
+filters:
+  markdown:
+    id: markdown
+    provider: markdown
+    status: true
+    weight: -15
+    settings:
+      override: false
+      id: commonmark-gfm
+      enabled: true
+      render_strategy:
+        type: filter_output
+        custom_allowed_html: ''
+        plugins:
+          commonmark: true
+          commonmark-external-links: false
+          commonmark-footnotes: false
+          commonmark-heading-permalink: false
+          commonmark-strikethrough: false
+          commonmark-table: false
+          commonmark-task-list: false
+          filter_align: false
+          filter_caption: false
+    filterFormat: null

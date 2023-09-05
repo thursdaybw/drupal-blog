@@ -1,0 +1,23 @@
+name: 'Drupal Blog'
+type: module
+description: 'Basic common features, configs and utilities for the Drupal Blog website'
+package: Drupal Blog
+core_version_requirement: ^10
+dependencies:
+  - default_content:default_content
+  - config_devel:config_devel
+  - markdown:markdown
+config_devel:
+  - markdown.settings
+  - filter.format.markdown
+default_content:
+  node:
+    - 22255162-8b49-4340-9148-efce9d32994c
+    - 2fabc295-44e4-4fc6-8035-3dddfecf5d84
+    - 41cb887e-6d1b-491d-a39a-e3647259eccb
+    - 770fd42f-c907-4eb5-91f2-f679d1876d8c
+    - 83b2fe2f-9cbb-451d-9bb1-b394ff35ea35
+    - 9d070994-e737-46c9-bfd0-a0b7694b0b68
+    - c2bd8807-d7e2-44d8-8cbe-fda900999a91
+    - ca5ad627-a943-4a8c-8934-c64b267b2c27
+    - f1812532-1702-4d46-a672-fa023be35ddc

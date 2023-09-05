@@ -12,34 +12,6 @@
         {
             "type": "composer",
             "url": "https://packages.drupal.org/8"
-        },
-        {
-            "type": "path",
-            "url": "./develop/pocketsmith_api",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "./develop/fi_account_entity",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "./develop/graphql_minimal",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/thursdaybw/pocketsmith-php",
-            "options": {
-                "symlink": true
-            }
         }
     ],
     "require": {
@@ -50,11 +22,7 @@
         "drupal/core-project-message": "^10.1",
         "drupal/core-recommended": "^10.1",
         "drupal/default_content": "^2.0@alpha",
-        "drupal/fi_account_entity": "dev-main",
-        "drupal/graphql_minimal": "dev-main",
         "drupal/markdown": "^3.0@RC",
-        "drupal/pocketsmith_api": "dev-main",
-        "drupal/typed_data": "^1.0@beta",
         "drupal/vani": "^10.0",
         "drush/drush": "^12.1",
         "league/commonmark": "^1.0",

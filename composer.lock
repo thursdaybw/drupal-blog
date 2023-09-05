@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "cddc2cce9d36dbf947af7a78f3ddd3db",
+    "content-hash": "8c671171fccd7b71fc1bd714134a2b9e",
     "packages": [
         {
             "name": "asm89/stack-cors",
@@ -1205,58 +1205,6 @@
             }
         },
         {
-            "name": "drupal/config_override",
-            "version": "2.0.2",
-            "source": {
-                "type": "git",
-                "url": "https://git.drupalcode.org/project/config_override.git",
-                "reference": "2.0.2"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://ftp.drupal.org/files/projects/config_override-2.0.2.zip",
-                "reference": "2.0.2",
-                "shasum": "647784f041c6d992bb4b1eb4deebc13b3da66fca"
-            },
-            "require": {
-                "drupal/core": "^9 || ^10",
-                "symfony/dotenv": "^4.0||^5.0||^6.0"
-            },
-            "require-dev": {
-                "drupal/coder": "^8.3"
-            },
-            "type": "drupal-module",
-            "extra": {
-                "drupal": {
-                    "version": "2.0.2",
-                    "datestamp": "1692293801",
-                    "security-coverage": {
-                        "status": "covered",
-                        "message": "Covered by Drupal's security advisory policy"
-                    }
-                }
-            },
-            "notification-url": "https://packages.drupal.org/8/downloads",
-            "license": [
-                "GPL-2.0+"
-            ],
-            "authors": [
-                {
-                    "name": "dawehner",
-                    "homepage": "https://www.drupal.org/user/99340"
-                },
-                {
-                    "name": "dpagini",
-                    "homepage": "https://www.drupal.org/user/1802126"
-                }
-            ],
-            "description": "Provides CSV as a serialization format.",
-            "homepage": "https://www.drupal.org/project/config_override",
-            "support": {
-                "source": "https://git.drupalcode.org/project/config_override"
-            }
-        },
-        {
             "name": "drupal/config_update",
             "version": "2.0.0-alpha3",
             "source": {
@@ -1714,65 +1662,6 @@
             }
         },
         {
-            "name": "drupal/fi_account_entity",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "./develop/fi_account_entity",
-                "reference": "89d9e8376f49b1f082615a54ba3173afe495d95e"
-            },
-            "type": "drupal-module",
-            "license": [
-                "GPL-2.0+"
-            ],
-            "authors": [
-                {
-                    "name": "Bevan Wishart",
-                    "homepage": "https://www.drupal.org/u/thursday_bw",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Provides fi_account_entity Entity",
-            "keywords": [
-                "Drupal"
-            ],
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "drupal/graphql_minimal",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "./develop/graphql_minimal",
-                "reference": "eb87503b615a498e55948d02b1f9a5d253853159"
-            },
-            "require": {
-                "drupal/config_override": "^2.0"
-            },
-            "type": "drupal-module",
-            "license": [
-                "GPL-2.0+"
-            ],
-            "authors": [
-                {
-                    "name": "Bevan Wishart",
-                    "homepage": "https://www.drupal.org/u/thursday_bw",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Provides base graph schema",
-            "keywords": [
-                "Drupal"
-            ],
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "drupal/markdown",
             "version": "3.0.0-rc3",
             "source": {
@@ -1839,96 +1728,6 @@
             "support": {
                 "source": "https://git.drupalcode.org/project/markdown",
                 "issues": "https://www.drupal.org/project/markdown"
-            }
-        },
-        {
-            "name": "drupal/pocketsmith_api",
-            "version": "dev-main",
-            "dist": {
-                "type": "path",
-                "url": "./develop/pocketsmith_api",
-                "reference": "81bfa4abc302c948a4cbc98d34257194aad8368f"
-            },
-            "require": {
-                "thursdaybw/pocketsmith-php": "dev-main"
-            },
-            "type": "drupal-module",
-            "license": [
-                "GPL-2.0+"
-            ],
-            "authors": [
-                {
-                    "name": "Bevan Wishart",
-                    "homepage": "https://www.drupal.org/u/thursday_bw",
-                    "role": "Maintainer"
-                }
-            ],
-            "description": "Provides Drupal integration with Pocketsmith",
-            "homepage": "https://www.drupal.org/project/pocketsmith_api",
-            "keywords": [
-                "Drupal"
-            ],
-            "support": {
-                "issues": "https://www.drupal.org/project/issues/pocketsmith_api",
-                "source": "http://cgit.drupalcode.org/pocketsmith_api"
-            },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "drupal/typed_data",
-            "version": "1.0.0-beta2",
-            "source": {
-                "type": "git",
-                "url": "https://git.drupalcode.org/project/typed_data.git",
-                "reference": "8.x-1.0-beta2"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://ftp.drupal.org/files/projects/typed_data-8.x-1.0-beta2.zip",
-                "reference": "8.x-1.0-beta2",
-                "shasum": "e0aa651b129d8dcd765ca49cba8682ebe09e6e73"
-            },
-            "require": {
-                "drupal/core": "^9.1 || ^10"
-            },
-            "type": "drupal-module",
-            "extra": {
-                "drupal": {
-                    "version": "8.x-1.0-beta2",
-                    "datestamp": "1679429196",
-                    "security-coverage": {
-                        "status": "not-covered",
-                        "message": "Beta releases are not covered by Drupal security advisories."
-                    }
-                },
-                "drush": {
-                    "services": {
-                        "drush.services.yml": ">=9"
-                    }
-                }
-            },
-            "notification-url": "https://packages.drupal.org/8/downloads",
-            "license": [
-                "GPL-2.0-or-later"
-            ],
-            "authors": [
-                {
-                    "name": "fago",
-                    "homepage": "https://www.drupal.org/user/16747"
-                },
-                {
-                    "name": "TR",
-                    "homepage": "https://www.drupal.org/user/202830"
-                }
-            ],
-            "description": "Extends the core Typed Data API with new APIs and features.",
-            "homepage": "https://www.drupal.org/project/typed_data",
-            "support": {
-                "source": "https://git.drupalcode.org/project/typed_data",
-                "issues": "https://www.drupal.org/project/issues/typed_data"
             }
         },
         {
@@ -4145,80 +3944,6 @@
                 }
             ],
             "time": "2023-05-23T14:45:45+00:00"
-        },
-        {
-            "name": "symfony/dotenv",
-            "version": "v6.3.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/symfony/dotenv.git",
-                "reference": "ceadb434fe2a6763a03d2d110441745834f3dd1e"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/symfony/dotenv/zipball/ceadb434fe2a6763a03d2d110441745834f3dd1e",
-                "reference": "ceadb434fe2a6763a03d2d110441745834f3dd1e",
-                "shasum": ""
-            },
-            "require": {
-                "php": ">=8.1"
-            },
-            "conflict": {
-                "symfony/console": "<5.4",
-                "symfony/process": "<5.4"
-            },
-            "require-dev": {
-                "symfony/console": "^5.4|^6.0",
-                "symfony/process": "^5.4|^6.0"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "Symfony\\Component\\Dotenv\\": ""
-                },
-                "exclude-from-classmap": [
-                    "/Tests/"
-                ]
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Fabien Potencier",
-                    "email": "fabien@symfony.com"
-                },
-                {
-                    "name": "Symfony Community",
-                    "homepage": "https://symfony.com/contributors"
-                }
-            ],
-            "description": "Registers environment variables from a .env file",
-            "homepage": "https://symfony.com",
-            "keywords": [
-                "dotenv",
-                "env",
-                "environment"
-            ],
-            "support": {
-                "source": "https://github.com/symfony/dotenv/tree/v6.3.0"
-            },
-            "funding": [
-                {
-                    "url": "https://symfony.com/sponsor",
-                    "type": "custom"
-                },
-                {
-                    "url": "https://github.com/fabpot",
-                    "type": "github"
-                },
-                {
-                    "url": "https://tidelift.com/funding/github/packagist/symfony/symfony",
-                    "type": "tidelift"
-                }
-            ],
-            "time": "2023-04-21T14:41:17+00:00"
         },
         {
             "name": "symfony/error-handler",
@@ -6565,70 +6290,6 @@
             "time": "2023-07-31T07:08:24+00:00"
         },
         {
-            "name": "thursdaybw/pocketsmith-php",
-            "version": "dev-main",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/thursdaybw/pocketsmith-php.git",
-                "reference": "533bfcd59deeef38e87a7ea893c6dbc5665aa11d"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/thursdaybw/pocketsmith-php/zipball/533bfcd59deeef38e87a7ea893c6dbc5665aa11d",
-                "reference": "533bfcd59deeef38e87a7ea893c6dbc5665aa11d",
-                "shasum": ""
-            },
-            "require": {
-                "ext-curl": "*",
-                "ext-json": "*",
-                "ext-mbstring": "*",
-                "guzzlehttp/guzzle": "^7.3",
-                "guzzlehttp/psr7": "^1.7 || ^2.0",
-                "php": "^7.4 || ^8.0"
-            },
-            "require-dev": {
-                "friendsofphp/php-cs-fixer": "^3.5",
-                "phpunit/phpunit": "^8.0 || ^9.0"
-            },
-            "default-branch": true,
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "OpenAPI\\Client\\": "lib/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "OpenAPI\\Client\\Test\\": "test/"
-                }
-            },
-            "license": [
-                "unlicense"
-            ],
-            "authors": [
-                {
-                    "name": "OpenAPI-Generator contributors",
-                    "homepage": "https://openapi-generator.tech"
-                }
-            ],
-            "description": "The PocketSmith API",
-            "homepage": "https://openapi-generator.tech",
-            "keywords": [
-                "api",
-                "openapi",
-                "openapi-generator",
-                "openapitools",
-                "php",
-                "rest",
-                "sdk"
-            ],
-            "support": {
-                "source": "https://github.com/thursdaybw/pocketsmith-php/tree/main",
-                "issues": "https://github.com/thursdaybw/pocketsmith-php/issues"
-            },
-            "time": "2023-08-15T14:02:59+00:00"
-        },
-        {
             "name": "twig/twig",
             "version": "v3.6.1",
             "source": {
@@ -6806,11 +6467,7 @@
     "stability-flags": {
         "drupal/config_update": 15,
         "drupal/default_content": 15,
-        "drupal/fi_account_entity": 20,
-        "drupal/graphql_minimal": 20,
-        "drupal/markdown": 5,
-        "drupal/pocketsmith_api": 20,
-        "drupal/typed_data": 10
+        "drupal/markdown": 5
     },
     "prefer-stable": true,
     "prefer-lowest": false,

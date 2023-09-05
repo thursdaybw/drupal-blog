@@ -16,7 +16,6 @@ filters:
     status: true
     weight: -15
     settings:
-      override: false
       id: commonmark-gfm
       enabled: true
       render_strategy:
@@ -32,4 +31,5 @@ filters:
           commonmark-task-list: false
           filter_align: false
           filter_caption: false
+      override: false
     filterFormat: null

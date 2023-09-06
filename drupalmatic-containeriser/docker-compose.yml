@@ -28,13 +28,9 @@ services:
   database:
     # Using the Lando MySQL image for compatibility
     image: bitnami/mysql:5.7.29-debian-10-r51
-    ports:
-      # Maps host port 3306 to container's MySQL port
-      # Todo, we sure about this?
-      - "3306:3306"
     volumes:
       # Mounts a volume for data persistence
-      - mysql_data:/bitnami/mysql/data
+      - mysql_data_drupal_blog:/bitnami/mysql/data
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_USER=${MYSQL_USER}
@@ -42,5 +38,5 @@ services:
       - MYSQL_DATABASE=${MYSQL_DATABASE}
 
 volumes: # Volume definition for data persistence
-  mysql_data: # Named volume to persist MySQL data between container restarts or rebuilds
+  mysql_data_drupal_blog: # Named volume to persist MySQL data between container restarts or rebuilds
 

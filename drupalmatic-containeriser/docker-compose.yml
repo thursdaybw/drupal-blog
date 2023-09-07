@@ -17,8 +17,8 @@ services:
       - "8445:443"
     # Mounts directories between the host and the container
     volumes:
-      # Mounts the entire directory where docker-compose.yml is to /var/www in the container
-      - ../:/var/www
+      # Bind mount for Drupal files
+      - ../html/sites/default/files:/var/www/html/sites/default/files
     user: "${HTTP_UID}:${HTTP_GID}"
     # Environment variables to set inside the container
     environment:

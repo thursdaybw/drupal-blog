@@ -1,0 +1,7 @@
+blog_consumer.create:
+  path: '/blog-consumer/create'
+  defaults:
+    _title: 'Create Article'
+    _controller: '\Drupal\blog_consumer\Controller\BlogConsumerController'
+  requirements:
+    _permission: 'access content'

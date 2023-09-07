@@ -8,7 +8,8 @@ features:
   favicon: true
   node_user_picture: false
 logo:
-  use_default: true
+  path: 'public://thursdays_blog_logo.png'
+  use_default: false
 all_icons_show: 0
 facebook_url: 'https://www.facebook.com/idewdot'
 twitter_url: 'https://twitter.com/dewdots'

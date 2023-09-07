@@ -12,8 +12,7 @@ RUN a2enmod rewrite
 COPY ./apache-config.conf /etc/apache2/sites-enabled/000-default.conf
 
 # Copy the Drupal codebase into the container
-COPY ../ /var/www/
+COPY . /var/www/
 
-# Set permissions for sites/default/files
-RUN chown -R www-data:www-data /var/www/html/sites/default/files
-RUN chmod u+rw /var/www/html/sites/default/files
+# Set permissions 
+RUN chown -R www-data:www-data /var/www

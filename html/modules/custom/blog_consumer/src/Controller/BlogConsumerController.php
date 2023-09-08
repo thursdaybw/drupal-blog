@@ -7,6 +7,7 @@ namespace Drupal\blog_consumer\Controller;
 use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Returns responses for Blog consumer routes.
@@ -31,32 +32,40 @@ final class BlogConsumerController extends ControllerBase {
   /**
    * Builds the response.
    */
-  public function __invoke(): array {
+  public function __invoke(): Response {
     $request = $this->requestStack->getCurrentRequest();
     $title = $request->query->get('title', 'Default Title');
     $body = $request->query->get('body', 'Default Body');
+    $uuid = $request->query->get('uuid', NULL);
 
-    // Create article node
-    $node = $this->entityTypeManager->getStorage('node')->create([
-      'type' => 'article',
-      'title' => $title,
-      'body' => [
-        'value' => $body,
-        'format' => 'markdown',
-      ],
-    ]);
+    if ($uuid) {
+      // Update existing node
+      $node = $this->entityTypeManager->getStorage('node')->loadByProperties(['uuid' => $uuid]);
+      if ($node) {
+        $node = reset($node);
+        $existing_body = $node->get('body')->value;
+        $node->set('body', [
+          'value' => $existing_body . "\n" . $body,
+          'format' => 'markdown',
+        ]);
+      } else {
+        return new Response('Node not found.', Response::HTTP_NOT_FOUND, ['Content-Type' => 'text/plain']);
+      }
+    } else {
+      // Create new node
+      $node = $this->entityTypeManager->getStorage('node')->create([
+        'type' => 'article',
+        'title' => $title,
+        'body' => [
+          'value' => $body,
+          'format' => 'markdown',
+        ],
+      ]);
+    }
 
     $node->save();
 
-    $build['content'] = [
-      '#type' => 'item',
-      '#markup' => $this->t('Article with title @title and body @body has been created!', [
-        '@title' => $title,
-        '@body' => $body,
-      ]),
-    ];
-
-    return $build;
+    // Return the UUID of the node as plain text
+    return new Response($node->uuid(), Response::HTTP_OK, ['Content-Type' => 'text/plain']);
   }
-
 }

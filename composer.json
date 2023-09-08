@@ -23,6 +23,7 @@
         "drupal/core-recommended": "^10.1",
         "drupal/default_content": "^2.0@alpha",
         "drupal/markdown": "^3.0@RC",
+        "drupal/openai": "^1.0@alpha",
         "drupal/vani": "^10.0",
         "drush/drush": "^12.1",
         "league/commonmark": "^1.0",
@@ -40,7 +41,8 @@
             "drupal/core-project-message": true,
             "phpstan/extension-installer": true,
             "dealerdirect/phpcodesniffer-composer-installer": true,
-            "wikimedia/composer-merge-plugin": true
+            "wikimedia/composer-merge-plugin": true,
+            "php-http/discovery": true
         },
         "sort-packages": true
     },

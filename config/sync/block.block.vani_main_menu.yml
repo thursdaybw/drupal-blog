@@ -12,8 +12,8 @@ _core:
   default_config_hash: VCwNgU_2WIDFyUHQt6nkaWiVnyHG6XAPXvm7FllVUZ0
 id: vani_main_menu
 theme: vani
-region: primary_menu
-weight: 0
+region: footer_top
+weight: -6
 provider: null
 plugin: 'system_menu_block:main'
 settings:

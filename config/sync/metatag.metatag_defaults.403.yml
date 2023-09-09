@@ -1,0 +1,15 @@
+uuid: fd0d9286-0a3e-4c2b-a67e-5292b8a8e5cb
+langcode: en
+status: true
+dependencies: {  }
+_core:
+  default_config_hash: RDCkFL0NDt75Gwioooxo1iuA1S50xTVsBOgX__c6wTw
+id: '403'
+label: '403 access denied'
+tags:
+  abstract: 'You do not have permission to access this page.'
+  canonical_url: '[site:url]'
+  description: 'You do not have permission to access this page.'
+  robots: noindex
+  shortlink: '[site:url]'
+  title: 'Access Denied | [site:name]'

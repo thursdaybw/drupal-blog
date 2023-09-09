@@ -1,0 +1,14 @@
+uuid: 88cb0e4f-1489-4a3a-886e-22eebfeb4d0c
+langcode: en
+status: true
+dependencies: {  }
+_core:
+  default_config_hash: 1noCXlegCr5HFehQRF1ViXy1jhU1jZ_sNN99a8Sj5jo
+id: front
+label: 'Front page'
+tags:
+  abstract: "Welcome to my digital playground, where I explore the intricate world of APIs, Drupal, and PHP. With over 20 years of experience in web development, I've navigated through the ever-changing landscape of code to bring you insights, tutorials, and musings on some of the most fascinating topics in the field. Whether you're a seasoned developer or just starting out, there's something here for you."
+  canonical_url: '[site:url]'
+  description: "Welcome to my digital playground, where I explore the intricate world of APIs, Drupal, and PHP. With over 20 years of experience in web development, I've navigated through the ever-changing landscape of code to bring you insights, tutorials, and musings on some of the most fascinating topics in the field. Whether you're a seasoned developer or just starting out, there's something here for you."
+  shortlink: '[site:url]'
+  title: '[site:name] - Home'

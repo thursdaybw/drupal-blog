@@ -1,0 +1,15 @@
+uuid: 90682d04-663e-44d0-b87a-7aa5c02fc807
+langcode: en
+status: true
+dependencies: {  }
+_core:
+  default_config_hash: puBstSLDz8mbaWU357zaqQDBGMGsJzG0j-TQNQkjg20
+id: '404'
+label: '404 page not found'
+tags:
+  abstract: 'The page you are looking for could not be found."'
+  canonical_url: '[site:url]'
+  description: 'The page you are looking for could not be found."'
+  robots: 'index, follow'
+  shortlink: '[site:url]'
+  title: 'Page Not Found | [site:name]'

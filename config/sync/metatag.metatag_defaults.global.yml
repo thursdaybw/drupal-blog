@@ -1,0 +1,16 @@
+uuid: 75c4145a-5bd4-4017-b8f7-9b283d6962a3
+langcode: en
+status: true
+dependencies: {  }
+_core:
+  default_config_hash: sL588ui1E_8-2c_UupwyYxcqX2OVyMFp3HTLbbFqvPc
+id: global
+label: Global
+tags:
+  abstract: '[node:summary]'
+  author: '[node:author:name]'
+  canonical_url: '[current-page:url]'
+  description: '[node:summary'
+  keywords: '[node:field_tags]'
+  robots: 'index, follow'
+  title: '[current-page:title] | [site:name]'

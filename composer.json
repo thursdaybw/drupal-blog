@@ -24,6 +24,7 @@
         "drupal/default_content": "^2.0@alpha",
         "drupal/markdown": "^3.0@RC",
         "drupal/openai": "^1.0@alpha",
+        "drupal/pathauto": "^1.11",
         "drupal/vani": "^10.0",
         "drush/drush": "^12.1",
         "league/commonmark": "^1.0",

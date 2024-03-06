@@ -20,6 +20,7 @@ handy command to deal the composer and lando both wanting to create the project 
 
 ## Deploy new code updates
 ```
+cd /root/workspace/drupal-blog 
 git pull origin main
 docker-compose down && docker-compose build && docker-compose up -d
 docker-compose exec appserver /bin/bash

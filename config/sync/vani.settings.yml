@@ -1,29 +1,32 @@
 _core:
   default_config_hash: 8_qX6deS-sD3xX39HCLpemQQ6C7YuiKujIdB3qH7cZI
 favicon:
-  use_default: true
+  mimetype: image/png
+  path: 'public://favicon_0.png'
+  use_default: false
 features:
   comment_user_picture: false
   comment_user_verification: false
   favicon: true
   node_user_picture: false
 logo:
-  path: 'public://thursdays_blog_logo.png'
+  path: 'public://bevansbenchlogo_1.png'
   use_default: false
-all_icons_show: 0
-facebook_url: 'https://www.facebook.com/idewdot'
-twitter_url: 'https://twitter.com/dewdots'
-instagram_url: 'https://www.instagram.com/google'
-linkedin_url: 'https://in.linkedin.com/company/google'
-youtube_url: 'https://www.youtube.com/user/Google'
-vimeo_url: 'https://vimeo.com/'
-telegram_url: 'https://telegram.org/'
-whatsapp_url: 'https://web.whatsapp.com/'
-github_url: 'https://github.com/'
+all_icons_show: 1
+facebook_url: 'https://www.facebook.com/bevan.wishart'
+twitter_url: 'https://twitter.com/thursday_bw'
+instagram_url: ''
+linkedin_url: 'https://www.linkedin.com/in/bevan-wishart-9b644a8/'
+youtube_url: 'https://www.youtube.com/channel/UCwBT4PuBbJnZ5C1C0Ss0EGg'
+vimeo_url: ''
+telegram_url: ''
+whatsapp_url: ''
+github_url: 'https://github.com/thursdaybw'
 vk_url: ''
 slider_show: 0
 slider_code: ''
-slider_image: {  }
+slider_image:
+  - '1'
 slider_image_path: ''
 front_sidebar: 0
 google_font: googlecdn
@@ -33,9 +36,9 @@ node_author_pic: 0
 node_tags: 0
 font_icon_fontawesome: 0
 font_icon_material: 0
-copyright_text: 1
+copyright_text: 0
 scrolltotop_on: 1
-styling: 0
-styling_code: ''
+styling: 1
+styling_code: ".header-cicle \r\n{\r\n  display: none;\r\n}\r\n\r\n\r\n.site-branding img {\r\n    width: auto;\r\n    max-height: 120px;\r\n}\r\n\r\n:root {\r\n    --dark-purple: #240B22ff;\r\n    --cool-gray: #928BA6ff;\r\n    --bistre: #493029ff;\r\n    --coyote: #876C47ff;\r\n    --mountbatten-pink: #857583ff;\r\n    --old-gold: #DCBE5Fff;\r\n    --umber: #654F46ff;\r\n    --sky-blue: #66BDD9ff;\r\n    --dark-purple-2: #290F1Aff;\r\n    --ecru: #C7AD72ff;\r\n\r\n    /* Global Theme Settings */\r\n    --header-block-bg: var(--cool-gray); \r\n    --content-bg: var(--mountbatten-pink); \r\n    --content-border-color: var(--bistre); \r\n    --footer-bg: var(--dark-purple); \r\n    --footer-color: var(--cool-gray); \r\n    --footer-border-color: var(--bistre); \r\n    --text-color: var(--bistre); \r\n    --bold-color: var(--dark-purple); \r\n    --border-color: var(--coyote); \r\n    --theme-color: var(--old-gold); \r\n    --theme-color-two: var(--umber); \r\n\r\n    /* Specific Theme Issues */\r\n    --inactive-tab-bg: var(--ecru); /* Lighter background for better contrast */\r\n    --inactive-tab-text: var(--dark-purple-2); /* Darker text for readability */\r\n    --comment-edit-box-bg: var(--sky-blue); /* Lighter background for comment edit box */\r\n}"
 font_icon_fontawesome5: 0
 font_icon_fontawesome6: 0

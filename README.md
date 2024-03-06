@@ -17,3 +17,19 @@ rmdir my-project
 ```
 handy command to deal the composer and lando both wanting to create the project directory.
 
+
+## Deploy new code updates
+```
+git pull origin main
+docker-compose down && docker-compose build && docker-compose up -d
+docker-compose exec appserver /bin/bash
+cd ..
+composer install
+./vendor/bin/drush cim -y
+```
+
+## Loging with bash
+```
+docker run drupal-blog_appserver_1 -it /bin/bash
+```
+

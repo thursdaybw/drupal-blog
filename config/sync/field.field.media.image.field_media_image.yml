@@ -1,21 +1,19 @@
-uuid: eaf0eed0-43b7-45c9-b8f3-25a36af88f66
+uuid: ae39a33e-933d-461a-9ba1-5098994f9ed9
 langcode: en
 status: true
 dependencies:
   config:
-    - field.storage.node.field_image
-    - node.type.article
+    - field.storage.media.field_media_image
+    - media.type.image
   module:
     - image
-_core:
-  default_config_hash: PmVL51L3A9QGbPLoeLHw5epAPszeZRasCeC3imeeDRQ
-id: node.article.field_image
-field_name: field_image
-entity_type: node
-bundle: article
+id: media.image.field_media_image
+field_name: field_media_image
+entity_type: media
+bundle: image
 label: Image
 description: ''
-required: false
+required: true
 translatable: true
 default_value: {  }
 default_value_callback: ''

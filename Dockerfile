@@ -3,7 +3,7 @@ FROM devwithlando/php:8.1-apache-4
 
 # Set home directory
 ENV HOME /home/http
-RUN mkdir -p $HOME && chown ${HTTP_UID}:${HTTP_GID} $HOME
+RUN mkdir -p $HOME && chown www-data:www-data $HOME
 
 # Enable mod_rewrite
 RUN a2enmod rewrite
@@ -16,3 +16,6 @@ COPY . /var/www/
 
 # Set permissions 
 RUN chown -R www-data:www-data /var/www
+
+# Switch to 'www-data' user
+USER www-data

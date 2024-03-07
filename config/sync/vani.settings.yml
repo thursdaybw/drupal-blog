@@ -2,15 +2,15 @@ _core:
   default_config_hash: 8_qX6deS-sD3xX39HCLpemQQ6C7YuiKujIdB3qH7cZI
 favicon:
   mimetype: image/png
-  path: 'public://favicon_0.png'
+  path: ''
   use_default: false
 features:
   comment_user_picture: false
   comment_user_verification: false
-  favicon: true
+  favicon: false
   node_user_picture: false
 logo:
-  path: 'public://bevansbenchlogo_1.png'
+  path: ''
   use_default: false
 all_icons_show: 1
 facebook_url: 'https://www.facebook.com/bevan.wishart'

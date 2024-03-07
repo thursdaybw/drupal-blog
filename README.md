@@ -20,13 +20,12 @@ handy command to deal the composer and lando both wanting to create the project 
 
 ## Deploy new code updates
 ```
-cd /root/workspace/drupal-blog 
+cd /root/workspace/drupal-blog
+sudo chown -R root:root .
 git pull origin main
+sudo chown -R www-data:www-data .
 docker-compose down && docker-compose build && docker-compose up -d
-docker-compose exec appserver /bin/bash
-cd ..
-composer install
-./vendor/bin/drush cim -y
+docker-compose exec -u www-data appserver bash -c "cd /var/www/html && composer install && ./vendor/bin/drush cim -y"
 ```
 
 ## Loging with bash

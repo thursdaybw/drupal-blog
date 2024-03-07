@@ -1,0 +1,13 @@
+uuid: b24453bc-67c5-4dc2-914e-b56ed9578849
+langcode: en
+status: true
+dependencies: {  }
+id: image
+label: 'Image '
+description: "This 'Image' media type is primarily designed for attaching main images to our blog articles, enhancing their presentation and ensuring they are properly represented on social media platforms like Facebook through Open Graph metadata. While it's crafted with articles in mind, its flexible design allows for future expansion, making it suitable for various content types across our site as our needs evolve."
+source: image
+queue_thumbnail_downloads: false
+new_revision: false
+source_configuration:
+  source_field: field_media_image
+field_map: {  }

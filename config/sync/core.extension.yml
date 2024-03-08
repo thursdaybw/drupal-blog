@@ -36,10 +36,6 @@ module:
   metatag_open_graph: 0
   mysql: 0
   node: 0
-  openai: 0
-  openai_api: 0
-  openai_ckeditor: 0
-  openai_content: 0
   options: 0
   page_cache: 0
   path: 0

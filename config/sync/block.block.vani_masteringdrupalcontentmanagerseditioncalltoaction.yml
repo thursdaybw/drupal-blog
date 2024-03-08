@@ -1,0 +1,33 @@
+uuid: 5d6cefec-5dc8-4cfd-aa42-4efce9b21864
+langcode: en
+status: true
+dependencies:
+  content:
+    - 'block_content:basic:d2dd3266-dc71-4a4b-984f-1a4c5161c6ed'
+  module:
+    - block_content
+    - node
+  theme:
+    - vani
+id: vani_masteringdrupalcontentmanagerseditioncalltoaction
+theme: vani
+region: content
+weight: -2
+provider: null
+plugin: 'block_content:d2dd3266-dc71-4a4b-984f-1a4c5161c6ed'
+settings:
+  id: 'block_content:d2dd3266-dc71-4a4b-984f-1a4c5161c6ed'
+  label: 'Mastering Drupal Content Managers Edition: Call to action'
+  label_display: '0'
+  provider: block_content
+  status: true
+  info: ''
+  view_mode: full
+visibility:
+  'entity_bundle:node':
+    id: 'entity_bundle:node'
+    negate: false
+    context_mapping:
+      node: '@node.node_route_context:node'
+    bundles:
+      article: article

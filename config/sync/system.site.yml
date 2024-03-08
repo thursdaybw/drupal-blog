@@ -2,7 +2,7 @@ _core:
   default_config_hash: VDJxTZtQR21qB4lvOq8zszJZLvLKrSPQpdn2E3T71Ww
 langcode: en
 uuid: e3f839dd-ec8f-4dd9-9aba-2998f31fdb62
-name: 'Drupal Blog'
+name: "Bevan's Bench"
 mail: admin@example.com
 slogan: ''
 page:

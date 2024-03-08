@@ -28,6 +28,15 @@ docker-compose down && docker-compose build && docker-compose up -d
 docker-compose exec -u www-data appserver bash -c "cd /var/www && composer install && ./vendor/bin/drush cim -y"
 ```
 
+## Restore the production database and sitefiles to local
+```
+# Restore the DB
+lando drush sql-drop -y && ssh root@myhost "cd /root/workspace/drupal-blog && docker-compose exec -T -u www-data appserver bash -c \"cd /var/www && ./vendor/bin/drush sql-dump --gzip\"" |gunzip |lando drush sqlc && lando drush cr
+
+# Sync site files
+rsync -avz -e "ssh" --progress root@85.31.234.104:/root/workspace/drupal-blog/html/sites/default/files/ ./html/sites/default/files/
+```
+
 ## Loging with bash
 ```
 docker run drupal-blog_appserver_1 -it /bin/bash

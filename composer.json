@@ -23,6 +23,7 @@
         "drupal/core-recommended": "^10.1",
         "drupal/default_content": "^2.0@alpha",
         "drupal/markdown": "^3.0@RC",
+        "drupal/matomo": "^1.23",
         "drupal/metatag": "^2.0",
         "drupal/openai": "^1.0@alpha",
         "drupal/pathauto": "^1.11",

@@ -9,6 +9,7 @@ dependencies:
     - contact
     - file
     - filter
+    - matomo
     - media
     - search
     - shortcut
@@ -25,6 +26,7 @@ permissions:
   - 'access shortcuts'
   - 'access site-wide contact form'
   - 'delete own files'
+  - 'opt-in or out of matomo tracking'
   - 'post comments'
   - 'search content'
   - 'skip comment approval'

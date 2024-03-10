@@ -12,8 +12,8 @@ _core:
   default_config_hash: zkOexElnl76CZuvtgGv8qURVOj9Jjiyi86Vc-YX3icc
 id: vani_account_menu
 theme: vani
-region: hidden_blocks
-weight: -8
+region: primary_menu
+weight: -6
 provider: null
 plugin: 'system_menu_block:account'
 settings:

@@ -29,7 +29,7 @@ slider_image:
   - '1'
 slider_image_path: ''
 front_sidebar: 0
-google_font: googlecdn
+google_font: local
 bootstrapicons: 0
 comment_user_pic: 0
 node_author_pic: 0

@@ -1,0 +1,65 @@
+uuid: 9330749c-454e-450b-ac7c-11a9f303b99e
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.node.to_do_list.field_to_do_list_description
+    - field.field.node.to_do_list.field_to_do_list_due_date
+    - field.field.node.to_do_list.field_to_do_list_priority
+    - field.field.node.to_do_list.field_to_do_list_status
+    - field.field.node.to_do_list.field_to_do_list_tags
+    - node.type.to_do_list
+  module:
+    - datetime
+    - options
+    - text
+    - user
+id: node.to_do_list.default
+targetEntityType: node
+bundle: to_do_list
+mode: default
+content:
+  field_to_do_list_description:
+    type: text_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 102
+    region: content
+  field_to_do_list_due_date:
+    type: datetime_default
+    label: above
+    settings:
+      timezone_override: ''
+      format_type: medium
+    third_party_settings: {  }
+    weight: 106
+    region: content
+  field_to_do_list_priority:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 104
+    region: content
+  field_to_do_list_status:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 103
+    region: content
+  field_to_do_list_tags:
+    type: entity_reference_label
+    label: above
+    settings:
+      link: true
+    third_party_settings: {  }
+    weight: 105
+    region: content
+  links:
+    settings: {  }
+    third_party_settings: {  }
+    weight: 100
+    region: content
+hidden: {  }

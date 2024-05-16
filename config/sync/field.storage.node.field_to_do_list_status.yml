@@ -1,0 +1,30 @@
+uuid: cf93c7a2-fa59-4be5-a865-0d1735aa8f0a
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+    - options
+id: node.field_to_do_list_status
+field_name: field_to_do_list_status
+entity_type: node
+type: list_string
+settings:
+  allowed_values:
+    -
+      value: pending
+      label: Pending
+    -
+      value: in_progress
+      label: 'In Progress'
+    -
+      value: completed
+      label: Completed
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

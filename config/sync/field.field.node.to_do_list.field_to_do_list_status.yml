@@ -1,0 +1,23 @@
+uuid: 430b1cb9-ac28-4bc9-ae36-b28cc88afbb6
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_to_do_list_status
+    - node.type.to_do_list
+  module:
+    - options
+id: node.to_do_list.field_to_do_list_status
+field_name: field_to_do_list_status
+entity_type: node
+bundle: to_do_list
+label: Status
+description: ' The current status of the task. Options include "pending," "in progress," and "completed."'
+required: true
+translatable: false
+default_value:
+  -
+    value: pending
+default_value_callback: ''
+settings: {  }
+field_type: list_string

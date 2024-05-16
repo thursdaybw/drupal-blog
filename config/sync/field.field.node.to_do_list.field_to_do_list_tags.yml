@@ -1,0 +1,29 @@
+uuid: 73a36fca-f1e5-47bb-b4cf-fc5de2db79a5
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_to_do_list_tags
+    - node.type.to_do_list
+    - taxonomy.vocabulary.tags
+id: node.to_do_list.field_to_do_list_tags
+field_name: field_to_do_list_tags
+entity_type: node
+bundle: to_do_list
+label: Tags
+description: 'Keywords or phrases that categorize the task. These tags help in organizing and searching for tasks based on specific themes or topics. For example, you might use tags like "domain," "renewal," or "KDE switch" to easily find related tasks. Tags can also enhance the contextual relevance of tasks during searches.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:taxonomy_term'
+  handler_settings:
+    target_bundles:
+      tags: tags
+    sort:
+      field: name
+      direction: asc
+    auto_create: true
+    auto_create_bundle: ''
+field_type: entity_reference

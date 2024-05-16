@@ -1,0 +1,22 @@
+uuid: 0a4a6ed7-c964-4268-9d42-0d2fca7e9365
+langcode: en
+status: true
+dependencies:
+  config:
+    - node.type.to_do_list
+id: node.to_do_list.promote
+field_name: promote
+entity_type: node
+bundle: to_do_list
+label: 'Promoted to front page'
+description: ''
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

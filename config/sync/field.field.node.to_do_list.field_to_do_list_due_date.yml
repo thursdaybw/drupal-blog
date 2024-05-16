@@ -1,0 +1,21 @@
+uuid: 2b67f102-526f-4215-b96a-decaff74f353
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_to_do_list_due_date
+    - node.type.to_do_list
+  module:
+    - datetime
+id: node.to_do_list.field_to_do_list_due_date
+field_name: field_to_do_list_due_date
+entity_type: node
+bundle: to_do_list
+label: 'Due Date'
+description: 'The date by which the task needs to be completed. Example: "2024-06-01"'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: datetime

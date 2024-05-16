@@ -1,0 +1,22 @@
+uuid: 0f1fa0f4-9357-473f-a214-1303d59dcfc2
+langcode: en
+status: true
+dependencies:
+  config:
+    - node.type.to_do_list
+id: node.to_do_list.status
+field_name: status
+entity_type: node
+bundle: to_do_list
+label: Published
+description: ''
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

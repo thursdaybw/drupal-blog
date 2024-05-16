@@ -1,0 +1,28 @@
+uuid: 9ad7ef8b-89b4-42ce-b5a6-8a4e909902e4
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_to_do_list_description
+    - filter.format.basic_html
+    - filter.format.markdown
+    - filter.format.plain_text
+    - node.type.to_do_list
+  module:
+    - text
+id: node.to_do_list.field_to_do_list_description
+field_name: field_to_do_list_description
+entity_type: node
+bundle: to_do_list
+label: Description
+description: 'Detailed information about the task. Example: "Renew the registration for the main business domain before it expires."'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  allowed_formats:
+    - basic_html
+    - markdown
+    - plain_text
+field_type: text_long

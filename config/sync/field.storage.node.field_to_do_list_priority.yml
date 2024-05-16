@@ -1,0 +1,30 @@
+uuid: ad8a6bfc-b30b-4eb3-b9c8-f02b9d4d4ca9
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+    - options
+id: node.field_to_do_list_priority
+field_name: field_to_do_list_priority
+entity_type: node
+type: list_string
+settings:
+  allowed_values:
+    -
+      value: low
+      label: Low
+    -
+      value: medium
+      label: Medium
+    -
+      value: high
+      label: High
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

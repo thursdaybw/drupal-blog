@@ -1,0 +1,30 @@
+uuid: 45d0faf3-c762-4567-be01-ea78fb7e891c
+langcode: en
+status: true
+dependencies:
+  config:
+    - core.entity_view_mode.node.teaser
+    - field.field.node.to_do_list.field_to_do_list_description
+    - field.field.node.to_do_list.field_to_do_list_due_date
+    - field.field.node.to_do_list.field_to_do_list_priority
+    - field.field.node.to_do_list.field_to_do_list_status
+    - field.field.node.to_do_list.field_to_do_list_tags
+    - node.type.to_do_list
+  module:
+    - user
+id: node.to_do_list.teaser
+targetEntityType: node
+bundle: to_do_list
+mode: teaser
+content:
+  links:
+    settings: {  }
+    third_party_settings: {  }
+    weight: 100
+    region: content
+hidden:
+  field_to_do_list_description: true
+  field_to_do_list_due_date: true
+  field_to_do_list_priority: true
+  field_to_do_list_status: true
+  field_to_do_list_tags: true

@@ -1,0 +1,14 @@
+todo_search.search:
+  path: '/api/todo/search'
+  defaults:
+    _title: 'Todo Search'
+    _controller: '\Drupal\todo_search\Controller\TodoSearchController::search'
+    _format: 'json'
+  requirements:
+    _permission: 'access content'
+    _method: 'GET'
+    _auth: 'basic_auth'
+  options:
+    _auth: ['basic_auth']
+  methods: [GET]
+

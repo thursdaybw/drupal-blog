@@ -28,6 +28,7 @@
         "drupal/openai": "^1.0@alpha",
         "drupal/pathauto": "^1.11",
         "drupal/recaptcha": "^3.2",
+        "drupal/restui": "^1.21",
         "drupal/vani": "^10.0",
         "drush/drush": "^12.1",
         "league/commonmark": "^1.0",

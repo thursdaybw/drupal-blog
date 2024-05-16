@@ -1,0 +1,10 @@
+name: 'Todo Search'
+type: module
+description: 'Provides search functionality for to-do items'
+package: Custom
+core_version_requirement: ^10
+dependencies:
+  - drupal:node
+  - drupal:rest
+  - drupal:serialization
+  - drupal:basic_auth

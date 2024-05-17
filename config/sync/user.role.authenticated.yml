@@ -11,6 +11,7 @@ dependencies:
     - filter
     - matomo
     - media
+    - openapi
     - search
     - shortcut
     - system
@@ -23,6 +24,7 @@ is_admin: false
 permissions:
   - 'access comments'
   - 'access content'
+  - 'access openapi api docs'
   - 'access shortcuts'
   - 'access site-wide contact form'
   - 'delete own files'

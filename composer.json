@@ -26,6 +26,7 @@
         "drupal/matomo": "^1.23",
         "drupal/metatag": "^2.0",
         "drupal/openai": "^1.0@alpha",
+        "drupal/openapi_rest": "^2.0@RC",
         "drupal/pathauto": "^1.11",
         "drupal/recaptcha": "^3.2",
         "drupal/restui": "^1.21",

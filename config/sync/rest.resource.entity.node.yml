@@ -1,0 +1,23 @@
+uuid: 9ad6345b-160d-49b6-9e03-734622abf0af
+langcode: en
+status: true
+dependencies:
+  module:
+    - basic_auth
+    - node
+    - serialization
+_core:
+  default_config_hash: 6ONvVCbif1qZnRfa8XmPzMwNKLDhF6K7eTrTgIVtP5E
+id: entity.node
+plugin_id: 'entity:node'
+granularity: resource
+configuration:
+  methods:
+    - GET
+    - POST
+    - DELETE
+    - PATCH
+  formats:
+    - json
+  authentication:
+    - basic_auth

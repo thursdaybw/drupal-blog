@@ -6,6 +6,7 @@ dependencies:
     - node
     - serialization
     - simple_oauth
+    - user
 _core:
   default_config_hash: 6ONvVCbif1qZnRfa8XmPzMwNKLDhF6K7eTrTgIVtP5E
 id: entity.node
@@ -21,3 +22,4 @@ configuration:
     - json
   authentication:
     - oauth2
+    - cookie

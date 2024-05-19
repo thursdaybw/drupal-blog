@@ -7,8 +7,5 @@ todo_search.search:
   requirements:
     _permission: 'access content'
     _method: 'GET'
-    _auth: 'basic_auth'
-  options:
-    _auth: ['basic_auth']
   methods: [GET]
 

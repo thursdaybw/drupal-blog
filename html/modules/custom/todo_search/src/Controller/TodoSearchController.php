@@ -27,11 +27,11 @@ final class TodoSearchController extends ControllerBase {
 
   public function search(Request $request) {
 
+
     $query = \Drupal::entityQuery('node')
       ->accessCheck(TRUE)
       ->condition('type', 'to_do_list')
-      ->condition('status', 0); // Published nodes only
-
+      ->condition('status', 1); // Published nodes only
 
     if ($status = $request->query->get('status')) {
       $query->condition('field_to_do_list_status', $status);
@@ -43,6 +43,45 @@ final class TodoSearchController extends ControllerBase {
 
     if ($due_date = $request->query->get('due_date')) {
       $query->condition('field_to_do_list_due_date', $due_date, '<=');
+    }
+
+    if ($due_date_upcoming = $request->query->get('due_date_upcoming')) {
+      $query->condition('field_to_do_list_due_date', $due_date_upcoming, '>=');
+    }
+
+    if ($due_date_overdue = $request->query->get('due_date_overdue')) {
+      $query->condition('field_to_do_list_due_date', $due_date_overdue, '<');
+    }
+
+    if ($request->query->get('due_date_empty')) {
+      $query->notExists('field_to_do_list_due_date');
+    }
+
+    if ($created = $request->query->get('created_after')) {
+      $query->condition('created', strtotime($created), '>=');
+    }
+
+    if ($priority = $request->query->get('priority')) {
+      $query->condition('field_to_do_list_priority', $priority);
+    }
+
+    if ($keyword = $request->query->get('keyword')) {
+      $group = $query->orConditionGroup()
+        ->condition('title', '%' . $query->escapeLike($keyword) . '%', 'LIKE')
+        ->condition('field_to_do_list_description', '%' . $query->escapeLike($keyword) . '%', 'LIKE');
+      $query->condition($group);
+    }
+
+    if ($author = $request->query->get('author')) {
+      $query->condition('uid', $author);
+    }
+
+    if ($assignee = $request->query->get('assignee')) {
+      $query->condition('field_to_do_list_assignee', $assignee);
+    }
+
+    if ($sort = $request->query->get('sort')) {
+      $query->sort('created', $sort);
     }
 
     $nids = $query->execute();
@@ -67,5 +106,5 @@ final class TodoSearchController extends ControllerBase {
     return new JsonResponse(['tasks' => $tasks]);
   }
 
-
 }
+

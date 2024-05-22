@@ -7,5 +7,6 @@ todo_search.search:
   requirements:
     _permission: 'access content'
     _method: 'GET'
+   _auth: ['oauth2']  # Allow OAuth2 authentication
   methods: [GET]
 

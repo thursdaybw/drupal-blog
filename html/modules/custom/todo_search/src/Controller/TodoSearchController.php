@@ -27,6 +27,8 @@ final class TodoSearchController extends ControllerBase {
 
   public function search(Request $request) {
 
+    $token = $request->headers->get('Authorization');
+    \Drupal::logger('todo_search')->info('Received token: ' . $token);
 
     $query = \Drupal::entityQuery('node')
       ->accessCheck(TRUE)

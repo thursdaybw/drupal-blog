@@ -5,6 +5,6 @@ todo_search.search:
     _controller: '\Drupal\todo_search\Controller\TodoSearchController::search'
     _format: 'json'
   requirements:
-    _permission: 'access content'
+    _permission: 'view own unpublished content'
     _method: 'GET'
   methods: [GET]

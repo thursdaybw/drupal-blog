@@ -33,7 +33,7 @@ final class TodoSearchController extends ControllerBase {
     $query = \Drupal::entityQuery('node')
       ->accessCheck(TRUE)
       ->condition('type', 'to_do_list')
-      ->condition('status', 1); // Published nodes only
+      ->condition('status', 0); // Published nodes only
 
     if ($status = $request->query->get('status')) {
       $query->condition('field_to_do_list_status', $status);

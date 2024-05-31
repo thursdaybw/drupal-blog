@@ -7,6 +7,4 @@ todo_search.search:
   requirements:
     _permission: 'view own unpublished content'
     _method: 'GET'
-  options:
-    _auth: ['cookie','oauth'] 
   methods: [GET]

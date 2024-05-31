@@ -6,6 +6,7 @@ use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Drupal\node\Entity\Node;
+use Drupal\Core\Database\Database;
 
 /**
  * Returns responses for Todo search routes.
@@ -68,9 +69,14 @@ final class TodoSearchController extends ControllerBase {
     }
 
     if ($keyword = $request->query->get('keyword')) {
+      // Get the database connection
+      $connection = Database::getConnection();
+      // Escape the keyword
+      $escaped_keyword = $connection->escapeLike($keyword);
+
       $group = $query->orConditionGroup()
-        ->condition('title', '%' . $query->escapeLike($keyword) . '%', 'LIKE')
-        ->condition('field_to_do_list_description', '%' . $query->escapeLike($keyword) . '%', 'LIKE');
+        ->condition('title', '%' . $escaped_keyword . '%', 'LIKE')
+        ->condition('field_to_do_list_description', '%' . $escaped_keyword . '%', 'LIKE');
       $query->condition($group);
     }
 

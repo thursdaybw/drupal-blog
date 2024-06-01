@@ -45,127 +45,94 @@ if (isset($_SESSION['auth_code']) && !isset($_SESSION['access_token'])) {
     $token_data = json_decode($response, true);
     if (isset($token_data['access_token'])) {
         $_SESSION['access_token'] = $token_data['access_token'];
-    } else {
-        echo "Failed to obtain access token.";
-        exit();
     }
 }
 
-// Step 5: Create a to-do item if the form is submitted
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_SESSION['access_token'])) {
-        $access_token = $_SESSION['access_token'];
-
-        // Data for creating a new to-do item
-        $new_todo_data = json_encode([
-            "type" => "to_do",
-            "title" => "Test To-Do Item",
-            "body" => [
-                "value" => "This is a test to-do item created to verify the functionality of creating tasks via the API.",
-                "format" => "plain_text"
-            ],
-            "field_to_do_list_description" => [
-                "value" => "Verify the creation and retrieval of a test to-do item."
-            ],
-            "field_to_do_list_due_date" => "2024-06-01",
-            "field_to_do_list_priority" => "medium",
-            "field_to_do_list_status" => "in_progress"
-        ]);
-
-        $ch = curl_init();
-
-        curl_setopt($ch, CURLOPT_URL, $create_todo_url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer ' . $access_token,
-            'Content-Type: application/json'
-        ]);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $new_todo_data);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Allow redirects
-
-        $create_response = curl_exec($ch);
-
-        if ($create_response === false) {
-            echo "cURL Error: " . curl_error($ch);
-        } else {
-            $created_todo = json_decode($create_response, true);
-            echo "<h1>Created Todo Item</h1><pre>";
-            print_r($created_todo);
-            echo "</pre>";
-        }
-
-        curl_close($ch);
-    }
-}
-
-// Step 6: Make an authenticated API request using cURL to list todo items
+// Step 5: Fetch the list of todo items.
 if (isset($_SESSION['access_token'])) {
+    $access_token = $_SESSION['access_token'];
+    $todos_response = file_get_contents($todos_url, false, stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'header' => 'Authorization: Bearer ' . $access_token
+        ]
+    ]));
+    $todos = json_decode($todos_response, true);
+}
 
-    // Prepare query parameters
-    $query_params = http_build_query([
-        '_format' => 'json'
-    ]);
+// Step 6: Handle creating a test todo item
+if (isset($_POST['create_test_todo'])) {
+    $new_todo = [
+        'type' => [['target_id' => 'to_do_list']], // Assuming 'to_do_list' is the content type
+        'title' => [['value' => 'Test Todo Item']],
+        'field_to_do_list_description' => [['value' => 'This is a test todo item created via the API.']],
+        'field_to_do_list_due_date' => [['value' => '2024-06-01T00:00:00Z']], // Corrected date format (RFC 3339)
+        'field_to_do_list_priority' => [['value' => 'high']], // Correct option from your configuration
+        'field_to_do_list_status' => [['value' => 'pending']],  // Correct option from your configuration
+        'field_to_do_list_tags' => [['target_id' => '42']] // Assuming '42' is a valid taxonomy term ID in the Tags vocabulary
+    ];
 
-    // Add query parameters to the URL
-    $todos_url_with_params = $todos_url . '?' . $query_params;
+    // Ensure the URL includes the _format parameter
+    $create_todo_url = 'http://bevansbench.com.ddev.site/node?_format=json';
 
-    $ch = curl_init();
+    // Initialize cURL
+    $ch = curl_init($create_todo_url);
 
-    curl_setopt($ch, CURLOPT_URL, $todos_url_with_params);
+    // Set cURL options
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Bearer ' . $_SESSION['access_token'],
+        'Authorization: Bearer ' . $access_token,
+        'Content-Type: application/json',
+        'Accept: application/json'
     ]);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Allow redirects
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($new_todo));
+    curl_setopt($ch, CURLOPT_FAILONERROR, true);
 
-    $todos_response = curl_exec($ch);
+    // Execute the cURL request
+    $create_response = curl_exec($ch);
 
-    if ($todos_response === false) {
-        echo "cURL Error: " . curl_error($ch);
-    } else {
-        $todos = json_decode($todos_response, true);
-	if (isset($todos['tasks'])) {
-          $todos = $todos['tasks'];
-	}
+    // Check for errors
+    if (curl_errno($ch)) {
+        echo 'Curl error: ' . curl_error($ch) . "\n";
     }
 
+    // Get the response status code
+    $http_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    // Close cURL session
     curl_close($ch);
+
+    // Log the payload, response, and status code
+    echo 'Payload: ' . json_encode($new_todo) . "\n";
+    echo 'HTTP Status Code: ' . $http_status . "\n";
+    echo 'Response: ' . $create_response . "\n";
+
+    // Decode the response to check for errors or success
+    $response_data = json_decode($create_response, true);
+    print_r($response_data);
 }
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>To-Do List</title>
+    <title>Todo List</title>
 </head>
 <body>
-    <h1>To-Do List</h1>
-<?php
-if (isset($todos)) {
-    // First check if $todos is an array
-    if (is_array($todos) && count($todos) > 0) {
-        echo "<ul>";
-        foreach ($todos as $todo) {
-            // Check if each $todo is an array and has a 'title' key before accessing it
-            if (is_array($todo) && array_key_exists('title', $todo)) {
-                echo "<li>" . htmlspecialchars($todo['title']) . "</li>";
-            } else {
-                // Log or handle individual todo item format issues
-                echo "<li>Error: Todo item is not in the expected format.</li>";
-            }
-        }
-        echo "</ul>";
-    } else {
-        // Handle cases where $todos is not structured as expected or is empty
-        echo "<p>Error: Todos data is not in the expected format or is empty.</p>";
-    }
-}
-?>
+    <h1>Todo List</h1>
+    <ul>
+        <?php if (isset($todos) && !empty($todos)): ?>
+            <?php foreach ($todos['tasks'] as $todo): ?>
+                <li><?php echo htmlspecialchars($todo['title']); ?></li>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <li>No todo items found.</li>
+        <?php endif; ?>
+    </ul>
+
     <form method="post">
-        <button type="submit">Create Test To-Do</button>
+        <button type="submit" name="create_test_todo">Create Test Todo Item</button>
     </form>
 </body>
 </html>

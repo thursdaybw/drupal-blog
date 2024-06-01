@@ -2,10 +2,10 @@
 session_start();
 
 // Configuration
-$base_url = "https://bevansbench.com.ddev.site"; // Updated to use HTTPS
-$client_id = "default_consumer";
+$base_url = "https://bevansbench.com"; // Updated to use HTTPS
+$client_id = "dev_consumer";
 $client_secret = "secret";
-$redirect_uri = "http://bevansbench.com.ddev.site/oauthclient.php"; // Ensure this matches exactly
+$redirect_uri = "http://bevansbench.com/oauthclient.php"; // Ensure this matches exactly
 $scope = "content_editor";
 $auth_url = "$base_url/oauth/authorize";
 $token_url = "$base_url/oauth/token";
@@ -73,7 +73,7 @@ if (isset($_POST['create_test_todo'])) {
     ];
 
     // Ensure the URL includes the _format parameter
-    $create_todo_url = 'http://bevansbench.com.ddev.site/node?_format=json';
+    $create_todo_url = 'http://bevansbench.com/node?_format=json';
 
     // Initialize cURL
     $ch = curl_init($create_todo_url);

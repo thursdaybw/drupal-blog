@@ -5,7 +5,7 @@ session_start();
 $base_url = "https://bevansbench.com"; // Updated to use HTTPS
 $client_id = "dev_consumer";
 $client_secret = "secret";
-$redirect_uri = "http://bevansbench.com/oauthclient.php"; // Ensure this matches exactly
+$redirect_uri = "http://bevansbench.com.ddev.site/oauthclient.php"; // Ensure this matches exactly
 $scope = "content_editor";
 $auth_url = "$base_url/oauth/authorize";
 $token_url = "$base_url/oauth/token";

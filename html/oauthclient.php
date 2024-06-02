@@ -2,7 +2,7 @@
 session_start();
 
 // Configuration
-$base_url = "https://bevansbench.com"; // Updated to use HTTPS
+$base_url = "https://www.bevansbench.com"; // Updated to use HTTPS
 $client_id = "dev_consumer";
 $client_secret = "secret";
 $redirect_uri = "http://bevansbench.com.ddev.site/oauthclient.php"; // Ensure this matches exactly
@@ -29,24 +29,51 @@ if (!isset($_GET['code']) && !isset($_SESSION['auth_code'])) {
 // Step 4: Exchange authorization code for access token
 if (isset($_SESSION['auth_code']) && !isset($_SESSION['access_token'])) {
     $auth_code = $_SESSION['auth_code'];
-    $response = file_get_contents($token_url, false, stream_context_create([
-        'http' => [
-            'method' => 'POST',
-            'header' => 'Content-Type: application/x-www-form-urlencoded',
-            'content' => http_build_query([
-                'grant_type' => 'authorization_code',
-                'code' => $auth_code,
-                'redirect_uri' => $redirect_uri,
-                'client_id' => $client_id,
-                'client_secret' => $client_secret
-            ])
-        ]
-    ]));
-    $token_data = json_decode($response, true);
-    if (isset($token_data['access_token'])) {
-        $_SESSION['access_token'] = $token_data['access_token'];
+    $token_url = 'https://www.bevansbench.com/oauth/token';
+
+    // Prepare the data for the POST request
+    $postData = http_build_query([
+        'grant_type' => 'authorization_code',
+        'code' => $auth_code,
+        'redirect_uri' => $redirect_uri,
+        'client_id' => $client_id,
+        'client_secret' => $client_secret
+    ]);
+
+    // Initialize cURL
+    $ch = curl_init();
+
+    // Set the options for the cURL request
+    curl_setopt($ch, CURLOPT_URL, $token_url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/x-www-form-urlencoded',
+        'Content-Length: ' . strlen($postData)
+    ]);
+
+    // Execute the POST request
+    $response = curl_exec($ch);
+
+    // Check for errors
+    if ($response === false) {
+        echo 'Curl error: ' . curl_error($ch);
+    } else {
+        echo 'Response from OAuth server: ' . $response; // Debugging line
+        $token_data = json_decode($response, true);
+        if (isset($token_data['access_token'])) {
+            $_SESSION['access_token'] = $token_data['access_token'];
+        } else {
+            // Handle the case where the access token is not found
+            echo 'Error: Access token not found in the response.';
+        }
     }
+
+    // Close the cURL session
+    curl_close($ch);
 }
+
 
 // Step 5: Fetch the list of todo items.
 if (isset($_SESSION['access_token'])) {
@@ -73,7 +100,7 @@ if (isset($_POST['create_test_todo'])) {
     ];
 
     // Ensure the URL includes the _format parameter
-    $create_todo_url = 'http://bevansbench.com/node?_format=json';
+    $create_todo_url = 'https://www.bevansbench.com/node?_format=json';
 
     // Initialize cURL
     $ch = curl_init($create_todo_url);

@@ -9,7 +9,6 @@ dependencies:
     - contact
     - filter
     - media
-    - openapi
     - search
     - system
 _core:
@@ -21,7 +20,6 @@ is_admin: false
 permissions:
   - 'access comments'
   - 'access content'
-  - 'access openapi api docs'
   - 'access site-wide contact form'
   - 'search content'
   - 'use text format restricted_html'

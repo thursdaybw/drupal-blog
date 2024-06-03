@@ -100,6 +100,232 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/TodoItem'
+  /node/{nodeId}:
+    patch:
+      operationId: updateNode
+      summary: Updates an existing node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID of the node to update
+        - name: _format
+          in: query
+          required: true
+          schema:
+            type: string
+            example: json
+          description: Response format
+      requestBody:
+        description: Node object with updated values
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        description: The updated title of the node
+                field_to_do_list_description:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: Updated description of the to-do item
+                field_to_do_list_due_date:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                        example: "2024-06-01T00:00:00Z"
+                        description: Updated due date of the to-do item
+                field_to_do_list_priority:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: Updated priority of the to-do item (e.g., "high", "medium", "low")
+                      example: "medium"
+                field_to_do_list_status:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: Updated status of the to-do item (e.g., "pending", "in_progress", "completed")
+                      example: "pending"
+                field_to_do_list_tags:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      target_id:
+                        type: string
+                    description: Updated tags for the to-do item
+                    required:
+                      - target_id
+                  example:
+                    - target_id: "1"
+                    - target_id: "2"
+      responses:
+        '200':
+          description: Node updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nid:
+                    type: object
+                    properties:
+                      value:
+                        type: integer
+                  uuid:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  vid:
+                    type: object
+                    properties:
+                      value:
+                        type: integer
+                  langcode:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  type:
+                    type: object
+                    properties:
+                      target_id:
+                        type: string
+                      target_type:
+                        type: string
+                      target_uuid:
+                        type: string
+                  revision_timestamp:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                  revision_uid:
+                    type: object
+                    properties:
+                      target_id:
+                        type: integer
+                      target_type:
+                        type: string
+                      target_uuid:
+                        type: string
+                      url:
+                        type: string
+                  status:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  uid:
+                    type: object
+                    properties:
+                      target_id:
+                        type: integer
+                      target_type:
+                        type: string
+                      target_uuid:
+                        type: string
+                      url:
+                        type: string
+                  title:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  created:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                  changed:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                  promote:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  sticky:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  default_langcode:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  revision_translation_affected:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  metatag:
+                    type: object
+                    properties:
+                      tag:
+                        type: string
+                  path:
+                    type: object
+                    properties:
+                      alias:
+                        type: string
+                      pid:
+                        type: string
+                      langcode:
+                        type: string
+                  field_to_do_list_description:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  field_to_do_list_due_date:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date
+                  field_to_do_list_priority:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  field_to_do_list_status:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  field_to_do_list_tags:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        target_id:
+                          type: integer
   /node:
     post:
       operationId: createNode
@@ -365,174 +591,6 @@ paths:
                       properties:
                         target_id:
                           type: integer
-        '201':
-          description: Node created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TodoItem'
-
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  nid:
-                    type: object
-                    properties:
-                      value:
-                        type: integer
-                  uuid:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                  vid:
-                    type: object
-                    properties:
-                      value:
-                        type: integer
-                  langcode:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                  type:
-                    type: object
-                    properties:
-                      target_id:
-                        type: string
-                      target_type:
-                        type: string
-                      target_uuid:
-                        type: string
-                  revision_timestamp:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                        format: date-time
-                      format:
-                        type: string
-                  revision_uid:
-                    type: object
-                    properties:
-                      target_id:
-                        type: integer
-                      target_type:
-                        type: string
-                      target_uuid:
-                        type: string
-                      url:
-                        type: string
-                  status:
-                    type: object
-                    properties:
-                      value:
-                        type: boolean
-                  uid:
-                    type: object
-                    properties:
-                      target_id:
-                        type: integer
-                      target_type:
-                        type: string
-                      target_uuid:
-                        type: string
-                      url:
-                        type: string
-                  title:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                  created:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                        format: date-time
-                      format:
-                        type: string
-                  changed:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                        format: date-time
-                      format:
-                        type: string
-                  promote:
-                    type: object
-                    properties:
-                      value:
-                        type: boolean
-                  sticky:
-                    type: object
-                    properties:
-                      value:
-                        type: boolean
-                  default_langcode:
-                    type: object
-                    properties:
-                      value:
-                        type: boolean
-                  revision_translation_affected:
-                    type: object
-                    properties:
-                      value:
-                        type: boolean
-                  metatag:
-                    type: object
-                    properties:
-                      tag:
-                        type: string
-                  path:
-                    type: object
-                    properties:
-                      alias:
-                        type: string
-                      pid:
-                        type: string
-                      langcode:
-                        type: string
-                  field_to_do_list_description:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                      format:
-                        type: string
-                      processed:
-                        type: string
-                  field_to_do_list_due_date:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                        format: date
-                  field_to_do_list_priority:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                  field_to_do_list_status:
-                    type: object
-                    properties:
-                      value:
-                        type: string
-                  field_to_do_list_tags:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        target_id:
-                          type: integer
-
-      responses:
         '201':
           description: Node created
           content:

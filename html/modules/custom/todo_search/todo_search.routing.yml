@@ -10,3 +10,10 @@ todo_search.search:
   options:
     _auth: ['oauth2']
   methods: [GET]
+todo_search.openapi:
+  path: '/openapi.yml'
+  defaults:
+    _controller: '\Drupal\todo_search\Controller\OpenApiController::serve'
+    _title: 'OpenAPI'
+  requirements:
+    _permission: 'access content'

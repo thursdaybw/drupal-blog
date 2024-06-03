@@ -1,0 +1,784 @@
+openapi: 3.0.0
+info:
+  title: To-Do List API
+  description: API for managing and retrieving to-do items.
+  version: 1.0.0
+servers:
+  - url: https://www.bevansbench.com
+    description: Main API server
+paths:
+  /api/todo/search:
+    get:
+      operationId: searchTodos
+      Current Time 1:
+      summary: Searches to-do items
+      parameters:
+        - name: _format
+          in: query
+          required: true
+          description: Format of the response
+          schema:
+            type: string
+            enum:
+              - json
+            default: json
+        - name: status
+          in: query
+          required: false
+          description: Filter by status (e.g., "completed", "in_progress")
+          schema:
+            type: string
+        - name: context
+          in: query
+          required: false
+          description: Filter by context (tags)
+          schema:
+            type: string
+        - name: due_date
+          in: query
+          required: false
+          description: Filter by due date (use format YYYY-MM-DD)
+          schema:
+            type: string
+        - name: due_date_upcoming
+          in: query
+          required: false
+          description: Filter by upcoming due dates (use format YYYY-MM-DD)
+          schema:
+            type: string
+        - name: due_date_overdue
+          in: query
+          required: false
+          description: Filter by overdue due dates (use format YYYY-MM-DD)
+          schema:
+            type: string
+        - name: due_date_empty
+          in: query
+          required: false
+          description: Filter by items with no due date
+          schema:
+            type: boolean
+        - name: created_after
+          in: query
+          required: false
+          description: Filter by creation date after (use format YYYY-MM-DD)
+          schema:
+            type: string
+        - name: priority
+          in: query
+          required: false
+          description: Filter by priority (e.g., "high", "medium", "low")
+          schema:
+            type: string
+        - name: keyword
+          in: query
+          required: false
+          description: Filter by keyword in title or description
+          schema:
+            type: string
+        - name: author
+          in: query
+          required: false
+          description: Filter by author (user ID)
+          schema:
+            type: integer
+        - name: sort
+          in: query
+          required: false
+          description: Sort by created date (ASC or DESC)
+          schema:
+            type: string
+            enum:
+              - ASC
+              - DESC
+      responses:
+        '200':
+          description: Returns a list of to-do items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TodoItem'
+  /node:
+    post:
+      operationId: createNode
+      summary: Creates a new node
+      parameters:
+        - name: _format
+          in: query
+          required: true
+          schema:
+            type: string
+            example: json
+          description: Response format
+      requestBody:
+        description: Node object that needs to be added
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:  # Mark the required fields here
+                - type
+                - title
+                - field_to_do_list_description
+                - field_to_do_list_due_date
+                - field_to_do_list_priority
+                - field_to_do_list_status
+                - field_to_do_list_tags
+              properties:
+                type:
+                  type: string
+                  description: The content type of the node
+                  example: to_do_list
+                  enum:  # Fixed value for the "type" field
+                    - to_do_list
+                title:
+                  type: array
+                  items:
+                  type: object
+                  properties:
+                    value:
+                       type: string
+                       description: The title of the node
+                  required:
+                    - value
+                  description: The title of the node
+                field_to_do_list_description:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: Description of the to-do item
+                  required:
+                    - value
+                field_to_do_list_due_date:
+                   type: array
+                   items:
+                     type: object
+                     properties:
+                       value:
+                         type: string
+                         format: date-time
+                         example: "2024-06-01T00:00:00Z" # Example of the correct date format 'Y-m-d\TH:i:sP' (RFC 3339), 'Y-m-d\TH:i:sO' (ISO 8601). The date format of \"Y-m-d\" is not in an accepted format.
+                         description: Due date of the to-do item
+                     required:
+                       - value
+                field_to_do_list_priority:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: The priority of the to-do item (e.g., "high", "medium", "low")
+                      example: "medium"
+                  required:
+                    - value
+                field_to_do_list_status:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: Status of the to-do item (e.g., "pending", "in_progress", "completed")
+                      example: "pending"
+                  required:
+                    - value
+                field_to_do_list_tags:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      target_id:
+                        type: string
+                    required:
+                      - target_id
+                    # The field_to_do_list_tags must be an array of objects.
+                    # Each object should contain a target_id property.
+                    # Example of a valid payload:
+                    # "field_to_do_list_tags": [
+                    #   {
+                    #     "target_id": "1"
+                    #   },
+                    #   {
+                    #     "target_id": "2"
+                    #   }
+                    # ]
+                  example:
+                    - target_id: "1"
+                    - target_id: "2"
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nid:
+                    type: object
+                    properties:
+                      value:
+                        type: integer
+                  uuid:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  vid:
+                    type: object
+                    properties:
+                      value:
+                        type: integer
+                  langcode:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  type:
+                    type: object
+                    properties:
+                      target_id:
+                        type: string
+                      target_type:
+                        type: string
+                      target_uuid:
+                        type: string
+                  revision_timestamp:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                      format:
+                        type: string
+                  revision_uid:
+                    type: object
+                    properties:
+                      target_id:
+                        type: integer
+                      target_type:
+                        type: string
+                      target_uuid:
+                        type: string
+                      url:
+                        type: string
+                  status:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  uid:
+                    type: object
+                    properties:
+                      target_id:
+                        type: integer
+                      target_type:
+                        type: string
+                      target_uuid:
+                        type: string
+                      url:
+                        type: string
+                  title:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  created:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                      format:
+                        type: string
+                  changed:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                      format:
+                        type: string
+                  promote:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  sticky:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  default_langcode:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  revision_translation_affected:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  metatag:
+                    type: object
+                    properties:
+                      tag:
+                        type: string
+                  path:
+                    type: object
+                    properties:
+                      alias:
+                        type: string
+                      pid:
+                        type: string
+                      langcode:
+                        type: string
+                  field_to_do_list_description:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                      format:
+                        type: string
+                      processed:
+                        type: string
+                  field_to_do_list_due_date:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date
+                  field_to_do_list_priority:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  field_to_do_list_status:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  field_to_do_list_tags:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        target_id:
+                          type: integer
+        '201':
+          description: Node created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoItem'
+
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nid:
+                    type: object
+                    properties:
+                      value:
+                        type: integer
+                  uuid:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  vid:
+                    type: object
+                    properties:
+                      value:
+                        type: integer
+                  langcode:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  type:
+                    type: object
+                    properties:
+                      target_id:
+                        type: string
+                      target_type:
+                        type: string
+                      target_uuid:
+                        type: string
+                  revision_timestamp:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                      format:
+                        type: string
+                  revision_uid:
+                    type: object
+                    properties:
+                      target_id:
+                        type: integer
+                      target_type:
+                        type: string
+                      target_uuid:
+                        type: string
+                      url:
+                        type: string
+                  status:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  uid:
+                    type: object
+                    properties:
+                      target_id:
+                        type: integer
+                      target_type:
+                        type: string
+                      target_uuid:
+                        type: string
+                      url:
+                        type: string
+                  title:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  created:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                      format:
+                        type: string
+                  changed:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date-time
+                      format:
+                        type: string
+                  promote:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  sticky:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  default_langcode:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  revision_translation_affected:
+                    type: object
+                    properties:
+                      value:
+                        type: boolean
+                  metatag:
+                    type: object
+                    properties:
+                      tag:
+                        type: string
+                  path:
+                    type: object
+                    properties:
+                      alias:
+                        type: string
+                      pid:
+                        type: string
+                      langcode:
+                        type: string
+                  field_to_do_list_description:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                      format:
+                        type: string
+                      processed:
+                        type: string
+                  field_to_do_list_due_date:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        format: date
+                  field_to_do_list_priority:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  field_to_do_list_status:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                  field_to_do_list_tags:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        target_id:
+                          type: integer
+
+      responses:
+        '201':
+          description: Node created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoItem'
+
+  /node/{nodeId}:
+    get:
+      operationId: readTodo
+      summary: Reads a to-do item
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          description: The ID of the to-do item
+          schema:
+            type: integer
+        - name: _format
+          in: query
+          required: true
+          description: Format of the response
+          schema:
+            type: string
+            enum:
+              - json
+            default: json
+      responses:
+        '200':
+          description: Returns a to-do item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoItem'
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      flows:
+        password:
+          tokenUrl: https://www.bevansbench.com/oauth/token
+          scopes: {}
+  schemas:
+    TodoItem:
+      type: object
+      properties:
+        nid:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: integer
+        uuid:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+        vid:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: integer
+        langcode:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+        type:
+          type: array
+          items:
+            type: object
+            properties:
+              target_id:
+                type: string
+              target_type:
+                type: string
+              target_uuid:
+                type: string
+        revision_timestamp:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+                format: date-time
+              format:
+                type: string
+        revision_uid:
+          type: array
+          items:
+            type: object
+            properties:
+              target_id:
+                type: integer
+              target_type:
+                type: string
+              target_uuid:
+                type: string
+              url:
+                type: string
+        status:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: boolean
+        uid:
+          type: array
+          items:
+            type: object
+            properties:
+              target_id:
+                type: integer
+              target_type:
+                type: string
+              target_uuid:
+                type: string
+              url:
+                type: string
+        title:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+        created:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+                format: date-time
+              format:
+                type: string
+        changed:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+                format: date-time
+              format:
+                type: string
+        promote:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: boolean
+        sticky:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: boolean
+        default_langcode:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: boolean
+        revision_translation_affected:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: boolean
+        metatag:
+          type: array
+          items:
+            type: object
+            properties:
+              tag:
+                type: string
+              attributes:
+                type: object
+                additionalProperties:
+                  type: string
+        path:
+          type: array
+          items:
+            type: object
+            properties:
+              alias:
+                type: string
+                nullable: true
+              pid:
+                type: string
+                nullable: true
+              langcode:
+                type: string
+        field_to_do_list_description:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              format:
+                type: string
+              processed:
+                type: string
+        field_to_do_list_due_date:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+                nullable: true
+        field_to_do_list_priority:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+        field_to_do_list_status:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+        field_to_do_list_tags:
+          type: array
+          items:
+            type: object
+            properties:
+              target_id:
+                type: integer
+security:
+  - OAuth2: []

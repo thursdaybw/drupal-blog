@@ -11,7 +11,7 @@ todo_search.search:
     _auth: ['oauth2']
   methods: [GET]
 todo_search.openapi:
-  path: '/openapi.yml'
+  path: '/openapi-spec'
   defaults:
     _controller: '\Drupal\todo_search\Controller\OpenApiController::serve'
     _title: 'OpenAPI'

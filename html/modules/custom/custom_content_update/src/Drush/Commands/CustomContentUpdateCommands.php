@@ -4,8 +4,15 @@ namespace Drupal\custom_content_update\Drush\Commands;
 
 use Drush\Commands\DrushCommands;
 use Symfony\Component\Yaml\Yaml;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 
 class CustomContentUpdateCommands extends DrushCommands {
+
+  protected $entityTypeManager;
+
+  public function __construct(EntityTypeManagerInterface $entityTypeManager) {
+    $this->entityTypeManager = $entityTypeManager;
+  }
 
   /**
    * Drush command to update default content UUIDs in the specified module's info file.
@@ -19,6 +26,12 @@ class CustomContentUpdateCommands extends DrushCommands {
    *   Update default content UUIDs in the module info file.
    */
   public function updateDefaultContent($module, $entity_type = 'node') {
+    // Validate entity type.
+    if (!$this->entityTypeManager->hasDefinition($entity_type)) {
+      $this->logger()->error(dt('The "@entity_type" entity type does not exist.', ['@entity_type' => $entity_type]));
+      return;
+    }
+
     // Load existing module info file.
     $module_path = \Drupal::service('extension.list.module')->getPath($module);
     $info_file = $module_path . "/$module.info.yml";
@@ -31,7 +44,7 @@ class CustomContentUpdateCommands extends DrushCommands {
     $existing_uuids = isset($info['default_content'][$entity_type]) ? $info['default_content'][$entity_type] : [];
 
     // Find all content of the specified entity type.
-    $entity_storage = \Drupal::entityTypeManager()->getStorage($entity_type);
+    $entity_storage = $this->entityTypeManager->getStorage($entity_type);
     $entities = $entity_storage->loadMultiple();
     $new_uuids = [];
     foreach ($entities as $entity) {

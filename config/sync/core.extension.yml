@@ -17,6 +17,7 @@ module:
   consumers: 0
   contact: 0
   contextual: 0
+  custom_content_update: 0
   datetime: 0
   dblog: 0
   default_content: 0

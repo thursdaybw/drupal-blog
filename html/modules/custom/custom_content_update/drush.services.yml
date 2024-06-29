@@ -1,7 +1,7 @@
 services:
   custom_content_update.commands:
     class: \Drupal\custom_content_update\Drush\Commands\CustomContentUpdateCommands
-    arguments: ['@entity_type.manager']
+    arguments: ['@entity_type.manager', '@default_content.exporter']
     tags:
       - { name: drush.command }
 

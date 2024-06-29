@@ -5,27 +5,44 @@ namespace Drupal\custom_content_update\Drush\Commands;
 use Drush\Commands\DrushCommands;
 use Symfony\Component\Yaml\Yaml;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\default_content\ExporterInterface;
+use Drush\Drush;
 
 class CustomContentUpdateCommands extends DrushCommands {
 
   protected $entityTypeManager;
+  protected $defaultContentExporter;
 
-  public function __construct(EntityTypeManagerInterface $entityTypeManager) {
+  public function __construct(EntityTypeManagerInterface $entityTypeManager, ExporterInterface $defaultContentExporter) {
+    parent::__construct();
     $this->entityTypeManager = $entityTypeManager;
+    $this->defaultContentExporter = $defaultContentExporter;
+    $this->logger = Drush::logger();
   }
 
   /**
-   * Drush command to update default content UUIDs in the specified module's info file.
+   * Drush command to update default content UUIDs and export content.
    *
-   * @command custom_content_update:update
+   * @command custom_content_update:update_and_export
    * @param string $module
-   *   The machine name of the module to update.
+   *   The machine name of the module to update and export content for.
    * @param string|null $entity_type
    *   The entity type to filter by (optional).
-   * @usage custom_content_update:update my_module node
-   *   Update default content UUIDs in the module info file.
+   * @usage custom_content_update:update_and_export my_module node
+   *   Update default content UUIDs in the module info file and export content.
    */
-  public function updateDefaultContent($module, $entity_type = 'node') {
+  public function updateAndExport($module, $entity_type = 'node') {
+    // Update default content UUIDs.
+    $this->updateDefaultContent($module, $entity_type);
+
+    // Export content for the module.
+    $this->contentExportModule($module);
+  }
+
+  /**
+   * Update default content UUIDs in the specified module's info file.
+   */
+  protected function updateDefaultContent($module, $entity_type = 'node') {
     // Validate entity type.
     if (!$this->entityTypeManager->hasDefinition($entity_type)) {
       $this->logger()->error(dt('The "@entity_type" entity type does not exist.', ['@entity_type' => $entity_type]));
@@ -58,5 +75,15 @@ class CustomContentUpdateCommands extends DrushCommands {
     $this->logger()->success(dt('Updated default content UUIDs in the module info file.'));
   }
 
+  /**
+   * Export content for the specified module.
+   */
+  protected function contentExportModule($module) {
+    $module_folder = \Drupal::moduleHandler()
+      ->getModule($module)
+      ->getPath() . '/content';
+    $this->defaultContentExporter->exportModuleContent($module, $module_folder);
+    $this->logger()->success(dt('Exported content for the module.'));
+  }
 }
 

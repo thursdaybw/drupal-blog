@@ -1,0 +1,8 @@
+name: 'Custom Content Update'
+type: module
+description: 'Drush command to update default content UUIDs in module info files'
+package: Custom
+core_version_requirement: ^10
+dependencies:
+  - drupal:node
+

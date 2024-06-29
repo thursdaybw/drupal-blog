@@ -1,0 +1,5 @@
+services:
+  custom_content_update.commands:
+    class: \Drupal\custom_content_update\Drush\Commands\CustomContentUpdateCommands
+    tags:
+      - { name: drush.command }

@@ -25,8 +25,7 @@ github_url: 'https://github.com/thursdaybw'
 vk_url: ''
 slider_show: 0
 slider_code: ''
-slider_image:
-  - '1'
+slider_image: {  }
 slider_image_path: ''
 front_sidebar: 0
 google_font: local

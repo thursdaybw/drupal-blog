@@ -21,6 +21,21 @@ class CustomContentUpdateCommands extends DrushCommands {
   }
 
   /**
+   * Drush command to update default content UUIDs in the module info file.
+   *
+   * @command custom_content_update:update
+   * @param string $module
+   *   The machine name of the module to update.
+   * @param string|null $entity_type
+   *   The entity type to filter by (optional).
+   * @usage custom_content_update:update my_module node
+   *   Update default content UUIDs in the module info file.
+   */
+  public function update($module, $entity_type = 'node') {
+    $this->updateDefaultContent($module, $entity_type);
+  }
+
+  /**
    * Drush command to update default content UUIDs and export content.
    *
    * @command custom_content_update:update_and_export

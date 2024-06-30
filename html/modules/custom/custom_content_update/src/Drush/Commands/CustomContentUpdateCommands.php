@@ -51,7 +51,7 @@ class CustomContentUpdateCommands extends DrushCommands {
     $this->updateDefaultContent($module, $entity_type);
 
     // Export content for the module.
-    $this->contentExportModule($module);
+    $this->contentExportModule($module, $entity_type);
   }
 
   /**
@@ -91,13 +91,21 @@ class CustomContentUpdateCommands extends DrushCommands {
   }
 
   /**
-   * Export content for the specified module.
+   * Export content for the specified module and entity type.
    */
-  protected function contentExportModule($module) {
+  protected function contentExportModule($module, $entity_type = 'node') {
     $module_folder = \Drupal::moduleHandler()
       ->getModule($module)
       ->getPath() . '/content';
-    $this->defaultContentExporter->exportModuleContent($module, $module_folder);
+
+    // Export referenced entities.
+    $entities = \Drupal::entityQuery($entity_type)
+      ->accessCheck(FALSE)
+      ->execute();
+    foreach ($entities as $entity_id) {
+      $this->defaultContentExporter->exportContentWithReferences($entity_type, $entity_id, $module_folder);
+    }
+
     $this->logger()->success(dt('Exported content for the module.'));
   }
 }

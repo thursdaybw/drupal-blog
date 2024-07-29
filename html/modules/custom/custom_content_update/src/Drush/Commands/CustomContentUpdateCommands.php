@@ -103,10 +103,58 @@ class CustomContentUpdateCommands extends DrushCommands {
       ->accessCheck(FALSE)
       ->execute();
     foreach ($entities as $entity_id) {
-      $this->defaultContentExporter->exportContentWithReferences($entity_type, $entity_id, $module_folder);
+      $this->exportEntityWithReferences($module, $entity_type, $entity_id, $module_folder);
     }
 
     $this->logger()->success(dt('Exported content for the module.'));
+  }
+
+  /**
+   * Export an entity and its references, including encoding file data.
+   */
+  protected function exportEntityWithReferences($module, $entity_type, $entity_id, $module_folder) {
+    $entity = $this->entityTypeManager->getStorage($entity_type)->load($entity_id);
+    if ($entity) {
+      $exported_content = $this->defaultContentExporter->exportContent($entity_type, $entity_id, $module_folder);
+
+      // Locate and encode file data.
+      if ($entity_type == 'file' || $entity->hasField('field_media_image')) {
+        $file_path = $entity_type == 'file' ? $entity->getFileUri() : $entity->get('field_media_image')->entity->getFileUri();
+        if (file_exists($file_path)) {
+          $file_content = file_get_contents($file_path);
+          $encoded_file_content = base64_encode($file_content);
+          $exported_content['_embedded_file'] = [
+            'filename' => $entity->label(),
+            'filedata' => $encoded_file_content,
+          ];
+        }
+      }
+
+      // Write the updated content to the YAML file.
+      $yaml_content = Yaml::dump($exported_content);
+      file_put_contents($module_folder . '/' . $entity_type . '_' . $entity_id . '.yml', $yaml_content);
+    }
+  }
+
+  /**
+   * Import an entity and its references, including decoding file data.
+   */
+  public function importEntityWithReferences($module, $entity_type, $entity_id, $module_folder) {
+    $yaml_file = $module_folder . '/' . $entity_type . '_' . $entity_id . '.yml';
+    if (file_exists($yaml_file)) {
+      $content = Yaml::parseFile($yaml_file);
+
+      // Decode and save file data.
+      if (isset($content['_embedded_file'])) {
+        $decoded_file_content = base64_decode($content['_embedded_file']['filedata']);
+        $file_path = 'public://' . $content['_embedded_file']['filename'];
+        file_put_contents($file_path, $decoded_file_content);
+        $content['uri'] = 'public://' . $content['_embedded_file']['filename'];
+      }
+
+      // Import the content using the default content importer.
+      $this->defaultContentExporter->importContent($entity_type, $content, $module_folder);
+    }
   }
 }
 

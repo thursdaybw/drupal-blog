@@ -1,0 +1,24 @@
+uuid: 150d94d3-13e1-4f1c-9002-77052a527c38
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_links
+    - filter.format.basic_html
+    - node.type.static_social_content
+  module:
+    - text
+id: node.static_social_content.field_links
+field_name: field_links
+entity_type: node
+bundle: static_social_content
+label: Links
+description: 'Link(s) to where this is posted'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  allowed_formats:
+    - basic_html
+field_type: text_long

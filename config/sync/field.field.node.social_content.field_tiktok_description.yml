@@ -1,0 +1,24 @@
+uuid: 4292fda4-132a-473c-beff-95f4c1269968
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_tiktok_description
+    - filter.format.basic_html
+    - node.type.social_content
+  module:
+    - text
+id: node.social_content.field_tiktok_description
+field_name: field_tiktok_description
+entity_type: node
+bundle: social_content
+label: 'TikTok Description'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  allowed_formats:
+    - basic_html
+field_type: text_long

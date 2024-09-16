@@ -1,0 +1,19 @@
+uuid: c51dcac7-67db-4f0c-a32e-71b62d6b88d3
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_hash_tags
+    - node.type.social_content
+id: node.social_content.field_hash_tags
+field_name: field_hash_tags
+entity_type: node
+bundle: social_content
+label: 'Hash Tags'
+description: 'Hash tags to include when published to socials'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string_long

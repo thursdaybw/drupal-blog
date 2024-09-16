@@ -1,0 +1,24 @@
+uuid: e43d501d-f6f1-4c8f-bd8e-f9591da2d0ee
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_socials_video_transcript
+    - filter.format.basic_html
+    - node.type.social_content
+  module:
+    - text
+id: node.social_content.field_socials_video_transcript
+field_name: field_socials_video_transcript
+entity_type: node
+bundle: social_content
+label: Transcript
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  allowed_formats:
+    - basic_html
+field_type: text_long

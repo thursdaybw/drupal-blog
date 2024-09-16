@@ -1,0 +1,24 @@
+uuid: ed8abdae-ed76-4193-90d2-52b54a310ef1
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_links
+    - filter.format.basic_html
+    - node.type.social_content
+  module:
+    - text
+id: node.social_content.field_links
+field_name: field_links
+entity_type: node
+bundle: social_content
+label: Links
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  allowed_formats:
+    - basic_html
+field_type: text_long

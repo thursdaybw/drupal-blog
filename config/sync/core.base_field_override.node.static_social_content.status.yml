@@ -1,0 +1,22 @@
+uuid: 0e770eed-7ec9-41c0-b100-efa7ae96075c
+langcode: en
+status: true
+dependencies:
+  config:
+    - node.type.static_social_content
+id: node.static_social_content.status
+field_name: status
+entity_type: node
+bundle: static_social_content
+label: Published
+description: ''
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

@@ -1,0 +1,29 @@
+uuid: dcca8bf0-e09c-4818-86a0-566fd397855f
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_destination_social_platfor
+    - node.type.static_social_content
+    - taxonomy.vocabulary.s
+id: node.static_social_content.field_destination_social_platfor
+field_name: field_destination_social_platfor
+entity_type: node
+bundle: static_social_content
+label: 'Destination social platform'
+description: 'The social platform this content will be posted to'
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:taxonomy_term'
+  handler_settings:
+    target_bundles:
+      s: s
+    sort:
+      field: name
+      direction: asc
+    auto_create: false
+    auto_create_bundle: ''
+field_type: entity_reference

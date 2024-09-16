@@ -1,0 +1,29 @@
+uuid: 3fcfed17-aa1c-4ce1-867c-b8317d944973
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_source_content
+    - node.type.social_content
+    - node.type.static_social_content
+id: node.static_social_content.field_source_content
+field_name: field_source_content
+entity_type: node
+bundle: static_social_content
+label: 'Source Content'
+description: 'Source long form content from which this micro content was generated'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:node'
+  handler_settings:
+    target_bundles:
+      social_content: social_content
+    sort:
+      field: _none
+      direction: ASC
+    auto_create: false
+    auto_create_bundle: ''
+field_type: entity_reference

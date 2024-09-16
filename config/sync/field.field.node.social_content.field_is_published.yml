@@ -1,0 +1,21 @@
+uuid: a1f35769-fab4-4332-b5e4-25ad8a514b01
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_is_published
+    - node.type.social_content
+id: node.social_content.field_is_published
+field_name: field_is_published
+entity_type: node
+bundle: social_content
+label: 'Is published'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

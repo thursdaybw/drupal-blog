@@ -1,0 +1,58 @@
+uuid: 32e4a61f-1968-4170-80f0-3b26accbda9d
+langcode: en
+status: true
+dependencies:
+  config:
+    - core.entity_view_mode.node.teaser
+    - field.field.node.social_content.body
+    - field.field.node.social_content.field_child_content
+    - field.field.node.social_content.field_destination_socials
+    - field.field.node.social_content.field_has_micro_content
+    - field.field.node.social_content.field_hash_tags
+    - field.field.node.social_content.field_instagram_description
+    - field.field.node.social_content.field_is_published
+    - field.field.node.social_content.field_linkedin_description
+    - field.field.node.social_content.field_links
+    - field.field.node.social_content.field_parent_video_title
+    - field.field.node.social_content.field_publish_date
+    - field.field.node.social_content.field_snaptchat_spotlight_desc
+    - field.field.node.social_content.field_socials_video_transcript
+    - field.field.node.social_content.field_tiktok_description
+    - field.field.node.social_content.field_tweets_text
+    - node.type.social_content
+  module:
+    - text
+    - user
+id: node.social_content.teaser
+targetEntityType: node
+bundle: social_content
+mode: teaser
+content:
+  body:
+    type: text_summary_or_trimmed
+    label: hidden
+    settings:
+      trim_length: 600
+    third_party_settings: {  }
+    weight: 101
+    region: content
+  links:
+    settings: {  }
+    third_party_settings: {  }
+    weight: 100
+    region: content
+hidden:
+  field_child_content: true
+  field_destination_socials: true
+  field_has_micro_content: true
+  field_hash_tags: true
+  field_instagram_description: true
+  field_is_published: true
+  field_linkedin_description: true
+  field_links: true
+  field_parent_video_title: true
+  field_publish_date: true
+  field_snaptchat_spotlight_desc: true
+  field_socials_video_transcript: true
+  field_tiktok_description: true
+  field_tweets_text: true

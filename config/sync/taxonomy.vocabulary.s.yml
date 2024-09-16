@@ -1,0 +1,9 @@
+uuid: 09cd597c-f00e-43ac-aafc-454c2261483c
+langcode: en
+status: true
+dependencies: {  }
+name: 'Social Sites'
+vid: s
+description: null
+weight: 0
+new_revision: false

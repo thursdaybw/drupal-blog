@@ -11,7 +11,7 @@ third_party_settings:
 name: 'To-Do List'
 type: to_do_list
 description: 'A content type for tracking tasks and to-do items. Each to-do item includes details such as the title, description, status, priority, tags, and due date, allowing for efficient task management and prioritization.'
-help: ''
+help: null
 new_revision: false
 preview_mode: 0
 display_submitted: false

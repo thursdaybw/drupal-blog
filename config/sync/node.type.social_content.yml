@@ -1,0 +1,18 @@
+uuid: 64473d4a-ad77-45de-a1c7-f960a4bf3693
+langcode: en
+status: true
+dependencies:
+  module:
+    - menu_ui
+third_party_settings:
+  menu_ui:
+    available_menus:
+      - main
+    parent: 'main:'
+name: 'Social Content'
+type: social_content
+description: null
+help: null
+new_revision: false
+preview_mode: 1
+display_submitted: true

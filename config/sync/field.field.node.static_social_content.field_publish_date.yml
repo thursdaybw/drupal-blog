@@ -1,0 +1,21 @@
+uuid: 0ac60615-4bfb-4fbe-b2de-aed7b13a1741
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_publish_date
+    - node.type.static_social_content
+  module:
+    - datetime
+id: node.static_social_content.field_publish_date
+field_name: field_publish_date
+entity_type: node
+bundle: static_social_content
+label: publish_date
+description: 'The date that this should be publish to socials'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: datetime

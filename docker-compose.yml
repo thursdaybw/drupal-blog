@@ -18,8 +18,12 @@ services:
     # Mounts directories between the host and the container
     volumes:
       # Bind mount for Drupal files
-      - ./html/sites/default/files:/var/www/html/sites/default/files
-    user: "${HTTP_UID}:${HTTP_GID}"
+      - type: bind
+        source: ./html/sites/default/files
+        target: /var/www/html/sites/default/files
+        bind:
+          propagation: shared
+      user: "${HTTP_UID}:${HTTP_GID}"
     # Environment variables to set inside the container
     environment:
       - USER_ID=${HTTP_UID}

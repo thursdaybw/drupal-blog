@@ -22,7 +22,7 @@ services:
         target: /var/www/html/sites/default/files
         bind:
           propagation: shared
-      user: "${HTTP_UID}:${HTTP_GID}"
+    user: "${HTTP_UID}:${HTTP_GID}"
     # Environment variables to set inside the container
     environment:
       - USER_ID=${HTTP_UID}

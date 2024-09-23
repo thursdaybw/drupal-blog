@@ -9,7 +9,9 @@ dependencies:
     - field.field.node.static_social_content.field_is_published
     - field.field.node.static_social_content.field_links
     - field.field.node.static_social_content.field_publish_date
+    - field.field.node.static_social_content.field_scheduled_date
     - field.field.node.static_social_content.field_source_content
+    - field.field.node.static_social_content.field_workflow_status
     - node.type.static_social_content
   module:
     - text
@@ -37,4 +39,6 @@ hidden:
   field_is_published: true
   field_links: true
   field_publish_date: true
+  field_scheduled_date: true
   field_source_content: true
+  field_workflow_status: true

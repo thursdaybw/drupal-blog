@@ -1,0 +1,21 @@
+uuid: a9cfcd97-5c43-4638-a455-005ba909e6a1
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_needs_static_content
+    - node.type.social_content
+id: node.social_content.field_needs_static_content
+field_name: field_needs_static_content
+entity_type: node
+bundle: social_content
+label: 'Needs static content'
+description: 'If this is checked then we need to pass this content to the Gary Vee quote generator on ChatGPT and generate a bunch of static content base on this short video.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

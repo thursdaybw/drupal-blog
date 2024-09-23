@@ -1,16 +1,17 @@
-uuid: 78abf50a-2cb9-4df1-829c-5f9805be50fb
+uuid: 4c05fefe-2748-44f8-b0d4-2893fe9a9b9a
 langcode: en
 status: true
 dependencies:
   module:
+    - datetime
     - node
-    - text
-id: node.field_linkedin_description
-field_name: field_linkedin_description
+id: node.field_scheduled_date
+field_name: field_scheduled_date
 entity_type: node
-type: text_long
-settings: {  }
-module: text
+type: datetime
+settings:
+  datetime_type: date
+module: datetime
 locked: false
 cardinality: 1
 translatable: true

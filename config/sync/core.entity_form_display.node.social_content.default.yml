@@ -1,23 +1,16 @@
-uuid: 45eb0267-fac4-49cd-9b8c-b4e85dfc9b6e
+uuid: 34d1d854-3689-4a0e-bf95-c93231132597
 langcode: en
 status: true
 dependencies:
   config:
     - field.field.node.social_content.body
-    - field.field.node.social_content.field_child_content
-    - field.field.node.social_content.field_destination_socials
-    - field.field.node.social_content.field_has_micro_content
     - field.field.node.social_content.field_hash_tags
-    - field.field.node.social_content.field_instagram_description
     - field.field.node.social_content.field_is_published
-    - field.field.node.social_content.field_linkedin_description
     - field.field.node.social_content.field_links
+    - field.field.node.social_content.field_needs_static_content
     - field.field.node.social_content.field_parent_video_title
     - field.field.node.social_content.field_publish_date
-    - field.field.node.social_content.field_snaptchat_spotlight_desc
     - field.field.node.social_content.field_socials_video_transcript
-    - field.field.node.social_content.field_tiktok_description
-    - field.field.node.social_content.field_tweets_text
     - node.type.social_content
   module:
     - datetime
@@ -30,7 +23,7 @@ mode: default
 content:
   body:
     type: text_textarea_with_summary
-    weight: 9
+    weight: 3
     region: content
     settings:
       rows: 9
@@ -40,44 +33,13 @@ content:
     third_party_settings: {  }
   created:
     type: datetime_timestamp
-    weight: 4
+    weight: 10
     region: content
     settings: {  }
-    third_party_settings: {  }
-  field_child_content:
-    type: entity_reference_autocomplete
-    weight: 28
-    region: content
-    settings:
-      match_operator: CONTAINS
-      match_limit: 10
-      size: 60
-      placeholder: ''
-    third_party_settings: {  }
-  field_destination_socials:
-    type: options_buttons
-    weight: 17
-    region: content
-    settings: {  }
-    third_party_settings: {  }
-  field_has_micro_content:
-    type: boolean_checkbox
-    weight: 27
-    region: content
-    settings:
-      display_label: true
     third_party_settings: {  }
   field_hash_tags:
     type: string_textarea
-    weight: 14
-    region: content
-    settings:
-      rows: 5
-      placeholder: ''
-    third_party_settings: {  }
-  field_instagram_description:
-    type: text_textarea
-    weight: 10
+    weight: 4
     region: content
     settings:
       rows: 5
@@ -85,26 +47,25 @@ content:
     third_party_settings: {  }
   field_is_published:
     type: boolean_checkbox
-    weight: 18
+    weight: 8
     region: content
     settings:
       display_label: true
     third_party_settings: {  }
-  field_linkedin_description:
+  field_links:
     type: text_textarea
-    weight: 13
+    weight: 5
     region: content
     settings:
       rows: 5
       placeholder: ''
     third_party_settings: {  }
-  field_links:
-    type: text_textarea
-    weight: 19
+  field_needs_static_content:
+    type: boolean_checkbox
+    weight: 6
     region: content
     settings:
-      rows: 5
-      placeholder: ''
+      display_label: true
     third_party_settings: {  }
   field_parent_video_title:
     type: string_textfield
@@ -116,17 +77,9 @@ content:
     third_party_settings: {  }
   field_publish_date:
     type: datetime_default
-    weight: 16
+    weight: 7
     region: content
     settings: {  }
-    third_party_settings: {  }
-  field_snaptchat_spotlight_desc:
-    type: text_textarea
-    weight: 12
-    region: content
-    settings:
-      rows: 5
-      placeholder: ''
     third_party_settings: {  }
   field_socials_video_transcript:
     type: text_textarea
@@ -136,45 +89,29 @@ content:
       rows: 5
       placeholder: ''
     third_party_settings: {  }
-  field_tiktok_description:
-    type: text_textarea
-    weight: 11
-    region: content
-    settings:
-      rows: 5
-      placeholder: ''
-    third_party_settings: {  }
-  field_tweets_text:
-    type: text_textarea
-    weight: 15
-    region: content
-    settings:
-      rows: 5
-      placeholder: ''
-    third_party_settings: {  }
   path:
     type: path
-    weight: 7
+    weight: 13
     region: content
     settings: {  }
     third_party_settings: {  }
   promote:
     type: boolean_checkbox
-    weight: 5
+    weight: 11
     region: content
     settings:
       display_label: true
     third_party_settings: {  }
   status:
     type: boolean_checkbox
-    weight: 8
+    weight: 14
     region: content
     settings:
       display_label: true
     third_party_settings: {  }
   sticky:
     type: boolean_checkbox
-    weight: 6
+    weight: 12
     region: content
     settings:
       display_label: true
@@ -189,7 +126,7 @@ content:
     third_party_settings: {  }
   uid:
     type: entity_reference_autocomplete
-    weight: 3
+    weight: 9
     region: content
     settings:
       match_operator: CONTAINS

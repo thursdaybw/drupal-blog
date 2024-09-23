@@ -8,10 +8,13 @@ dependencies:
     - field.field.node.static_social_content.field_is_published
     - field.field.node.static_social_content.field_links
     - field.field.node.static_social_content.field_publish_date
+    - field.field.node.static_social_content.field_scheduled_date
     - field.field.node.static_social_content.field_source_content
+    - field.field.node.static_social_content.field_workflow_status
     - node.type.static_social_content
   module:
     - datetime
+    - options
     - text
     - user
 id: node.static_social_content.default
@@ -60,6 +63,15 @@ content:
     third_party_settings: {  }
     weight: 102
     region: content
+  field_scheduled_date:
+    type: datetime_default
+    label: above
+    settings:
+      timezone_override: ''
+      format_type: medium
+    third_party_settings: {  }
+    weight: 116
+    region: content
   field_source_content:
     type: entity_reference_label
     label: above
@@ -67,6 +79,13 @@ content:
       link: true
     third_party_settings: {  }
     weight: 114
+    region: content
+  field_workflow_status:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 115
     region: content
   links:
     settings: {  }

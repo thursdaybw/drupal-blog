@@ -15,6 +15,9 @@ settings:
       value: draft
       label: draft
     -
+      value: ready
+      label: Ready
+    -
       value: scheduled
       label: scheduled
     -

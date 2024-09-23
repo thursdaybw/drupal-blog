@@ -17,7 +17,6 @@ services:
       - "8445:443"
     # Mounts directories between the host and the container
     volumes:
-      # Bind mount for Drupal files
       - type: bind
         source: ./html/sites/default/files
         target: /var/www/html/sites/default/files

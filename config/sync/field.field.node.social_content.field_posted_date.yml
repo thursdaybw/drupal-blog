@@ -1,0 +1,21 @@
+uuid: d6a6d0a9-b636-4ef9-97fc-9fa8fa663d0d
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_posted_date
+    - node.type.social_content
+  module:
+    - datetime
+id: node.social_content.field_posted_date
+field_name: field_posted_date
+entity_type: node
+bundle: social_content
+label: 'Posted Date'
+description: 'The date that this content was posted to social media'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: datetime

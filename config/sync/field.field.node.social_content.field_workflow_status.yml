@@ -1,0 +1,23 @@
+uuid: 4f6393e9-2dcf-4456-b894-23ca3da08bde
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_workflow_status
+    - node.type.social_content
+  module:
+    - options
+id: node.social_content.field_workflow_status
+field_name: field_workflow_status
+entity_type: node
+bundle: social_content
+label: 'Workflow Status'
+description: ''
+required: false
+translatable: false
+default_value:
+  -
+    value: draft
+default_value_callback: ''
+settings: {  }
+field_type: list_string

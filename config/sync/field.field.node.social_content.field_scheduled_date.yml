@@ -1,0 +1,21 @@
+uuid: a4211c3e-e70f-4457-bd4d-ab2ee19b18d2
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_scheduled_date
+    - node.type.social_content
+  module:
+    - datetime
+id: node.social_content.field_scheduled_date
+field_name: field_scheduled_date
+entity_type: node
+bundle: social_content
+label: 'Scheduled date'
+description: 'The date that we plan to publish this content'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: datetime

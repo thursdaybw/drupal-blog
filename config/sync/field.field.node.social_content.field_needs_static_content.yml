@@ -13,7 +13,9 @@ label: 'Needs static content'
 description: 'If this is checked then we need to pass this content to the Gary Vee quote generator on ChatGPT and generate a bunch of static content base on this short video.'
 required: false
 translatable: false
-default_value: {  }
+default_value:
+  -
+    value: 1
 default_value_callback: ''
 settings:
   on_label: 'On'

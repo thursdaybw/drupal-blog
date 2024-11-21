@@ -5,8 +5,8 @@ dependencies:
   config:
     - field.field.node.static_social_content.body
     - field.field.node.static_social_content.field_destination_social_platfor
-    - field.field.node.static_social_content.field_is_published
     - field.field.node.static_social_content.field_links
+    - field.field.node.static_social_content.field_posted_date
     - field.field.node.static_social_content.field_publish_date
     - field.field.node.static_social_content.field_scheduled_date
     - field.field.node.static_social_content.field_source_content
@@ -37,22 +37,21 @@ content:
     third_party_settings: {  }
     weight: 102
     region: content
-  field_is_published:
-    type: boolean
-    label: above
-    settings:
-      format: default
-      format_custom_false: ''
-      format_custom_true: ''
-    third_party_settings: {  }
-    weight: 105
-    region: content
   field_links:
     type: text_default
     label: above
     settings: {  }
     third_party_settings: {  }
     weight: 106
+    region: content
+  field_posted_date:
+    type: datetime_default
+    label: above
+    settings:
+      timezone_override: ''
+      format_type: medium
+    third_party_settings: {  }
+    weight: 117
     region: content
   field_publish_date:
     type: datetime_default

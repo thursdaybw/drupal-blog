@@ -10,8 +10,11 @@ dependencies:
     - field.field.node.social_content.field_links
     - field.field.node.social_content.field_needs_static_content
     - field.field.node.social_content.field_parent_video_title
+    - field.field.node.social_content.field_posted_date
     - field.field.node.social_content.field_publish_date
+    - field.field.node.social_content.field_scheduled_date
     - field.field.node.social_content.field_socials_video_transcript
+    - field.field.node.social_content.field_workflow_status
     - node.type.social_content
   module:
     - text
@@ -45,5 +48,8 @@ hidden:
   field_links: true
   field_needs_static_content: true
   field_parent_video_title: true
+  field_posted_date: true
   field_publish_date: true
+  field_scheduled_date: true
   field_socials_video_transcript: true
+  field_workflow_status: true

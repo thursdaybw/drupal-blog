@@ -9,11 +9,15 @@ dependencies:
     - field.field.node.social_content.field_links
     - field.field.node.social_content.field_needs_static_content
     - field.field.node.social_content.field_parent_video_title
+    - field.field.node.social_content.field_posted_date
     - field.field.node.social_content.field_publish_date
+    - field.field.node.social_content.field_scheduled_date
     - field.field.node.social_content.field_socials_video_transcript
+    - field.field.node.social_content.field_workflow_status
     - node.type.social_content
   module:
     - datetime
+    - options
     - text
     - user
 id: node.social_content.default
@@ -75,6 +79,15 @@ content:
     third_party_settings: {  }
     weight: 111
     region: content
+  field_posted_date:
+    type: datetime_default
+    label: above
+    settings:
+      timezone_override: ''
+      format_type: medium
+    third_party_settings: {  }
+    weight: 117
+    region: content
   field_publish_date:
     type: datetime_default
     label: above
@@ -84,12 +97,28 @@ content:
     third_party_settings: {  }
     weight: 102
     region: content
+  field_scheduled_date:
+    type: datetime_default
+    label: above
+    settings:
+      timezone_override: ''
+      format_type: medium
+    third_party_settings: {  }
+    weight: 116
+    region: content
   field_socials_video_transcript:
     type: text_default
     label: above
     settings: {  }
     third_party_settings: {  }
     weight: 112
+    region: content
+  field_workflow_status:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 115
     region: content
   links:
     settings: {  }

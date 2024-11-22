@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\fancy_captions\Form;
+namespace Drupal\video_forge\Form;
 
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -46,7 +46,7 @@ final class CaptionsForm extends FormBase {
    * {@inheritdoc}
    */
   public function getFormId(): string {
-    return 'fancy_captions_captions';
+    return 'video_forge_captions';
   }
 
   public function buildForm(array $form, FormStateInterface $form_state) {
@@ -120,9 +120,9 @@ final class CaptionsForm extends FormBase {
 	  exec($command, $output, $return_var);
 
 	  // Log the command and its output
-	  \Drupal::logger('fancy_captions')->info('Command: @command', ['@command' => $command]);
-	  \Drupal::logger('fancy_captions')->info('Output: @output', ['@output' => implode("\n", $output)]);
-	  \Drupal::logger('fancy_captions')->info('Return code: @code', ['@code' => $return_var]);
+	  \Drupal::logger('video_forge')->info('Command: @command', ['@command' => $command]);
+	  \Drupal::logger('video_forge')->info('Output: @output', ['@output' => implode("\n", $output)]);
+	  \Drupal::logger('video_forge')->info('Return code: @code', ['@code' => $return_var]);
 
 	  if ($return_var !== 0) {
 		  \Drupal::messenger()->addError($this->t('Whisper failed to process the video.'));
@@ -136,11 +136,14 @@ final class CaptionsForm extends FormBase {
 		  \Drupal::messenger()->addError($this->t('Whisper JSON file not found.'));
 		  return;
 	  }
+	  else {
+		  $this->saveManagedFile($json_file, 'Generated JSON File');
+	  }
 
 	  // Run your PHP script to generate ASS captions
 	  $ass_file = str_replace('.mp4', '.ass', $file_path);
 	  // Get the module's path dynamically
-	  $module_path = \Drupal::service('module_handler')->getModule('fancy_captions')->getPath();
+	  $module_path = \Drupal::service('module_handler')->getModule('video_forge')->getPath();
 	  $php_script = DRUPAL_ROOT . '/' . $module_path . '/captions.php';
 
 
@@ -151,6 +154,9 @@ final class CaptionsForm extends FormBase {
 		  \Drupal::messenger()->addError($this->t('Failed to generate ASS captions.'));
 		  return;
 	  }
+	  else {
+		  $this->saveManagedFile($ass_file, 'Generated ASS File');
+	  }
 
 	  // Use FFmpeg to render captions into the video
 	  $output_video = str_replace('.mp4', '_with_captions.mp4', $file_path);
@@ -160,26 +166,33 @@ final class CaptionsForm extends FormBase {
 	  exec($command, $output, $return_var);
 
 	  // Log the command and its output
-	  \Drupal::logger('fancy_captions')->info('Command: @command', ['@command' => $command]);
-	  \Drupal::logger('fancy_captions')->info('Output: @output', ['@output' => implode("\n", $output)]);
-	  \Drupal::logger('fancy_captions')->info('Return code: @code', ['@code' => $return_var]);
+	  \Drupal::logger('video_forge')->info('Command: @command', ['@command' => $command]);
+	  \Drupal::logger('video_forge')->info('Output: @output', ['@output' => implode("\n", $output)]);
+	  \Drupal::logger('video_forge')->info('Return code: @code', ['@code' => $return_var]);
 
 	  if ($return_var !== 0) {
 		  \Drupal::messenger()->addError($this->t('Failed to render captions into the video.'));
 		  return;
 	  }
+	  else {
+		  $this->saveManagedFile($output_video, 'Video with Captions');
+	  }
 
 	  // Generate a public URL for the processed video
-	  //
-	  $output_video_uri = 'public://videos/' . basename($output_video);
-	  $output_video_url = $this->fileUrlGenerator->generateAbsoluteString($output_video_uri);	  
+	  // Load the managed File entities by their URIs.
+	  $json_file_entity = \Drupal::entityTypeManager()->getStorage('file')->loadByProperties(['uri' => 'public://videos/' . basename($json_file)]);
+	  $ass_file_entity = \Drupal::entityTypeManager()->getStorage('file')->loadByProperties(['uri' => 'public://videos/' . basename($ass_file)]);
+	  $output_video_entity = \Drupal::entityTypeManager()->getStorage('file')->loadByProperties(['uri' => 'public://videos/' . basename($output_video)]);
 
-	  $json_file_uri = 'public://videos/' . basename($json_file);
-	  $json_file_url = $this->fileUrlGenerator->generateAbsoluteString($json_file_uri);	  
+	  // Extract the first result since loadByProperties returns an array.
+	  $json_file_entity = reset($json_file_entity);
+	  $ass_file_entity = reset($ass_file_entity);
+	  $output_video_entity = reset($output_video_entity);
 
-	  $ass_file_uri = 'public://videos/' . basename($ass_file);
-	  $ass_file_url = $this->fileUrlGenerator->generateAbsoluteString($ass_file_uri);	  
-
+	  // Generate URLs from the managed File entities.
+	  $json_file_url = $json_file_entity ? $this->fileUrlGenerator->generateAbsoluteString($json_file_entity->getFileUri()) : NULL;
+	  $ass_file_url = $ass_file_entity ? $this->fileUrlGenerator->generateAbsoluteString($ass_file_entity->getFileUri()) : NULL;
+	  $output_video_url = $output_video_entity ? $this->fileUrlGenerator->generateAbsoluteString($output_video_entity->getFileUri()) : NULL;
 	  $this->t('Download your video with captions: <a href=":url" target="_blank">:url</a>', [
 		  ':url' => $output_video_url,
 	  ]);
@@ -192,6 +205,32 @@ final class CaptionsForm extends FormBase {
 		  ]));
 
 	  \Drupal::messenger()->addMessage($this->t('Whisper successfully processed the video.'));
+  }
+
+  /**
+   * Save a file as a managed file in Drupal.
+   *
+   * @param string $file_path
+   *   The real path to the file.
+   * @param string $description
+   *   A description for the managed file.
+   */
+  private function saveManagedFile(string $file_path, string $description): void {
+	  $file_uri = 'public://videos/' . basename($file_path);
+
+	  // Copy the file to the managed file location (if not already there).
+	  if (!file_exists($file_uri)) {
+		  \Drupal::service('file_system')->copy($file_path, $file_uri, \Drupal\Core\File\FileSystemInterface::EXISTS_REPLACE);
+	  }
+
+	  // Create the File entity.
+	  $file = \Drupal\file\Entity\File::create([
+		  'uri' => $file_uri,
+		  'status' => 1, // Permanent file.
+		  'uid' => \Drupal::currentUser()->id(),
+	  ]);
+
+	  $file->save();
   }
 
 }

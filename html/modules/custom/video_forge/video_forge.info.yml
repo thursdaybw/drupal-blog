@@ -1,5 +1,5 @@
-name: 'Fancy captions'
+name: 'Video Forge'
 type: module
 description: 'Provides a feature to upload a video, transcribe it and add fancy captions'
-package: BevansBench
+package: Forge Suite
 core_version_requirement: ^10 || ^11

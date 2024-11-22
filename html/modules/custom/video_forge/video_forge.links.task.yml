@@ -1,0 +1,11 @@
+media.generate_captions:
+  route_name: media.forge.generate_captions
+  title: 'Generate Captions'
+  base_route: entity.media.canonical
+  weight: 1
+  requirements:
+    _custom_access: 'video_forge.media_type_access_check:access'
+  options:
+    parameters:
+      media:
+        type: entity:media

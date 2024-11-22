@@ -1,0 +1,5 @@
+services:
+  video_forge.media_type_access_check:
+    class: Drupal\video_forge\Access\MediaTypeAccessCheck
+    arguments: ['@logger.factory']
+

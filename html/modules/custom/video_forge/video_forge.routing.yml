@@ -1,0 +1,19 @@
+video_forge.video_upload:
+  path: '/video-forge/video/upload'
+  defaults:
+    _title: 'Captions Video Upload'
+    _form: 'Drupal\video_forge\Form\CaptionsForm'
+  requirements:
+    _permission: 'access content'
+media.forge.generate_captions:
+  path: '/media/{media}/generate-captions'
+  defaults:
+    _controller: '\Drupal\video_forge\Controller\GenerateCaptionsController::generate'
+    _title: 'Generate Captions'
+  requirements:
+    _permission: 'administer media'
+    _custom_access: 'video_forge.media_type_access_check:access'
+  options:
+    parameters:
+      media:
+        type: entity:media

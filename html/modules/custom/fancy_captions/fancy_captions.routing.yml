@@ -1,0 +1,7 @@
+fancy_captions.video_upload:
+  path: '/fancy-captions/video/upload'
+  defaults:
+    _title: 'Captions Video Upload'
+    _form: 'Drupal\fancy_captions\Form\CaptionsForm'
+  requirements:
+    _permission: 'access content'

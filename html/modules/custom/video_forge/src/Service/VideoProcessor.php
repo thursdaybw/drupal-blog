@@ -37,6 +37,7 @@ class VideoProcessor {
   public function __construct(FileSystemInterface $file_system, LoggerChannelFactoryInterface $logger_factory) {
     $this->fileSystem = $file_system;
     $this->logger = $logger_factory->get('video_forge');
+    $this->config = $config_factory->get('video_forge.settings');
   }
 
   /**

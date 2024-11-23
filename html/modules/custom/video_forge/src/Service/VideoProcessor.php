@@ -34,7 +34,7 @@ class VideoProcessor {
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
    *   The logger factory.
    */
-  public function __construct(FileSystemInterface $file_system, LoggerChannelFactoryInterface $logger_factory) {
+  public function __construct(FileSystemInterface $file_system, LoggerChannelFactoryInterface $logger_factory,  ConfigFactoryInterface $config_factory) {
     $this->fileSystem = $file_system;
     $this->logger = $logger_factory->get('video_forge');
     $this->config = $config_factory->get('video_forge.settings');

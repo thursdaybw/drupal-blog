@@ -54,8 +54,10 @@ class VideoProcessor {
     $ass_file = str_replace('.mp4', '.ass', $video_path);
     $output_video = str_replace('.mp4', '_with_captions.mp4', $video_path);
 
+
     // Step 1: Generate JSON using Whisper.
-    $whisper_command = "/home/bevan/.local/bin/whisper --model medium -f json \"$video_path\" --output_dir \"$output_dir\" --word_timestamps True";
+    $whisper_path = $this->config->get('whisper_path');
+    $whisper_command = "$whisper_path --model medium -f json \"$video_path\" --output_dir \"$output_dir\" --word_timestamps True";
     exec($whisper_command, $output, $return_var);
 
     $this->logCommand('Whisper', $whisper_command, $output, $return_var);
@@ -77,7 +79,8 @@ class VideoProcessor {
     }
 
     // Step 3: Render captions into the video using FFmpeg.
-    $ffmpeg_command = "ffmpeg -i \"$video_path\" -vf subtitles=\"$ass_file\" -c:a copy \"$output_video\"";
+    $ffmpeg_path = $this->config->get('ffmpeg_path');
+    $ffmpeg_command = "$ffmpeg_path -i \"$video_path\" -vf subtitles=\"$ass_file\" -c:a copy \"$output_video\"";
     exec($ffmpeg_command, $output, $return_var);
 
     $this->logCommand('FFmpeg', $ffmpeg_command, $output, $return_var);

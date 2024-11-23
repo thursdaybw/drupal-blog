@@ -3,6 +3,7 @@ FROM devwithlando/php:8.1-apache-4
 
 # Install msmtp and other necessary packages
 RUN apt-get update && apt-get install -y \
+    cron \
     msmtp \
     mailutils \
     ffmpeg \

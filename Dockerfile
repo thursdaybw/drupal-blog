@@ -1,13 +1,17 @@
 # Use your current image as the base
 FROM devwithlando/php:8.1-apache-4
 
-#== msmtp start ==
-
 # Install msmtp and other necessary packages
 RUN apt-get update && apt-get install -y \
     msmtp \
     mailutils \
-    && rm -rf /var/lib/apt/lists/*
+    ffmpeg \
+    python3-pip \
+    python3-venv && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Whisper directly via pip
+RUN python3 -m pip install openai-whisper
 
 # Copy msmtp configuration file
 COPY msmtprc /etc/msmtprc
@@ -21,7 +25,7 @@ RUN touch /var/log/msmtp.log \
 
 RUN echo "sendmail_path = /usr/bin/msmtp -t" > /usr/local/etc/php/conf.d/sendmail.ini
 
-# == msmtp end ==
+# msmtp end
 
 # Set home directory
 ENV HOME /home/http
@@ -41,3 +45,4 @@ RUN chown -R www-data:www-data /var/www
 
 # Switch to 'www-data' user
 USER www-data
+

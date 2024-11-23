@@ -1,5 +1,3 @@
-version: '3.8' # Defines the Docker Compose version we're using
-
 # Defines the services that make up the app
 services:
   # The PHP container

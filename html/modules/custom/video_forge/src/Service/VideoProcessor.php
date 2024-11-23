@@ -5,6 +5,7 @@ namespace Drupal\video_forge\Service;
 use Drupal\media\MediaInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Config\ConfigFactoryInterface;
 
 /**
  * Handles video processing logic.

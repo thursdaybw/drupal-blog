@@ -4,27 +4,35 @@
  * Implements hook_cron().
  */
 function video_forge_cron() {
-  // Process items in the 'video_forge_caption_generation' queue.
-  $queue = \Drupal::service('queue')->get('video_forge_caption_generation');
-  $queue_worker = \Drupal::service('plugin.manager.queue_worker')->createInstance('video_forge_caption_generation');
-  
-  // Process a batch of items from the queue.
-  $limit = 10; // Adjust the batch size as needed.
-  for ($i = 0; $i < $limit; $i++) {
-    if ($item = $queue->claimItem()) {
-      try {
-        $queue_worker->processItem($item->data);
-        $queue->deleteItem($item);
-      }
-      catch (\Exception $e) {
-        // Log any errors and release the item back to the queue.
-        \Drupal::logger('video_forge')->error('Error processing queue item: @message', ['@message' => $e->getMessage()]);
-        $queue->releaseItem($item);
+  $lock = \Drupal::service('lock');
+  if ($lock->acquire('video_forge_cron')) {
+    try {
+      $queue = \Drupal::service('queue')->get('video_forge_caption_generation');
+      $queue_worker = \Drupal::service('plugin.manager.queue_worker')->createInstance('video_forge_caption_generation');
+
+      $limit = 10;
+      for ($i = 0; $i < $limit; $i++) {
+        if ($item = $queue->claimItem()) {
+          try {
+            $queue_worker->processItem($item->data);
+            $queue->deleteItem($item);
+          }
+          catch (\Exception $e) {
+            \Drupal::logger('video_forge')->error('Error processing queue item: @message', ['@message' => $e->getMessage()]);
+            $queue->releaseItem($item);
+          }
+        }
+        else {
+          break;
+        }
       }
     }
-    else {
-      break; // No more items to process.
+    finally {
+      $lock->release('video_forge_cron');
     }
+  }
+  else {
+    \Drupal::logger('video_forge')->notice('Cron already running.');
   }
 }
 

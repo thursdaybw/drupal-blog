@@ -2,4 +2,15 @@ services:
   video_forge.media_type_access_check:
     class: Drupal\video_forge\Access\MediaTypeAccessCheck
     arguments: ['@logger.factory']
+ # Service definition for the Video Processor.
+  video_forge.video_processor:
+    class: Drupal\video_forge\Service\VideoProcessor
+    arguments: ['@file_system', '@logger.factory']
+
+  # Service definition for the Caption Generation Queue Worker.
+  video_forge.caption_generation_worker:
+    class: Drupal\video_forge\Plugin\QueueWorker\VideoForgeCaptionWorker
+    arguments: ['@video_forge.video_processor']
+    tags:
+      - { name: "queue_worker", queue: "video_forge_caption_generation" }
 

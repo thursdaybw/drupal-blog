@@ -27,14 +27,14 @@ $presets = [
         "highlight" => [
             "color" => "&H29F602", // Bright green
             "size" => $fontsize_l,
-            "bold" => true
+            "bold" => false 
         ],
         "animation" => "fade-in"
     ],
     "MrBeast" => [
         "style" => "Style: MrBeast,Impact,$fontsize_s,&H00FFFF00,&H00FFFF00,&H00000000,&H00000000,-1,0,0,0,100,100,-20,0,1,3,1,2,200,200,700,1",
         "highlight" => [
-            "color" => "&H0000FF", // Blue
+            "color" => "&HFF0000", // Red
             "size" => $fontsize_l,
             "bold" => true
         ],
@@ -71,6 +71,7 @@ $presets = [
 
 // Choose a preset
 $chosenPresetKey = "Hormozi"; // Change this to select a different preset
+$chosenPresetKey = "MrBeast"; // Change this to select a different preset
 $chosenPreset = $presets[$chosenPresetKey];
 
 // Generate ASS header
@@ -126,25 +127,18 @@ foreach ($data["segments"] as $segment) {
 				    // Apply highlight style to the current word
 				    $highlightedPhrase .= "{\\c{$chosenPreset['highlight']['color']}\\fs{$chosenPreset['highlight']['size']}\\b" .
 					    ($chosenPreset['highlight']['bold'] ? "1" : "0") .
-					    "}{$otherWord}{\\c&HFFFFFF&\\fs$fontsize_s\\b0}";
+					    "}{$otherWord}{\\c&HFFFFFF&\\fs$fontsize_s\\b" . ($chosenPreset['highlight']['bold'] ? "1" : "0") . "}";
 			    } else {
 				    // Default style for non-highlighted words
 				    $highlightedPhrase .= "{$otherWord}";
 			    }
 		    }
 
-                // Apply animation effect
-                $animationEffect = "";
-                if ($chosenPreset['animation'] === "fade-in") {
-                    $animationEffect = "\\fad(500,0)"; // 500ms fade-in, no fade-out
-                }
-
                 // Format start and end times for ASS
                 $subStartTime = gmdate("H:i:s", floor($subWordInfo["start"])) . '.' . sprintf('%02d', ($subWordInfo["start"] - floor($subWordInfo["start"])) * 100);
                 $subEndTime = gmdate("H:i:s", floor($subWordInfo["end"])) . '.' . sprintf('%02d', ($subWordInfo["end"] - floor($subWordInfo["end"])) * 100);
 
                 // Create ASS dialogue line
-		// Create ASS dialogue line
 		$assEvent = "Dialogue: 0,{$subStartTime},{$subEndTime},{$chosenPresetKey},,0,0,0,,{$highlightedPhrase}";
 		$assEvents[] = $assEvent;
 	    }

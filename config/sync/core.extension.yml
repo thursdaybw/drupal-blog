@@ -67,6 +67,7 @@ module:
   tour: 0
   update: 0
   user: 0
+  video_forge: 0
   views_ui: 0
   pathauto: 1
   views: 10

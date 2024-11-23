@@ -1,0 +1,40 @@
+uuid: 86d3a10a-2a18-4e9e-b0ad-4491c44839da
+langcode: en
+status: true
+dependencies:
+  config:
+    - core.entity_view_mode.media.media_library
+    - field.field.media.forge_video.field_captioned_video
+    - field.field.media.forge_video.field_json_transcript_file
+    - field.field.media.forge_video.field_media_video_file
+    - field.field.media.forge_video.field_processing_state
+    - field.field.media.forge_video.field_subtitle_file_ass
+    - image.style.medium
+    - media.type.forge_video
+  module:
+    - image
+id: media.forge_video.media_library
+targetEntityType: media
+bundle: forge_video
+mode: media_library
+content:
+  thumbnail:
+    type: image
+    label: hidden
+    settings:
+      image_link: ''
+      image_style: medium
+      image_loading:
+        attribute: lazy
+    third_party_settings: {  }
+    weight: 0
+    region: content
+hidden:
+  created: true
+  field_captioned_video: true
+  field_json_transcript_file: true
+  field_media_video_file: true
+  field_processing_state: true
+  field_subtitle_file_ass: true
+  name: true
+  uid: true

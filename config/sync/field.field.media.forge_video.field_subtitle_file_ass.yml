@@ -1,0 +1,27 @@
+uuid: 20289a70-a724-471d-8a95-935dc50ec872
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.media.field_subtitle_file_ass
+    - media.type.forge_video
+  module:
+    - file
+id: media.forge_video.field_subtitle_file_ass
+field_name: field_subtitle_file_ass
+entity_type: media
+bundle: forge_video
+label: 'Subtitle File (ASS)'
+description: 'The Advanced SubStation Alpha (ASS) file with styled captions, used for rendering subtitles onto the video.'
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:file'
+  handler_settings: {  }
+  file_directory: '[date:custom:Y]-[date:custom:m]'
+  file_extensions: ass
+  max_filesize: ''
+  description_field: false
+field_type: file

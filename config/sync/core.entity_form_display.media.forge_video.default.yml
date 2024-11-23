@@ -1,0 +1,73 @@
+uuid: a6ef898b-5370-45a2-b066-5edc306d6c37
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.media.forge_video.field_captioned_video
+    - field.field.media.forge_video.field_json_transcript_file
+    - field.field.media.forge_video.field_media_video_file
+    - field.field.media.forge_video.field_processing_state
+    - field.field.media.forge_video.field_subtitle_file_ass
+    - media.type.forge_video
+  module:
+    - file
+    - path
+id: media.forge_video.default
+targetEntityType: media
+bundle: forge_video
+mode: default
+content:
+  created:
+    type: datetime_timestamp
+    weight: 3
+    region: content
+    settings: {  }
+    third_party_settings: {  }
+  field_media_video_file:
+    type: file_generic
+    weight: 1
+    region: content
+    settings:
+      progress_indicator: throbber
+    third_party_settings: {  }
+  field_processing_state:
+    type: options_select
+    weight: 6
+    region: content
+    settings: {  }
+    third_party_settings: {  }
+  name:
+    type: string_textfield
+    weight: 0
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  path:
+    type: path
+    weight: 4
+    region: content
+    settings: {  }
+    third_party_settings: {  }
+  status:
+    type: boolean_checkbox
+    weight: 5
+    region: content
+    settings:
+      display_label: true
+    third_party_settings: {  }
+  uid:
+    type: entity_reference_autocomplete
+    weight: 2
+    region: content
+    settings:
+      match_operator: CONTAINS
+      match_limit: 10
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+hidden:
+  field_captioned_video: true
+  field_json_transcript_file: true
+  field_subtitle_file_ass: true

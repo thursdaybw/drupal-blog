@@ -1,0 +1,22 @@
+uuid: 81f50271-750d-47c1-8bab-6061feabd66f
+langcode: en
+status: true
+dependencies:
+  config:
+    - media.type.forge_video
+id: media.forge_video.status
+field_name: status
+entity_type: media
+bundle: forge_video
+label: Published
+description: ''
+required: false
+translatable: true
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

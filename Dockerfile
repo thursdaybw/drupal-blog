@@ -46,3 +46,5 @@ RUN chown -R www-data:www-data /var/www
 # Switch to 'www-data' user
 USER www-data
 
+COPY php-uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+

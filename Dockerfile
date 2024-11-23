@@ -3,7 +3,6 @@ FROM devwithlando/php:8.1-apache-4
 
 # Install msmtp and other necessary packages
 RUN apt-get update && apt-get install -y \
-    cron \
     msmtp \
     mailutils \
     ffmpeg \
@@ -43,12 +42,6 @@ COPY . /var/www/
 
 # Set permissions 
 RUN chown -R www-data:www-data /var/www
-
-COPY my-crontab /etc/cron.d/drupal-cron
-RUN chmod 0644 /etc/cron.d/drupal-cron && crontab /etc/cron.d/drupal-cron
-
-# Start cron in the foreground
-CMD service cron
 
 # Switch to 'www-data' user
 USER www-data

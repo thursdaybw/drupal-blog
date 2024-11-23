@@ -47,6 +47,9 @@ RUN chown -R www-data:www-data /var/www
 COPY my-crontab /etc/cron.d/drupal-cron
 RUN chmod 0644 /etc/cron.d/drupal-cron && crontab /etc/cron.d/drupal-cron
 
+# Start cron in the foreground
+CMD service cron
+
 # Switch to 'www-data' user
 USER www-data
 

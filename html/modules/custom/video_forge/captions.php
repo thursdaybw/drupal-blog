@@ -19,7 +19,7 @@ if (!$data) {
 // Define styles
 $styles = [
     "MrBeastDefault" => [
-        "Fontname" => "Impact",
+        "Fontname" => "Anton SC",
         "Fontsize" => "80",
         "PrimaryColour" => "&H00FFFFFF", // White
         "SecondaryColour" => "&H000000", // Not used
@@ -35,7 +35,7 @@ $styles = [
         "Angle" => "0",
         "BorderStyle" => "1",
         "Outline" => "3",
-        "Shadow" => "1",
+        "Shadow" => "0",
         "Alignment" => "2",
         "MarginL" => "200",
         "MarginR" => "200",
@@ -59,7 +59,7 @@ $styles = [
         "Angle" => "0",
         "BorderStyle" => "1",
         "Outline" => "10",
-        "Shadow" => "1",
+        "Shadow" => "0",
         "Alignment" => "2",
         "MarginL" => "200",
         "MarginR" => "200",
@@ -83,40 +83,64 @@ foreach ($styles as $styleName => $styleProps) {
     $assHeader .= "Style: $styleName," . implode(',', $styleProps) . "\n";
 }
 
+// Define chunking parameters
+$maxWords = 6;
+$maxDuration = 2.0; // Max duration for each chunk (seconds)
+$pauseThreshold = 0.3; // Minimum pause duration to split chunks (seconds)
+
 $assEvents = [];
 
-// Process each segment
+// Process each segment with chunking
 foreach ($data["segments"] as $segment) {
     $words = $segment["words"];
+    $chunkStart = $words[0]["start"];
+    $chunkWords = [];
+    $wordCount = 0;
+
     foreach ($words as $index => $wordInfo) {
-        $currentWord = $wordInfo["word"];
-        $startTime = gmdate("H:i:s", floor($wordInfo["start"])) . '.' . sprintf('%02d', ($wordInfo["start"] - floor($wordInfo["start"])) * 100);
-        $endTime = gmdate("H:i:s", floor($wordInfo["end"])) . '.' . sprintf('%02d', ($wordInfo["end"] - floor($wordInfo["end"])) * 100);
+        $word = $wordInfo["word"];
+        $start = $wordInfo["start"];
+        $end = $wordInfo["end"];
 
-        // Build the line with highlight for the current word
-        $highlightedLine = "";
-        foreach ($words as $i => $info) {
-            $word = $info["word"];
-            if ($i === $index) {
-                // Add highlight tags for the current word
-                $highlightedLine .= "{\\rMrBeastHighlight}$word{\\r}";
-            } else {
-                // Add other words without highlighting
-                $highlightedLine .= " $word";
+        $chunkWords[] = $wordInfo; // Add word to the current chunk
+        $wordCount++;
+
+        $nextWordStart = isset($words[$index + 1]) ? $words[$index + 1]["start"] : null;
+        $chunkDuration = $end - $chunkStart;
+        $pauseDuration = $nextWordStart ? $nextWordStart - $end : null;
+
+        // Check if chunk conditions are met
+        if ($wordCount >= $maxWords || $chunkDuration >= $maxDuration || ($pauseDuration && $pauseDuration >= $pauseThreshold) || !$nextWordStart) {
+            // Generate the text for the chunk with highlighted word
+            foreach ($chunkWords as $currentIndex => $currentWordInfo) {
+                $highlightedLine = ""; // Add fade effect for the first line
+		if ($currentIndex === 0) {
+                    $highlightedLine .= "{\\fad(500,0)}"; // Add fade effect for the first line
+		}
+                foreach ($chunkWords as $j => $info) {
+                    $currentWord = $info["word"];
+                    if ($j === $currentIndex) {
+                        $highlightedLine .= "{\\rMrBeastHighlight}$currentWord{\\r}";
+                    } else {
+                        $highlightedLine .= " $currentWord";
+                    }
+                }
+
+                // Format start and end times for the chunk
+                $chunkStartTime = gmdate("H:i:s", floor($currentWordInfo["start"])) . '.' . sprintf('%02d', ($currentWordInfo["start"] - floor($currentWordInfo["start"])) * 100);
+                $chunkEndTime = gmdate("H:i:s", floor($currentWordInfo["end"])) . '.' . sprintf('%02d', ($currentWordInfo["end"] - floor($currentWordInfo["end"])) * 100);
+
+                // Create the dialogue line
+                $assEvents[] = "Dialogue: 0,{$chunkStartTime},{$chunkEndTime},MrBeastDefault,,0,0,0,,$highlightedLine";
             }
-        }
-        $highlightedLine = $highlightedLine; // Clean up extra spaces
 
-        // Add fade-in effect to the first line
-        if ($index === 0) {
-            $highlightedLine = "{\\fad(500,0)}" . $highlightedLine;
+            // Reset for the next chunk
+            $chunkStart = $nextWordStart;
+            $chunkWords = [];
+            $wordCount = 0;
         }
-
-        // Add the dialogue line
-        $assEvents[] = "Dialogue: 0,{$startTime},{$endTime},MrBeastDefault,,0,0,0,,$highlightedLine";
     }
 }
-
 
 // Combine header and events
 $assContent = $assHeader . "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" . implode("\n", $assEvents);

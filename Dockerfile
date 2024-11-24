@@ -43,6 +43,12 @@ COPY . /var/www/
 # Set permissions 
 RUN chown -R www-data:www-data /var/www
 
+# Copy fonts to the container
+COPY ./fonts /usr/share/fonts/custom
+
+# Refresh font cache to make the fonts available
+RUN fc-cache -f -v
+
 # Switch to 'www-data' user
 USER www-data
 

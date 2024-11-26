@@ -21,8 +21,8 @@ services:
         bind:
           propagation: shared
       - type: bind
-        source: ./medium.pt
-        target: /root/.cache/whisper/medium.pt
+        source: /root/.cache/whisper/medium.pt
+        target: /home/http/.cache/whisper/medium.pt
         bind:
           propagation: shared
     user: "${HTTP_UID}:${HTTP_GID}"

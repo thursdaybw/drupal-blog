@@ -87,6 +87,41 @@ $styles = [
             "Outline" => "10"
         ]
     ],
+    "GreenAndGold" => [
+        "Default" => [
+            "Fontname" => "Anton SC",
+            "Fontsize" => "70",
+            "PrimaryColour" => "&H00FFFFFF",
+            "SecondaryColour" => "&H000000", // Not used
+            "OutlineColour" => "&H00000000",
+            "BackColour" => "&H00000000",
+            "Bold" => "-1",
+            "Italic" => "0",
+            "Underline" => "0",
+            "StrikeOut" => "0",
+            "ScaleX" => "100",
+            "ScaleY" => "100",
+            "Spacing" => "-20",
+            "Angle" => "0",
+            "BorderStyle" => "1",
+            "Outline" => "5",
+            "Shadow" => "4",
+            "Alignment" => "2",
+            "MarginL" => "200",
+            "MarginR" => "200",
+            "MarginV" => "300",
+            "Encoding" => "1"
+        ],
+        "PrimaryHighlight" => [
+            "PrimaryColour" => "&H0029F602", // Green 
+            "Shadow" => "6"
+        ],
+        "SecondaryHighlight" => [
+	    "PrimaryColour" => "&H000aeaf1", // Gold 
+            "BackColour" => "&H00000000",
+            "Outline" => "8"
+        ]
+    ],
     "BoldShadow" => [
         "Default" => [
             "Fontname" => "Anton SC",
@@ -177,7 +212,8 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 ";
 
 // Build ASS styles dynamically
-$selectedStyle = "BoldShadow"; // Change to the desired style, e.g., MrBeast, NeonGlow, etc.
+$selectedStyle = "GreenAndGold"; // Change to the desired style, e.g., MrBeast, NeonGlow, etc.
+
 foreach ($styles[$selectedStyle] as $styleName => $overrides) {
     $finalStyle = mergeStyles($styles[$selectedStyle]["Default"], $overrides);
 

@@ -40,7 +40,7 @@ $styles = [
             "Alignment" => "2",
             "MarginL" => "200",
             "MarginR" => "200",
-            "MarginV" => "100",
+            "MarginV" => "300",
             "Encoding" => "1"
         ],
         "PrimaryHighlight" => [
@@ -78,7 +78,7 @@ $styles = [
             "Alignment" => "2",
             "MarginL" => "200",
             "MarginR" => "200",
-            "MarginV" => "100",
+            "MarginV" => "300",
             "Encoding" => "1"
         ],
 	"PrimaryHighlight" => [
@@ -109,7 +109,7 @@ $styles = [
             "Alignment" => "2",
             "MarginL" => "200",
             "MarginR" => "200",
-            "MarginV" => "100",
+            "MarginV" => "300",
             "Encoding" => "1"
         ],
         "PrimaryHighlight" => [
@@ -145,7 +145,7 @@ $styles = [
             "Alignment" => "2",
             "MarginL" => "200",
             "MarginR" => "200",
-            "MarginV" => "100",
+            "MarginV" => "200",
             "Encoding" => "1"
         ],
 	"PrimaryHighlight" => [

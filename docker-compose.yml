@@ -20,6 +20,11 @@ services:
         target: /var/www/html/sites/default/files
         bind:
           propagation: shared
+      - type: bind
+        source: ./medium.pt
+        target: /root/.cache/whisper/medium.pt
+        bind:
+          propagation: shared
     user: "${HTTP_UID}:${HTTP_GID}"
     # Environment variables to set inside the container
     environment:

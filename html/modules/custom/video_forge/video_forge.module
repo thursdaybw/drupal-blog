@@ -1,5 +1,7 @@
 <?php
 
+use Drupal\Core\Extension\ExtensionPathResolverInterface;
+
 /**
  * Implements hook_cron().
  */
@@ -35,4 +37,74 @@ function video_forge_cron() {
     \Drupal::logger('video_forge')->notice('Cron already running.');
   }
 }
+
+/**
+ * Implements hook_preprocess_HOOK() for media template.
+ */
+function video_forge_preprocess_media(array &$variables) {
+  if ($variables['media']->bundle() === 'forge_video') {
+    $variables['#attached']['library'][] = 'video_forge/video_player';
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for file_video template.
+ */
+function video_forge_preprocess_file_video(array &$variables) {
+  // Attach the Video.js library.
+  $variables['#attached']['library'][] = 'video_forge/video_player';
+
+  // Attach the videojs-ass library.
+  $variables['#attached']['library'][] = 'video_forge/video_forge.videojs_ass';
+
+  // Check if we can extract the file entity from the `files` key.
+  if (!empty($variables['files']) && is_array($variables['files'])) {
+    // Assume the first file is the target, as typically, there's only one video file.
+    $file_data = reset($variables['files']);
+
+    if (isset($file_data['file']) && $file_data['file'] instanceof \Drupal\file\FileInterface) {
+      $file = $file_data['file'];
+
+      // Find the media entity referencing this file.
+      $media_storage = \Drupal::entityTypeManager()->getStorage('media');
+      $media_query = $media_storage->getQuery()
+        ->condition('field_media_video_file.target_id', $file->id())
+        ->accessCheck(FALSE)
+        ->range(0, 1);
+      $media_ids = $media_query->execute();
+
+      if (!empty($media_ids)) {
+        $media = $media_storage->load(reset($media_ids));
+        if ($media) {
+          // Pass the media entity to the template.
+          $variables['media'] = $media;
+        } else {
+          \Drupal::logger('video_forge')->debug('Media entity could not be loaded.');
+        }
+      } else {
+        \Drupal::logger('video_forge')->debug('No media entity found for file ID @file_id.', [
+          '@file_id' => $file->id(),
+        ]);
+      }
+    } else {
+      \Drupal::logger('video_forge')->debug('File entity is not a valid FileInterface instance.');
+    }
+  } else {
+    \Drupal::logger('video_forge')->debug('No files key or valid data found in variables array.');
+  }
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function video_forge_theme_registry_alter(array &$theme_registry) {
+  // Get the path to the 'video_forge' module.
+  $module_handler = \Drupal::service('module_handler');
+  $module_path = $module_handler->getModule('video_forge')->getPath();
+
+  // Add the path to the template.
+  $theme_registry['file_video']['template'] = 'file-video';
+  $theme_registry['file_video']['path'] = $module_path . '/templates';
+}
+
 

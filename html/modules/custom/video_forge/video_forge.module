@@ -39,23 +39,11 @@ function video_forge_cron() {
 }
 
 /**
- * Implements hook_preprocess_HOOK() for media template.
- */
-function video_forge_preprocess_media(array &$variables) {
-  if ($variables['media']->bundle() === 'forge_video') {
-    $variables['#attached']['library'][] = 'video_forge/video_player';
-  }
-}
-
-/**
  * Implements hook_preprocess_HOOK() for file_video template.
  */
 function video_forge_preprocess_file_video(array &$variables) {
-  // Attach the Video.js library.
   $variables['#attached']['library'][] = 'video_forge/video_player';
-
-  // Attach the videojs-ass library.
-  $variables['#attached']['library'][] = 'video_forge/video_forge.videojs_ass';
+  $variables['#attached']['library'][] = 'video_forge/subtitles_renderer';
 
   // Check if we can extract the file entity from the `files` key.
   if (!empty($variables['files']) && is_array($variables['files'])) {
@@ -76,35 +64,30 @@ function video_forge_preprocess_file_video(array &$variables) {
       if (!empty($media_ids)) {
         $media = $media_storage->load(reset($media_ids));
         if ($media) {
-          // Pass the media entity to the template.
-          $variables['media'] = $media;
-        } else {
-          \Drupal::logger('video_forge')->debug('Media entity could not be loaded.');
+          // Assuming the media entity has a field for the subtitle file (e.g., 'field_subtitle_file').
+          if ($media->hasField('field_subtitle_file_ass') && !$media->get('field_subtitle_file_ass')->isEmpty()) {
+            \Drupal::logger('video_forge')->notice('Found non-empty subtitle field');
+            // Get the subtitle file entity.
+            $subtitle_file = $media->get('field_subtitle_file_ass')->entity;
+            if ($subtitle_file instanceof \Drupal\file\FileInterface) {
+              // Generate the URL for the subtitle file.
+	      $subtitle_url = \Drupal::service('file_url_generator')->generateAbsoluteString($subtitle_file->getFileUri());
+
+              // Pass the subtitle file URL through drupalSettings.
+              $variables['#attached']['drupalSettings']['videoForge']['subtitlesUrl'] = $subtitle_url;
+            }
+          }
+	  else {
+            \Drupal::logger('video_forge')->notice('Non non-empty subtitels found');
+	  }
         }
-      } else {
-        \Drupal::logger('video_forge')->debug('No media entity found for file ID @file_id.', [
-          '@file_id' => $file->id(),
-        ]);
       }
-    } else {
-      \Drupal::logger('video_forge')->debug('File entity is not a valid FileInterface instance.');
     }
-  } else {
-    \Drupal::logger('video_forge')->debug('No files key or valid data found in variables array.');
+  }
+
+  // Fallback: If no subtitle file was found, pass a default or empty value.
+  if (empty($variables['#attached']['drupalSettings']['videoForge']['subtitlesUrl'])) {
+    $variables['#attached']['drupalSettings']['videoForge']['subtitlesUrl'] = '';
   }
 }
-
-/**
- * Implements hook_theme_registry_alter().
- */
-function video_forge_theme_registry_alter(array &$theme_registry) {
-  // Get the path to the 'video_forge' module.
-  $module_handler = \Drupal::service('module_handler');
-  $module_path = $module_handler->getModule('video_forge')->getPath();
-
-  // Add the path to the template.
-  $theme_registry['file_video']['template'] = 'file-video';
-  $theme_registry['file_video']['path'] = $module_path . '/templates';
-}
-
 

@@ -1,0 +1,15 @@
+video_player:
+  version: 1.x
+  js:
+    js/video_forge.js: {}
+  dependencies:
+    - core/jquery
+    - core/once
+subtitles_renderer:
+  version: 1.x
+  js:
+    js/libass/package/dist/js/subtitles-octopus.js: {}
+    js/libass/package/dist/js/subtitles-octopus-worker.js: {}
+  dependencies:
+    - core/jquery
+    - core/once

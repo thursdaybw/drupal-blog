@@ -3,18 +3,33 @@ services:
     class: Drupal\video_forge\Access\MediaTypeAccessCheck
     arguments: ['@logger.factory']
 
-  # Service definition for the Video Processor.
-  video_forge.video_processor:
-    class: Drupal\video_forge\Service\VideoProcessor
+  video_forge.captions_processor:
+    class: Drupal\video_forge\Service\CaptionsProcessor
     arguments:
       - '@file_system'
       - '@logger.factory'
       - '@config.factory'
 
-  # Service definition for the Caption Generation Queue Worker.
+  video_forge.render_processor:
+    class: Drupal\video_forge\Service\RenderProcessor
+    arguments:
+      - '@file_system'
+      - '@logger.factory'
+      - '@config.factory'
+
   video_forge.caption_generation_worker:
     class: Drupal\video_forge\Plugin\QueueWorker\VideoForgeCaptionWorker
-    arguments: ['@video_forge.video_processor']
+    arguments: ['@video_forge.captions_processor']
     tags:
       - { name: "queue_worker", queue: "video_forge_caption_generation" }
+
+  video_forge.caption_render_worker:
+    class: Drupal\video_forge\Plugin\QueueWorker\VideoForgeRenderWorker
+    arguments: ['@video_forge.render_processor']
+    tags:
+      - { name: "queue_worker", queue: "video_forge_caption_rendering" }
+
+  video_forge.caption_settings_form:
+    class: Drupal\video_forge\Form\CaptionSettingsForm
+    arguments: ['@current_route_match']
 

@@ -1,6 +1,6 @@
 media.generate_captions:
-  route_name: media.forge.generate_captions
-  title: 'Generate Captions'
+  route_name: media.forge.caption_settings
+  title: 'Caption Settings'
   base_route: entity.media.canonical
   weight: 1
   requirements:

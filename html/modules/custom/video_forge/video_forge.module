@@ -6,35 +6,34 @@ use Drupal\Core\Extension\ExtensionPathResolverInterface;
  * Implements hook_cron().
  */
 function video_forge_cron() {
-  $lock = \Drupal::service('lock');
-  if ($lock->acquire('video_forge_cron')) {
-    try {
-      $queue = \Drupal::service('queue')->get('video_forge_caption_generation');
-      $queue_worker = \Drupal::service('plugin.manager.queue_worker')->createInstance('video_forge_caption_generation');
+  $queues = [
+    'video_forge_caption_generation' => 'video_forge_caption_generation',
+    'video_forge_caption_rendering' => 'video_forge_caption_rendering',
+  ];
 
-      $limit = 10;
-      for ($i = 0; $i < $limit; $i++) {
-        if ($item = $queue->claimItem()) {
-          try {
-            $queue_worker->processItem($item->data);
-            $queue->deleteItem($item);
-          }
-          catch (\Exception $e) {
-            \Drupal::logger('video_forge')->error('Error processing queue item: @message', ['@message' => $e->getMessage()]);
-            $queue->releaseItem($item);
-          }
+  foreach ($queues as $queue_name => $worker_id) {
+    $queue = \Drupal::service('queue')->get($queue_name);
+    $queue_worker = \Drupal::service('plugin.manager.queue_worker')->createInstance($worker_id);
+
+    $limit = 10;
+    for ($i = 0; $i < $limit; $i++) {
+      if ($item = $queue->claimItem()) {
+        try {
+          $queue_worker->processItem($item->data);
+          $queue->deleteItem($item);
         }
-        else {
-          break;
+        catch (\Exception $e) {
+          \Drupal::logger('video_forge')->error('Error processing queue item in @worker: @message', [
+            '@worker' => $worker_id,
+            '@message' => $e->getMessage(),
+          ]);
+          $queue->releaseItem($item);
         }
       }
+      else {
+        break;
+      }
     }
-    finally {
-      $lock->release('video_forge_cron');
-    }
-  }
-  else {
-    \Drupal::logger('video_forge')->notice('Cron already running.');
   }
 }
 
@@ -90,4 +89,54 @@ function video_forge_preprocess_file_video(array &$variables) {
     $variables['#attached']['drupalSettings']['videoForge']['subtitlesUrl'] = '';
   }
 }
+
+/**
+ * Implements hook_preprocess_HOOK() for media entities.
+ */
+function video_forge_preprocess_media(array &$variables) {
+  $media = $variables['media'];
+
+  if ($media->bundle() === 'forge_video') {
+    $generate_captions_url = \Drupal\Core\Url::fromRoute('media.forge.generate_captions', [
+      'media' => $media->id(),
+    ])->toString();
+
+    $links = [
+      '#theme' => 'item_list',
+      '#items' => [
+        [
+          'data' => [
+            '#type' => 'link',
+            '#title' => t('Generate Captions'),
+            '#url' => \Drupal\Core\Url::fromRoute('media.forge.generate_captions', [
+              'media' => $media->id(),
+            ]),
+          ],
+        ],
+      ],
+    ];
+
+    // Check if the media has a subtitle file to display "Render Captions".
+    if (!$media->get('field_subtitle_file_ass')->isEmpty()) {
+      $links['#items'][] = [
+        'data' => [
+          '#type' => 'link',
+          '#title' => t('Render Captions'),
+          '#url' => \Drupal\Core\Url::fromRoute('media.forge.render_captions', [
+            'media' => $media->id(),
+          ]),
+        ],
+      ];
+    }
+
+    // Add the links to the content variable for output.
+    $variables['content']['video_forge_links'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['video-forge-links']],
+      'links' => $links,
+    ];
+  }
+}
+
+
 

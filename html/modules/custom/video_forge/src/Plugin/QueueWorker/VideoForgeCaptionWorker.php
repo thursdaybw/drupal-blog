@@ -5,7 +5,7 @@ namespace Drupal\video_forge\Plugin\QueueWorker;
 use Drupal\Core\Queue\QueueWorkerBase;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\video_forge\Service\VideoProcessor;
+use Drupal\video_forge\Service\CaptionsProcessor;
 
 /**
  * Processes video caption generation tasks.
@@ -14,8 +14,7 @@ use Drupal\video_forge\Service\VideoProcessor;
  *   id = "video_forge_caption_generation",
  *   title = @Translation("Video Caption Generation"),
  *   cron = {"time" = 60}
- * )
- */
+ * ) */
 class VideoForgeCaptionWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
 
   /**
@@ -23,16 +22,16 @@ class VideoForgeCaptionWorker extends QueueWorkerBase implements ContainerFactor
    *
    * @var \Drupal\video_forge\Service\VideoProcessor
    */
-  protected $videoProcessor;
+  protected $captionsProcessor;
 
   /**
    * Constructs a new VideoForgeCaptionWorker object.
    *
-   * @param \Drupal\video_forge\Service\VideoProcessor $video_processor
+   * @param \Drupal\video_forge\Service\CaptionsProcessor $captions_processor
    *   The video processor service.
    */
-  public function __construct(VideoProcessor $video_processor) {
-    $this->videoProcessor = $video_processor;
+  public function __construct(CaptionsProcessor $captions_processor) {
+    $this->captionsProcessor = $captions_processor;
   }
 
   /**
@@ -40,7 +39,7 @@ class VideoForgeCaptionWorker extends QueueWorkerBase implements ContainerFactor
    */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
     return new static(
-      $container->get('video_forge.video_processor')
+      $container->get('video_forge.captions_processor')
     );
   }
 
@@ -56,7 +55,7 @@ class VideoForgeCaptionWorker extends QueueWorkerBase implements ContainerFactor
     }
 
     // Run the caption processing.
-    $this->videoProcessor->processVideo($media, $data['video_path']);
+    $this->captionsProcessor->generateCaptions($media, $data['video_path']);
   }
 }
 

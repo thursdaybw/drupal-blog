@@ -1,15 +1,52 @@
 <?php
-if ($argc !== 3) {
-    echo "Usage: php captions.php input.json output.ass\n";
+
+$options = getopt('', ['style:']); // Parse named options like --style
+
+// Remove the script name and named options from $argv to get positional arguments.
+$args = array_values(array_filter($argv, function ($arg) {
+    return strpos($arg, '--') !== 0; // Exclude named options like --style
+}));
+
+// Validate required positional arguments.
+if (count($args) < 3) {
+    echo "Usage: php captions.php [--style=<style>] input.json output.ass\n";
     exit(1);
 }
 
-$jsonFile = $argv[1];
-$outputFile = $argv[2];
+// Extract positional arguments.
+$jsonFile = $args[1]; // First positional argument
+$outputFile = $args[2]; // Second positional argument
 
-// Read and parse the JSON file
+// Validate the style option or use the default.
+$selectedStyle = $options['style'] ?? 'GreenAndGold';
+
+// Log the selected style (useful for debugging).
+error_log("Selected style: $selectedStyle");
+
+// Validate the style against allowed styles.
+$allowed_styles = ['GreenAndGold', 'MrBeast', 'NeonGlow', 'BoldShadow', 'ClassicBlue'];
+if (!in_array($selectedStyle, $allowed_styles, true)) {
+    fwrite(STDERR, "Error: Invalid style '$selectedStyle'. Allowed styles are: " . implode(', ', $allowed_styles) . "\n");
+    exit(1);
+}
+
+// Validate the JSON file.
+if (!file_exists($jsonFile) || !is_readable($jsonFile)) {
+    echo "Error: JSON file '$jsonFile' does not exist or is not readable.\n";
+    exit(1);
+}
+
+// Read and parse the JSON file.
 $jsonContent = file_get_contents($jsonFile);
 $data = json_decode($jsonContent, true);
+
+if (!$data) {
+    echo "Error: Failed to parse JSON file.\n";
+    exit(1);
+}
+
+// Your existing logic for processing the JSON file and generating the ASS file goes here.
+
 
 if (!$data) {
     echo "Error: Failed to parse JSON file.\n";
@@ -211,9 +248,6 @@ PlayResY: 1080
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 ";
 
-// Build ASS styles dynamically
-$selectedStyle = "GreenAndGold"; // Change to the desired style, e.g., MrBeast, NeonGlow, etc.
-
 foreach ($styles[$selectedStyle] as $styleName => $overrides) {
     $finalStyle = mergeStyles($styles[$selectedStyle]["Default"], $overrides);
 
@@ -306,6 +340,10 @@ foreach ($data["segments"] as $segment) {
 
 // Combine header and events
 $assContent = $assHeader . "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" . implode("\n", $assEvents);
+
+if (file_exists($outputFile)) {
+    unlink($outputFile); // Remove the existing file.
+}
 
 // Save the ASS file with UTF-8 BOM encoding
 file_put_contents($outputFile, "\xEF\xBB\xBF" . $assContent);

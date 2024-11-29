@@ -35,3 +35,35 @@ media.forge.render_captions:
       media:
         type: entity:media
 
+
+entity.caption_style.collection:
+  path: '/admin/structure/caption-style'
+  defaults:
+    _entity_list: 'caption_style'
+    _title: 'Caption Style configuration'
+  requirements:
+    _permission: 'administer caption_style'
+
+entity.caption_style.add_form:
+  path: '/admin/structure/caption_style/add'
+  defaults:
+    _entity_form: 'caption_style.add'
+    _title: 'Add a caption style'
+  requirements:
+    _permission: 'administer caption_style'
+
+entity.caption_style.edit_form:
+  path: '/admin/structure/caption-style/{caption_style}'
+  defaults:
+    _entity_form: 'caption_style.edit'
+    _title: 'Edit a caption style'
+  requirements:
+    _permission: 'administer caption_style'
+
+entity.caption_style.delete_form:
+  path: '/admin/structure/caption-style/{caption_style}/delete'
+  defaults:
+    _entity_form: 'caption_style.delete'
+    _title: 'Delete a caption style'
+  requirements:
+    _permission: 'administer caption_style'

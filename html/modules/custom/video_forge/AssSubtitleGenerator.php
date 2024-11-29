@@ -221,26 +221,26 @@ PlayResY: 1080
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 ";
 
-    // Extract the global base default from the styles array.
-    $baseDefault = $this->styles["baseDefault"];
+    // Use the "Default" entry in the current style as the base default.
+    $baseDefault = $style['Default'];
 
     foreach ($style as $styleName => $overrides) {
-        // Skip the 'type' entry in the style definition.
-        if ($styleName === 'type' || $styleName === 'baseDefault') {
+        // Skip the 'type' entry in the style definition
+        if ($styleName === 'type') {
             continue;
         }
 
-        // Merge the base default, style-specific default, and overrides.
-        $finalStyle = $this->mergeStyles($baseDefault, $style["Default"] ?? []);
-        $finalStyle = $this->mergeStyles($finalStyle, $overrides);
+        // Merge with the base default and the current style overrides
+        $finalStyle = $this->mergeStyles($baseDefault, $overrides);
 
-        // Convert the final style array to a string for ASS.
+        // Convert the final style array to a string for ASS
         $styleString = implode(',', array_values($finalStyle));
         $header .= "Style: $styleName,$styleString\n";
     }
 
     return $header;
 }
+
 
 
 private function generateAssEvents(array $data, array $style): array {

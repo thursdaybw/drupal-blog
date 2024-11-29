@@ -1,0 +1,5 @@
+entity.caption_style.add_form:
+  route_name: 'entity.caption_style.add_form'
+  title: 'Add caption style'
+  appears_on:
+    - entity.caption_style.collection

@@ -63,6 +63,8 @@ class CaptionSettingsForm extends FormBase {
 			  'NeonGlow' => $this->t('Neon Glow'),
 			  'BoldShadow' => $this->t('Bold Shadow'),
 			  'ClassicBlue' => $this->t('Classic Blue'),
+			  'KaraokeClassic' => $this->t('Karaoke Classic'),
+			  'PlainStyle' => $this->t('Plain'),
 		  ],
 	  ];
 
@@ -84,7 +86,6 @@ class CaptionSettingsForm extends FormBase {
 	  // Generate the .ass file from the .json file.
 	  $json_file = $this->media->get('field_json_transcript_file')->entity->getFileUri();
 	  $ass_file = str_replace('.json', '.ass', $json_file);
-
 
 	  $this->process_subtitles($json_file, $ass_file, $style);
 

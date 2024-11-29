@@ -68,16 +68,7 @@ class VideoProcessor {
     }
 
     // Step 2: Generate ASS file.
-    $module_path = \Drupal::service('module_handler')->getModule('video_forge')->getPath();
-    $php_script = DRUPAL_ROOT . '/' . $module_path . '/captions.php';
-    $ass_command = "php \"$php_script\" \"$json_file\" \"$ass_file\"";
-    exec($ass_command, $output, $return_var);
-
-    $this->logCommand('ASS', $ass_command, $output, $return_var);
-    if ($return_var !== 0) {
-      $media->set('field_processing_state', 'failed')->save();
-      return;
-    }
+    $this->process_subtitles($json_file, $ass_file, $style);
 
     // Step 3: Render captions into the video using FFmpeg.
     $ffmpeg_path = $this->config->get('ffmpeg_path');
@@ -135,5 +126,12 @@ class VideoProcessor {
 
     $media->set($field_name, ['target_id' => $file_entity->id()]);
   }
+
+  private function process_subtitles($inputJson, $outputAss, $style = 'GreenAndGold') {
+          $generator = new AssSubtitleGenerator();
+          $generator->generateAssFromJson($inputJson, $outputAss, $style);
+  }
+
+
 }
 

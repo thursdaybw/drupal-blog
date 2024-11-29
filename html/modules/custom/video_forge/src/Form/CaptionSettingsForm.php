@@ -6,6 +6,7 @@ use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\media\MediaInterface;
+use Drupal\video_forge\Subtitle\AssSubtitleGenerator;
 
 /**
  * Provides a form for adjusting caption settings.
@@ -84,38 +85,17 @@ class CaptionSettingsForm extends FormBase {
 	  $json_file = $this->media->get('field_json_transcript_file')->entity->getFileUri();
 	  $ass_file = str_replace('.json', '.ass', $json_file);
 
-	  $module_path = \Drupal::service('module_handler')->getModule('video_forge')->getPath();
-	  $php_script = DRUPAL_ROOT . '/' . $module_path . '/captions.php';
 
-	  // Build the command with properly escaped arguments.
-	  $command = sprintf(
-		  'php %s --style=%s %s %s',
-		  escapeshellarg($php_script), // Escape the script path for safety.
-		  escapeshellarg($style), // Escape the style argument.
-		  escapeshellarg(\Drupal::service('file_system')->realpath($json_file)), // Escape the JSON file path.
-		  escapeshellarg(\Drupal::service('file_system')->realpath($ass_file)) // Escape the ASS file path.
-	  );
-
-	  // Execute the command and capture output and return code.
-	  exec($command, $output, $return_var);
-
-	  // Log the executed command, output, and return value for debugging.
-	  \Drupal::logger('video_forge')->info('Captions.php Command: @command', ['@command' => $command]);
-	  \Drupal::logger('video_forge')->info('Captions.php Output: @output', ['@output' => implode("\n", $output)]);
-	  \Drupal::logger('video_forge')->info('Captions.php Return Code: @return', ['@return' => $return_var]);
-
-	  // Check the result of the command execution.
-	  if ($return_var !== 0) {
-		  $this->messenger()->addError($this->t('Failed to generate ASS file.'));
-	  } else {
-		  $this->messenger()->addMessage($this->t('ASS file successfully generated with the "%style" style.', ['%style' => $style]));
-	  }
+	  $this->process_subtitles($json_file, $ass_file, $style);
 
 	  // Redirect back to the media view.
 	  $form_state->setRedirect('entity.media.canonical', ['media' => $this->media->id()]);
   }
 
-
+  private function process_subtitles($inputJson, $outputAss, $style = 'GreenAndGold') {
+	  $generator = new AssSubtitleGenerator();
+	  $generator->generateAssFromJson($inputJson, $outputAss, $style);
+  }
 
 }
 

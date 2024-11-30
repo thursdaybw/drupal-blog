@@ -45,113 +45,49 @@ use Drupal\video_forge\CaptionStyleInterface;
  *     "id",
  *     "label",
  *     "description",
+ *     "type",
+ *     "fontName",
+ *     "fontSize",
+ *     "primaryColour",
+ *     "secondaryColour",
+ *     "outlineColour",
+ *     "backColour",
+ *     "bold",
+ *     "italic",
+ *     "underline",
+ *     "scaleX",
+ *     "scaleY",
+ *     "alignment",
+ *     "marginL",
+ *     "marginR",
+ *     "marginV",
+ *     "primaryHighlight",
+ *     "secondaryHighlight"
  *   },
  * )
  */
 final class CaptionStyle extends ConfigEntityBase implements CaptionStyleInterface {
 
-  /**
-   * The unique ID of the caption style.
-   */
   protected string $id;
-
-  /**
-   * The label of the caption style.
-   */
   protected string $label;
-
-  /**
-   * A brief description of the caption style.
-   */
   protected ?string $description = NULL;
-
-  /**
-   * The type of the style (sequence, karaoke, plain).
-   */
   protected string $type;
-
-  /**
-   * The default font name for the style.
-   */
   protected string $fontName = 'Arial';
-
-  /**
-   * The default font size for the style.
-   */
   protected int $fontSize = 70;
-
-  /**
-   * The primary color for the style.
-   */
   protected string $primaryColour = '&H00FFFFFF';
-
-  /**
-   * The secondary color for karaoke or highlight effects.
-   */
   protected ?string $secondaryColour = NULL;
-
-  /**
-   * The outline color for the style.
-   */
   protected string $outlineColour = '&H00000000';
-
-  /**
-   * The background color for the style.
-   */
   protected string $backColour = '&H00000000';
-
-  /**
-   * The bold property for the style (-1 for true, 0 for false).
-   */
   protected int $bold = -1;
-
-  /**
-   * The italic property for the style (0 for false, 1 for true).
-   */
   protected int $italic = 0;
-
-  /**
-   * The underline property for the style (0 for false, 1 for true).
-   */
   protected int $underline = 0;
-
-  /**
-   * The scale factors for the X and Y axes.
-   */
   protected int $scaleX = 100;
   protected int $scaleY = 100;
-
-  /**
-   * The spacing between characters.
-   */
-  protected int $spacing = 0;
-
-  /**
-   * The alignment for the style.
-   */
   protected int $alignment = 2;
-
-  /**
-   * The margins for left, right, and vertical alignment.
-   */
   protected int $marginL = 200;
   protected int $marginR = 200;
   protected int $marginV = 300;
-
-  /**
-   * The encoding value for the style.
-   */
-  protected int $encoding = 1;
-
-  /**
-   * Highlight settings for primary words.
-   */
   protected array $primaryHighlight = [];
-
-  /**
-   * Highlight settings for secondary words.
-   */
   protected array $secondaryHighlight = [];
-
 }
 

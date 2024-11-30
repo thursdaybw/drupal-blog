@@ -1,7 +1,5 @@
 <?php
 
-
-
 namespace Drupal\video_forge\Subtitle;
 
 /**
@@ -191,7 +189,7 @@ private $styles = [
       unlink($outputAssPath);
     }
 
-    \Drupal::logger('video_forge')->error('Writing file @outputAssPath', [
+    \Drupal::logger('video_forge')->notice('Writing file @outputAssPath', [
       '@outputAssPath' => $outputAssPath,
     ]);
 

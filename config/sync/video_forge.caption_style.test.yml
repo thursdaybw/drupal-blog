@@ -1,0 +1,31 @@
+uuid: 15ab2287-e04d-43ac-a5e5-4ca5da638fd6
+langcode: en
+status: true
+dependencies: {  }
+id: test
+label: 'My Beast'
+description: null
+type: sequence
+fontName: 'Anton SC'
+fontSize: 80
+primaryColour: '&H00FFFFFF'
+secondaryColour: '&H00000000'
+outlineColour: '&H00000000'
+backColour: '&H00000000'
+bold: 0
+italic: 0
+underline: 0
+scaleX: 100
+scaleY: 100
+alignment: 2
+marginL: 200
+marginR: 200
+marginV: 300
+primaryHighlight:
+  colour: '&H00FF0000'
+  outline_colour: '&H0000FF00'
+  shadow: '0'
+secondaryHighlight:
+  colour: '&H00FFFF00'
+  outline_colour: '&H00FF00FF'
+  shadow: '0'

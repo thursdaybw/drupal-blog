@@ -4,6 +4,8 @@ status: true
 dependencies:
   config:
     - core.entity_view_mode.media.media_library
+    - field.field.media.forge_video.field_caption_overrides
+    - field.field.media.forge_video.field_caption_style
     - field.field.media.forge_video.field_captioned_video
     - field.field.media.forge_video.field_json_transcript_file
     - field.field.media.forge_video.field_media_video_file
@@ -31,6 +33,8 @@ content:
     region: content
 hidden:
   created: true
+  field_caption_overrides: true
+  field_caption_style: true
   field_captioned_video: true
   field_json_transcript_file: true
   field_media_video_file: true

@@ -3,6 +3,8 @@ langcode: en
 status: true
 dependencies:
   config:
+    - field.field.media.forge_video.field_caption_overrides
+    - field.field.media.forge_video.field_caption_style
     - field.field.media.forge_video.field_captioned_video
     - field.field.media.forge_video.field_json_transcript_file
     - field.field.media.forge_video.field_media_video_file
@@ -17,6 +19,21 @@ targetEntityType: media
 bundle: forge_video
 mode: default
 content:
+  field_caption_overrides:
+    type: basic_string
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 6
+    region: content
+  field_caption_style:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 7
+    region: content
   field_captioned_video:
     type: file_video
     label: above

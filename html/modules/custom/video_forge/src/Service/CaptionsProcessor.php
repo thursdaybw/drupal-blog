@@ -6,6 +6,7 @@ use Drupal\media\MediaInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\video_forge\Subtitle\AssSubtitleGenerator;
 
 /**
  * Handles caption generation logic.
@@ -35,14 +36,7 @@ class CaptionsProcessor {
       return;
     }
 
-    // Step 2: Generate ASS file.
-    $php_script = DRUPAL_ROOT . '/' . \Drupal::service('module_handler')->getModule('video_forge')->getPath() . '/captions.php';
-    $ass_command = "php \"$php_script\" --style=GreenAndGold \"$json_file\" \"$ass_file\"";
-    exec($ass_command, $output, $return_var);
-    if ($return_var !== 0) {
-      $this->logger->error('ASS generation failed.');
-      return;
-    }
+    $this->process_subtitles($json_file, $ass_file);
 
     // Attach generated files to media.
     $this->attachFile($media, $json_file, 'field_json_transcript_file');
@@ -76,5 +70,12 @@ class CaptionsProcessor {
 
     $media->set($field_name, ['target_id' => $file_entity->id()]);
   }
+
+    private function process_subtitles($inputJson, $outputAss, $style = 'GreenAndGold') {
+          $generator = new AssSubtitleGenerator();
+          $generator->generateAssFromJson($inputJson, $outputAss, $style);
+  }
+
+
 }
 

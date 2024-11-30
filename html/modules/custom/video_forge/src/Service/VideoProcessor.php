@@ -58,10 +58,14 @@ class VideoProcessor {
 
     // Step 1: Generate JSON using Whisper.
     $whisper_path = $this->config->get('whisper_path');
+
+    $this->logCommand('Whisper path', $whisper_command, $output, $return_var);
+
     $whisper_command = "$whisper_path --model medium -f json \"$video_path\" --output_dir \"$output_dir\" --word_timestamps True";
+    $this->logCommand('Whisper command', $whisper_command, $output, $return_var);
+
     exec($whisper_command, $output, $return_var);
 
-    $this->logCommand('Whisper', $whisper_command, $output, $return_var);
     if ($return_var !== 0) {
       $media->set('field_processing_state', 'failed')->save();
       return;

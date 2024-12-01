@@ -2,151 +2,13 @@
 
 namespace Drupal\video_forge\Subtitle;
 
+use Drupal\video_forge\Entity\CaptionStyle;
+
 /**
  * Class AssSubtitleGenerator
  * Handles the generation of ASS subtitle files from Whisper JSON files.
  */
 class AssSubtitleGenerator {
-
-  /**
-   * Preset styles for ASS file generation.
-   */
-private $styles = [
-    "baseDefault" => [
-        "Fontname" => "Arial",
-        "Fontsize" => "70",
-        "PrimaryColour" => "&H00FFFFFF", // White
-        "SecondaryColour" => "&H000000", // Not used
-        "OutlineColour" => "&H00000000",
-        "BackColour" => "&H00000000",
-        "Bold" => "-1",
-        "Italic" => "0",
-        "Underline" => "0",
-        "StrikeOut" => "0",
-        "ScaleX" => "100",
-        "ScaleY" => "100",
-        "Spacing" => "-20",
-        "Angle" => "0",
-        "BorderStyle" => "1",
-        "Outline" => "3",
-        "Shadow" => "0",
-        "Alignment" => "2",
-        "MarginL" => "200",
-        "MarginR" => "200",
-        "MarginV" => "300",
-        "Encoding" => "1",
-    ],
-    "MrBeast" => [
-	"type" => "sequence",
-        "Default" => [
-            "Fontname" => "Anton SC",
-            "Fontsize" => "80",
-        ],
-        "PrimaryHighlight" => [
-            "PrimaryColour" => "&H00FF0000", // Red
-            "OutlineColour" => "&H0000FF00",
-        ],
-        "SecondaryHighlight" => [
-            "PrimaryColour" => "&H00FFFF00", // Yellow
-            "OutlineColour" => "&H00FF00FF",
-        ],
-    ],
-    "NeonGlow" => [
-	"type" => "sequence",
-        "Default" => [
-            "Fontname" => "Impact",
-            "OutlineColour" => "&H00FF4500",
-            "Shadow" => "2",
-        ],
-        "PrimaryHighlight" => [
-            "PrimaryColour" => "&H00FFFF00", // Neon yellow
-            "OutlineColour" => "&H00FF00FF",
-        ],
-    ],
-    "GreenAndGold" => [
-	"type" => "sequence",
-        "Default" => [
-            "Fontname" => "Anton SC",
-            "Outline" => "5",
-            "Shadow" => "4",
-        ],
-        "PrimaryHighlight" => [
-            "PrimaryColour" => "&H0029F602", // Green
-        ],
-        "SecondaryHighlight" => [
-            "PrimaryColour" => "&H000aeaf1", // Gold
-        ],
-    ],
-    "BoldShadow" => [
-	"type" => "sequence",
-        "Default" => [
-            "Fontname" => "Anton SC",
-            "Shadow" => "4",
-        ],
-        "PrimaryHighlight" => [
-            "PrimaryColour" => "&H00FF4500", // Orange
-        ],
-        "SecondaryHighlight" => [
-            "PrimaryColour" => "&H0029F602", // Hormozi Green
-        ],
-    ],
-    "ClassicBlue" => [
-	"type" => "sequence",
-        "Default" => [
-            "Fontname" => "Arial",
-            "OutlineColour" => "&H000000FF", // Blue outline
-        ],
-        "PrimaryHighlight" => [
-            "PrimaryColour" => "&H00FF0000", // Red
-        ],
-    ],
-    "KaraokeClassic" => [
-	    "type" => "karaoke", // Standard karaoke style
-	    "Default" => [
-		    "Fontname" => "Arial",
-		    "Fontsize" => "70",
-		    "PrimaryColour" => "&H00FFFFFF",
-		    "SecondaryColour" => "&H00FFFF00", // Used by ASS karaoke
-		    "OutlineColour" => "&H00000000",
-		    "BackColour" => "&H00000000",
-		    "Bold" => "-1",
-		    "Italic" => "0",
-		    "Underline" => "0",
-		    "StrikeOut" => "0",
-		    "ScaleX" => "100",
-		    "ScaleY" => "100",
-		    "Spacing" => "0",
-		    "Angle" => "0",
-		    "BorderStyle" => "1",
-		    "Outline" => "2",
-		    "Shadow" => "0",
-		    "Alignment" => "2",
-		    "MarginL" => "200",
-		    "MarginR" => "200",
-		    "MarginV" => "200",
-		    "Encoding" => "1"
-	    ],
-    ],
-   "KaraokeClassic" => [
-        "type" => "karaoke", // Standard karaoke style
-        "Default" => [
-            "Fontname" => "Arial",
-            "Fontsize" => "70",
-            "PrimaryColour" => "&H00FFFFFF",
-            "SecondaryColour" => "&H00FFFF00", // Used by ASS karaoke
-            "Outline" => "2",
-        ],
-    ],
-    "PlainStyle" => [
-        "type" => "plain", // Simple subtitles with no effects
-        "Default" => [
-            "Fontname" => "Verdana",
-            "Fontsize" => "60",
-            "PrimaryColour" => "&H00FFFFFF",
-            "OutlineColour" => "&H000000FF",
-        ],
-    ],
-];
 
   /**
    * Parameters for chunking.
@@ -163,11 +25,11 @@ private $styles = [
    * @param string $outputAssPath
    *   Path to save the ASS file.
    * @param string $selectedStyle
-   *   The style key to use.
+   *   The machine name of the style configuration entity to use.
    *
    * @throws \Exception
    */
-  public function generateAssFromJson(string $inputJsonPath, string $outputAssPath, string $selectedStyle = 'GreenAndGold') {
+  public function generateAssFromJson(string $inputJsonPath, string $outputAssPath, string $selectedStyle) {
     if (!file_exists($inputJsonPath)) {
       throw new \Exception("JSON file does not exist: $inputJsonPath");
     }
@@ -179,19 +41,25 @@ private $styles = [
       throw new \Exception("Failed to parse JSON file.");
     }
 
-    if (!isset($this->styles[$selectedStyle])) {
+    // Load the selected style configuration entity.
+    /** @var \Drupal\video_forge\Entity\CaptionStyle $styleEntity */
+    $styleEntity = \Drupal::entityTypeManager()
+      ->getStorage('caption_style')
+      ->load($selectedStyle);
+
+    if (!$styleEntity) {
       throw new \InvalidArgumentException("Invalid style: $selectedStyle");
     }
 
-    $assContent = $this->generateAssContent($data, $selectedStyle);
+    // Convert the entity to an array for use in ASS generation.
+    $chosenStyle = $styleEntity->toArray();
+    echo "chosenStyle: " . print_r($chosenStyle, 1);
+
+    $assContent = $this->generateAssContent($data, $chosenStyle);
 
     if (file_exists($outputAssPath)) {
       unlink($outputAssPath);
     }
-
-    \Drupal::logger('video_forge')->notice('Writing file @outputAssPath', [
-      '@outputAssPath' => $outputAssPath,
-    ]);
 
     file_put_contents($outputAssPath, "\xEF\xBB\xBF" . $assContent);
   }
@@ -199,8 +67,8 @@ private $styles = [
   /**
    * Generate ASS content.
    */
-  private function generateAssContent(array $data, string $selectedStyle): string {
-    $chosenStyle = $this->styles[$selectedStyle];
+  private function generateAssContent(array $data, array $chosenStyle): string {
+
 
     $assHeader = $this->generateAssHeader($chosenStyle);
     $assEvents = $this->generateAssEvents($data, $chosenStyle);
@@ -219,34 +87,57 @@ PlayResY: 1080
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 ";
 
-    // Extract the global base default from the styles array.
-    $baseDefault = $this->styles["baseDefault"];
+    // Add the base/default style.
+    $fields = CaptionStyle::getFieldDefinitions();
+    $baseStyleString = $this->buildStyleString($style, $fields);
+    $header .= "Style: Default{$baseStyleString}\n";
 
-    foreach ($style as $styleName => $overrides) {
-        // Skip the 'type' entry in the style definition.
-        if ($styleName === 'type' || $styleName === 'baseDefault') {
-            continue;
+    // Add styles for PrimaryHighlight and SecondaryHighlight.
+    foreach (['primaryHighlight', 'secondaryHighlight'] as $highlightKey) {
+        if (!empty($style[$highlightKey])) {
+            // Merge the base style with highlight overrides.
+            $highlightOverrides = $style[$highlightKey];
+            $highlightStyleString = $this->buildStyleString($style, $fields, $highlightOverrides);
+
+            // Append the new style line to the header.
+            $header .= "Style: {$highlightKey}{$highlightStyleString}\n";
         }
-
-        // Merge the base default, style-specific default, and overrides.
-        $finalStyle = $this->mergeStyles($baseDefault, $style["Default"] ?? []);
-        $finalStyle = $this->mergeStyles($finalStyle, $overrides);
-
-        // Convert the final style array to a string for ASS.
-        $styleString = implode(',', array_values($finalStyle));
-        $header .= "Style: $styleName,$styleString\n";
     }
-
     return $header;
 }
 
+/**
+ * Builds a style string for the ASS header.
+ *
+ * @param array $baseStyle
+ *   The base style array.
+ * @param array $fields
+ *   Field definitions from CaptionStyle.
+ * @param array $overrides
+ *   (optional) Override values for specific fields.
+ *
+ * @return string
+ *   The generated style string for ASS.
+ */
+private function buildStyleString(array $baseStyle, array $fields, array $overrides = []): string {
+    $styleString = '';
+
+    foreach ($fields as $field_name => $metadata) {
+        if (!empty($metadata['ass_key'])) {
+            $ass_key = $metadata['ass_key'];
+            $value = $overrides[$field_name] ?? $baseStyle[$field_name] ?? $metadata['default'];
+            $styleString .= ",$value";
+        }
+    }
+
+    return $styleString;
+}
 
 private function generateAssEvents(array $data, array $style): array {
     $assEvents = [];
 
     switch ($style['type']) {
         case 'sequence':
-            // Existing sequenced dialogue logic
             foreach ($data["segments"] as $segment) {
                 $words = $segment["words"];
                 $chunkStart = $words[0]["start"];
@@ -272,7 +163,6 @@ private function generateAssEvents(array $data, array $style): array {
             break;
 
         case 'karaoke':
-            // Karaoke logic using ASS built-in `k` overrides
             foreach ($data["segments"] as $segment) {
                 $start = gmdate("H:i:s", floor($segment["start"])) . '.' . sprintf('%02d', ($segment["start"] - floor($segment["start"])) * 100);
                 $end = gmdate("H:i:s", floor($segment["end"])) . '.' . sprintf('%02d', ($segment["end"] - floor($segment["end"])) * 100);
@@ -288,7 +178,6 @@ private function generateAssEvents(array $data, array $style): array {
             break;
 
         case 'plain':
-            // Plain subtitles with no effects
             foreach ($data["segments"] as $segment) {
                 $start = gmdate("H:i:s", floor($segment["start"])) . '.' . sprintf('%02d', ($segment["start"] - floor($segment["start"])) * 100);
                 $end = gmdate("H:i:s", floor($segment["end"])) . '.' . sprintf('%02d', ($segment["end"] - floor($segment["end"])) * 100);
@@ -303,38 +192,30 @@ private function generateAssEvents(array $data, array $style): array {
     return $assEvents;
 }
 
-
 private function addAssEvent(array $chunkWords, array $style, array &$assEvents, bool $applyFade) {
-    $highlightCounter = 0; // Counter to track when to apply secondary highlight.
+    $highlightCounter = 0;
 
     foreach ($chunkWords as $index => $wordInfo) {
         $highlightedLine = "";
 
-        // Apply fade effect only to the first dialogue entry in the sequence.
         if ($applyFade && $index === 0) {
             $highlightedLine .= "{\\fad(500,0)}";
         }
 
-        // Build the dialogue with highlighting for the current word.
         foreach ($chunkWords as $wordIndex => $otherWordInfo) {
             $otherWord = $otherWordInfo["word"];
 
-            // Check if SecondaryHighlight is defined in styles.
-            $useSecondaryHighlight = isset($style["SecondaryHighlight"]);
+            $useSecondaryHighlight = isset($style["secondaryHighlight"]);
+            $highlightStyle = $useSecondaryHighlight && $highlightCounter % 5 === 4
+                ? "secondaryHighlight"
+                : "primaryHighlight";
 
-            // Use primary style for 4 words, then secondary for 1 word if defined.
-            if ($useSecondaryHighlight) {
-                $highlightStyle = ($highlightCounter % 5 === 4) ? "SecondaryHighlight" : "PrimaryHighlight";
-            } else {
-                // Fallback to primary style if secondary is not defined.
-                $highlightStyle = "PrimaryHighlight";
-            }
+            $highlightValues = $style[$highlightStyle] ?? [];
+            $highlightTag = $this->buildHighlightTag($highlightValues);
 
             if ($index === $wordIndex) {
-                // Apply highlight style to the current word.
-                $highlightedLine .= "{\\r$highlightStyle}{$otherWord}{\\r}";
+                $highlightedLine .= "{\\r$highlightTag}{$otherWord}{\\r}";
             } else {
-                // Default style for non-highlighted words.
                 $highlightedLine .= " {$otherWord}";
             }
 
@@ -346,18 +227,26 @@ private function addAssEvent(array $chunkWords, array $style, array &$assEvents,
 
         $assEvents[] = "Dialogue: 0,{$start},{$end},Default,,0,0,0,,$highlightedLine";
 
-        $applyFade = false; // Ensure fade is applied only to the first entry.
+        $applyFade = false;
     }
 }
 
-  /**
-   * Merge styles.
-   */
-  private function mergeStyles(array $baseStyle, array $overrides): array {
-    foreach ($overrides as $key => $value) {
-      $baseStyle[$key] = $value;
+private function buildHighlightTag(array $highlightValues): string {
+    $tag = "";
+
+    if (!empty($highlightValues['colour'])) {
+        $tag .= "\\c{$highlightValues['colour']}";
     }
-    return $baseStyle;
-  }
+    if (!empty($highlightValues['outline_colour'])) {
+        $tag .= "\\3c{$highlightValues['outline_colour']}";
+    }
+    if (!empty($highlightValues['shadow'])) {
+        $tag .= "\\shad{$highlightValues['shadow']}";
+    }
+
+    return $tag;
+}
+
+
 }
 

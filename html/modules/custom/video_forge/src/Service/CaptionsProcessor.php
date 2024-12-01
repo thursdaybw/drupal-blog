@@ -28,15 +28,30 @@ class CaptionsProcessor {
     $json_file = str_replace('.mp4', '.json', $video_path);
     $ass_file = str_replace('.mp4', '.ass', $video_path);
 
-    // Step 1: Generate JSON using Whisper.
-    $whisper_command = "{$this->config->get('whisper_path')} --model medium -f json \"$video_path\" --output_dir \"$output_dir\" --word_timestamps True";
-    exec($whisper_command, $output, $return_var);
-    if ($return_var !== 0) {
-      $this->logger->error('Whisper command failed.');
-      return;
+    // Fetch the style from the media entity's field_caption_style.
+    $style_name = $media->get('field_caption_style')->value ?? 'default_style';
+
+    if (!$style_name) {
+        $this->logger->error('No style selected for media @media_id. Falling back to default.', [
+            '@media_id' => $media->id(),
+        ]);
+        $style_name = 'default_style';
     }
 
-    $this->process_subtitles($json_file, $ass_file);
+    // Step 1: Generate JSON using Whisper.
+    if (!file_exists($json_file)) { 
+	    $whisper_command = "{$this->config->get('whisper_path')} --model medium -f json \"$video_path\" --output_dir \"$output_dir\" --word_timestamps True";
+	    exec($whisper_command, $output, $return_var);
+	    if ($return_var !== 0) {
+	      $this->logger->error('Whisper command failed.');
+	      return;
+	    }
+    }
+    else {
+	    $this->logger->info('JSON file already exists: @json_file. Skipping Whisper generation.', ['@json_file' => $json_file]);
+    }
+
+    $this->process_subtitles($json_file, $ass_file, $style_name);
 
     // Attach generated files to media.
     $this->attachFile($media, $json_file, 'field_json_transcript_file');
@@ -71,7 +86,7 @@ class CaptionsProcessor {
     $media->set($field_name, ['target_id' => $file_entity->id()]);
   }
 
-    private function process_subtitles($inputJson, $outputAss, $style = 'GreenAndGold') {
+    private function process_subtitles($inputJson, $outputAss, $style) {
           $generator = new AssSubtitleGenerator();
           $generator->generateAssFromJson($inputJson, $outputAss, $style);
   }

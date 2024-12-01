@@ -47,6 +47,25 @@ final class CaptionStyleForm extends EntityForm {
       '#disabled' => !$entity->isNew(),
     ];
 
+    $form['type'] = [
+        '#type' => 'select',
+        '#title' => $this->t('Style Type'),
+        '#options' => [
+          'sequence' => $this->t('Sequence'),
+          'karaoke' => $this->t('Karaoke'),
+          'plain' => $this->t('Plain'),
+        ],
+        '#default_value' => $entity->get('type') ?? 'plain',
+        '#required' => TRUE,
+	/*
+        '#ajax' => [
+          'callback' => '::updateDynamicFields',
+          'wrapper' => 'dynamic-fields-wrapper',
+        ],
+	 */
+      ];
+
+
     // Add the fields provided by the trait.
     $form += $this->buildCommonFields($entity->toArray());
     $form += $this->buildHighlightFieldsets($entity->toArray());

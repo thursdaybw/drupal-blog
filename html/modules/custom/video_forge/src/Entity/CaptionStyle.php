@@ -55,12 +55,19 @@ use Drupal\video_forge\CaptionStyleInterface;
  *     "bold",
  *     "italic",
  *     "underline",
+ *     "strikeOut",
  *     "scaleX",
  *     "scaleY",
+ *     "spacing",
+ *     "angle",
+ *     "borderStyle",
+ *     "outline",
+ *     "shadow",
  *     "alignment",
  *     "marginL",
  *     "marginR",
  *     "marginV",
+ *     "encoding",
  *     "primaryHighlight",
  *     "secondaryHighlight"
  *   },
@@ -228,13 +235,18 @@ public static function getFieldDefinitions(): array {
   protected int $strikeout = 0;
   protected int $scaleX = 100;
   protected int $scaleY = 100;
+  protected int $spacing = 0;
+  protected int $angle = 0;
+  protected int $borderStyle = 1;
+  protected int $outline = 1;
+  protected int $shadow = 0;
   protected int $alignment = 2;
-  protected int $spaceing = -20;
   protected int $marginL = 200;
   protected int $marginR = 200;
   protected int $marginV = 300;
   protected array $primaryHighlight = [];
   protected array $secondaryHighlight = [];
+  protected int $encoding = 1;
 
 }
 

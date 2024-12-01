@@ -210,8 +210,7 @@ private function addAssEvent(array $chunkWords, array $style, array &$assEvents,
                 ? "secondaryHighlight"
                 : "primaryHighlight";
 
-            $highlightValues = $style[$highlightStyle] ?? [];
-            $highlightTag = $this->buildHighlightTag($highlightValues);
+            $highlightTag = $this->buildHighlightTag($style, $highlightStyle);
 
             if ($index === $wordIndex) {
                 $highlightedLine .= "{\\r$highlightTag}{$otherWord}{\\r}";
@@ -231,17 +230,66 @@ private function addAssEvent(array $chunkWords, array $style, array &$assEvents,
     }
 }
 
-private function buildHighlightTag(array $highlightValues): string {
-    $tag = "";
+/**
+ * Builds a style override tag for ASS from highlight values.
+ *
+ * @param array $style
+ *   The complete style array, including base and highlight overrides.
+ * @param string $highlightKey
+ *   The key for the highlight type ('primaryHighlight' or 'secondaryHighlight').
+ *
+ * @return string
+ *   The generated ASS override tag.
+ */
+private function buildHighlightTag(array $style, string $highlightKey): string {
+    $fields = CaptionStyle::getFieldDefinitions();
+    $overrideMapping = [
+        'fontName' => 'fn',
+        'fontSize' => 'fs',
+        'primaryColour' => 'c',
+        'secondaryColour' => '2c',
+        'outlineColour' => '3c',
+        'backColour' => '4c',
+        'bold' => 'b',
+        'italic' => 'i',
+        'underline' => 'u',
+        'strikeOut' => 's',
+        'scaleX' => 'fscx',
+        'scaleY' => 'fscy',
+        'spacing' => 'fsp',
+        'angle' => 'frz', // Z-axis rotation
+        'borderStyle' => 'bord',
+        'outline' => 'bord', // ASS uses 'bord' for both
+        'shadow' => 'shad',
+        'alignment' => 'an',
+        'marginL' => null, // Margins are not override codes
+        'marginR' => null,
+        'marginV' => null,
+        'encoding' => 'fe',
+    ];
 
-    if (!empty($highlightValues['colour'])) {
-        $tag .= "\\c{$highlightValues['colour']}";
-    }
-    if (!empty($highlightValues['outline_colour'])) {
-        $tag .= "\\3c{$highlightValues['outline_colour']}";
-    }
-    if (!empty($highlightValues['shadow'])) {
-        $tag .= "\\shad{$highlightValues['shadow']}";
+    $tag = '';
+
+    // Extract the highlight values for the given highlightKey.
+    $highlightValues = $style[$highlightKey] ?? [];
+
+    foreach ($fields as $field_name => $metadata) {
+        if (!isset($overrideMapping[$field_name])) {
+            continue;
+        }
+
+        $overrideCode = $overrideMapping[$field_name];
+        if (!$overrideCode) {
+            continue; // Skip fields without a corresponding ASS override code
+        }
+
+        $baseValue = $style[$field_name] ?? $metadata['default'];
+        $overrideValue = $highlightValues[$field_name] ?? null;
+
+        if ($overrideValue !== null && $overrideValue != $baseValue) {
+            // Add the override tag for this field
+            $tag .= sprintf("\\%s%s", $overrideCode, $overrideValue);
+        }
     }
 
     return $tag;

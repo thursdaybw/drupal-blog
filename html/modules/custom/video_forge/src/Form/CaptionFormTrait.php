@@ -44,7 +44,10 @@ trait CaptionFormTrait {
    * Builds individual highlight fields for a given title and default values.
    */
   protected function buildHighlightFields(string $title, array $default_values = []): array {
-    return [
+
+    $common_fields = $this->buildCommonFields($default_values);
+
+    return array_merge([
       '#type' => 'fieldset',
       '#title' => $this->t($title),
       '#tree' => TRUE,
@@ -53,22 +56,7 @@ trait CaptionFormTrait {
           ':input[name="type"]' => ['value' => 'sequence'],
         ],
       ],
-      'colour' => [
-        '#type' => 'textfield',
-        '#title' => $this->t('Highlight Colour'),
-        '#default_value' => $default_values['colour'] ?? '&H00FFFFFF',
-      ],
-      'outline_colour' => [
-        '#type' => 'textfield',
-        '#title' => $this->t('Outline Colour'),
-        '#default_value' => $default_values['outline_colour'] ?? '&H00FFFFFF',
-      ],
-      'shadow' => [
-        '#type' => 'number',
-        '#title' => $this->t('Shadow'),
-        '#default_value' => $default_values['Shadow'] ?? 0,
-      ],
-    ];
+    ], $common_fields);
   }
 
   /**
@@ -96,6 +84,7 @@ trait CaptionFormTrait {
 		  }
 	  }
 
+    // print_r($form_state->getValue('type')); exit;
     if ($form_state->hasValue('type')) {
       $entity->set('type', $form_state->getValue('type'));
     }

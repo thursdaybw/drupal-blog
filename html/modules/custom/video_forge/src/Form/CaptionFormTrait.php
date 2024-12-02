@@ -15,20 +15,21 @@ trait CaptionFormTrait {
   /**
    * Builds common fields for caption styles.
    */
-	protected function buildCommonFields(array $default_values = []): array {
-		$fields = CaptionStyle::getFieldDefinitions();
-		$form = [];
-		foreach ($fields as $field_name => $metadata) {
-			if (isset($metadata['ass_key'])) {
-				$form[$field_name] = [
-					'#type' => $metadata['type'] === 'integer' ? 'number' : 'textfield',
-					'#title' => $this->t($metadata['label']),
-					'#default_value' => $default_values[$field_name] ?? $metadata['default'],
-				];
-			}
-		}
-		return $form;
-	}
+protected function buildCommonFields(array $default_values = []): array {
+    $fields = CaptionStyle::getFieldDefinitions();
+    $form = [];
+    foreach ($fields as $field_name => $metadata) {
+        if (isset($metadata['ass_key'])) {
+            $form[$field_name] = [
+                '#type' => $metadata['type'] === 'integer' ? 'number' : 'textfield',
+                '#title' => $this->t($metadata['label']),
+                '#description' => $this->t($metadata['description'] ?? ''),
+                '#default_value' => $default_values[$field_name] ?? $metadata['default'],
+            ];
+        }
+    }
+    return $form;
+}
 
   /**
    * Builds highlight fieldsets for Primary and Secondary highlights.

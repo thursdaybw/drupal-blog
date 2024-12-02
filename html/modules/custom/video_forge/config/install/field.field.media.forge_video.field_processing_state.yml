@@ -1,0 +1,23 @@
+uuid: fef2a4d2-745d-49a5-8886-ef608859d2ed
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.media.field_processing_state
+    - media.type.forge_video
+  module:
+    - options
+id: media.forge_video.field_processing_state
+field_name: field_processing_state
+entity_type: media
+bundle: forge_video
+label: 'Processing State'
+description: 'Tracks the current stage of the video processing workflow. Possible values include "Uploaded," "Processing," and "Completed."'
+required: true
+translatable: false
+default_value:
+  -
+    value: uploaded
+default_value_callback: ''
+settings: {  }
+field_type: list_string

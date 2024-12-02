@@ -1,0 +1,92 @@
+uuid: 377f91e5-7c00-4980-9911-e6f351e3cba6
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.media.forge_video.field_caption_overrides
+    - field.field.media.forge_video.field_caption_style
+    - field.field.media.forge_video.field_captioned_video
+    - field.field.media.forge_video.field_json_transcript_file
+    - field.field.media.forge_video.field_media_video_file
+    - field.field.media.forge_video.field_processing_state
+    - field.field.media.forge_video.field_subtitle_file_ass
+    - media.type.forge_video
+  module:
+    - file
+    - options
+id: media.forge_video.default
+targetEntityType: media
+bundle: forge_video
+mode: default
+content:
+  field_caption_overrides:
+    type: basic_string
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 6
+    region: content
+  field_caption_style:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 7
+    region: content
+  field_captioned_video:
+    type: file_video
+    label: above
+    settings:
+      controls: true
+      autoplay: false
+      loop: false
+      multiple_file_display_type: tags
+      muted: false
+      width: 640
+      height: 480
+    third_party_settings: {  }
+    weight: 1
+    region: content
+  field_json_transcript_file:
+    type: file_default
+    label: above
+    settings:
+      use_description_as_link_text: true
+    third_party_settings: {  }
+    weight: 2
+    region: content
+  field_media_video_file:
+    type: file_video
+    label: visually_hidden
+    settings:
+      controls: true
+      autoplay: false
+      loop: false
+      multiple_file_display_type: tags
+      muted: false
+      width: 640
+      height: 480
+    third_party_settings: {  }
+    weight: 0
+    region: content
+  field_processing_state:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 4
+    region: content
+  field_subtitle_file_ass:
+    type: file_default
+    label: above
+    settings:
+      use_description_as_link_text: true
+    third_party_settings: {  }
+    weight: 3
+    region: content
+hidden:
+  created: true
+  name: true
+  thumbnail: true
+  uid: true

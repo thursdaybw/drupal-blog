@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e95fc500b934ced048c49114d10d44c8",
+    "content-hash": "719ef650af0d9ac0cead102b8c505089",
     "packages": [
         {
             "name": "asm89/stack-cors",
@@ -8547,6 +8547,35 @@
             "time": "2024-09-25T14:18:03+00:00"
         },
         {
+            "name": "thursdaybw/video_forge",
+            "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "git@github.com:thursdaybw/video_forge.git",
+                "reference": "d5e1f22137dfad1338b3f6188925a8b6b89b8ddb"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/thursdaybw/video_forge/zipball/d5e1f22137dfad1338b3f6188925a8b6b89b8ddb",
+                "reference": "d5e1f22137dfad1338b3f6188925a8b6b89b8ddb",
+                "shasum": ""
+            },
+            "require": {
+                "drupal/core": "^10.0"
+            },
+            "default-branch": true,
+            "type": "drupal-module",
+            "license": [
+                "proprietary"
+            ],
+            "description": "A private video module for managing enhanced captions and subtitles.",
+            "support": {
+                "source": "https://github.com/thursdaybw/video_forge/tree/main",
+                "issues": "https://github.com/thursdaybw/video_forge/issues"
+            },
+            "time": "2024-12-02T02:16:36+00:00"
+        },
+        {
             "name": "twig/twig",
             "version": "v3.14.2",
             "source": {
@@ -8737,7 +8766,8 @@
         "drupal/markdown": 5,
         "drupal/openai": 15,
         "drupal/openapi_rest": 5,
-        "drupal/openapi_ui": 5
+        "drupal/openapi_ui": 5,
+        "thursdaybw/video_forge": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

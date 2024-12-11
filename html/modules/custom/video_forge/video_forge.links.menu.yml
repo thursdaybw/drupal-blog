@@ -1,5 +1,0 @@
-entity.caption_style.overview:
-  title: Caption Styles
-  parent: system.admin_structure
-  description: 'List of caption styles to extend site functionality.'
-  route_name: entity.caption_style.collection

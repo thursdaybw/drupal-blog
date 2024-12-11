@@ -12,7 +12,11 @@
         {
             "type": "composer",
             "url": "https://packages.drupal.org/8"
-        }
+        },
+	{
+	    "type": "vcs",
+	    "url": "git@github.com:thursdaybw/video_forge.git"
+	}
     ],
     "require": {
         "composer/installers": "^2.0",
@@ -37,6 +41,7 @@
         "drupal/vani": "^10.0",
         "drush/drush": "^12.1",
         "league/commonmark": "^1.0",
+        "thursdaybw/video_forge": "dev-main",
         "wikimedia/composer-merge-plugin": "^2.1"
     },
     "conflict": {

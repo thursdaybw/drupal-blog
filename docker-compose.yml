@@ -30,6 +30,7 @@ services:
     environment:
       - USER_ID=${HTTP_UID}
       - GROUP_ID=${HTTP_GID}
+      - COMPOSER_AUTH=${COMPOSER_AUTH}
   # The MySQL container
   database:
     # Using the Lando MySQL image for compatibility

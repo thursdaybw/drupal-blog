@@ -5,7 +5,7 @@ dependencies: {  }
 id: greenandgold 
 label: Green and Gold 
 description: null
-type: plain
+type: segment 
 fontName: 'Anton SC'
 fontSize: 70
 primaryColour: '&H00FFFFFF'

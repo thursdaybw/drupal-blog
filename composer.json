@@ -60,7 +60,10 @@
             "php-http/discovery": true,
             "cweagans/composer-patches": true
         },
-        "sort-packages": true
+        "sort-packages": true,
+        "preferred-install": {
+           "thursdaybw/video_forge": "source"
+        }
     },
     "extra": {
         "drupal-scaffold": {

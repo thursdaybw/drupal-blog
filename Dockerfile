@@ -13,6 +13,10 @@ RUN apt-get update && apt-get install -y \
 # Install Whisper directly via pip
 RUN python3 -m pip install openai-whisper
 
+# Ensure correct permissions for /home/http/.cache
+RUN mkdir -p /home/http/.cache && \
+    chown -R www-data:www-data /home/http/.cache
+
 # Copy msmtp configuration file
 COPY msmtprc /etc/msmtprc
 

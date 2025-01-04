@@ -12,7 +12,7 @@ primaryColour: '&H00FFFFFF'
 secondaryColour: '&H00000000'
 outlineColour: '&H00000000'
 backColour: '&H00000000'
-bold: -1
+bold: 0
 italic: 0
 underline: 0
 strikeOut: '0'
@@ -29,7 +29,7 @@ marginR: 200
 marginV: 300
 encoding: 1
 primaryHighlight:
-  fontName: Arial
+  fontName: 'Anton SC'
   fontSize: '70'
   primaryColour: '&H0029F602'
   secondaryColour: '&H00000000'
@@ -52,7 +52,7 @@ primaryHighlight:
   marginV: '300'
   encoding: '1'
 secondaryHighlight:
-  fontName: Arial
+  fontName: 'Anton SC'
   fontSize: '70'
   primaryColour: '&H000aeaf1'
   secondaryColour: '&H00000000'

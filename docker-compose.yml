@@ -6,7 +6,7 @@ services:
     # Using the Lando PHP image ensures compatibility
     build: .
     # image: devwithlando/php:8.1-apache-4
-    command: bash -c "a2enmod rewrite && apache2-foreground"
+    command: ["bash", "-c", "mount_sftp.sh && a2enmod rewrite && apache2-foreground"] 
     # Maps the ports between the host and the container
     ports:
       # Maps host port 80 to container's Apache HTTP port
@@ -15,6 +15,11 @@ services:
       - "8445:443"
     # Mounts directories between the host and the container
     volumes:
+      - /root/.ssh:/root/.ssh:ro # Mount SSH keys for authentication
+      - type: tmpfs  # Temporary filesystem for mounting
+        target: /var/www/html/sites/default/files/receipts
+        tmpfs:
+          size: 100M  # Adjust as needed
       - type: bind
         source: ./html/sites/default/files
         target: /var/www/html/sites/default/files

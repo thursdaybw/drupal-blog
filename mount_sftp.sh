@@ -5,6 +5,7 @@ LOGFILE="/var/log/mount_sftp.log"
 
 # Ensure the mount point exists
 mkdir -p /var/www/html/sites/default/files/receipts
+chown www-data:www-data /var/www/html/sites/default/files/receipts
 
 # Check if it's already mounted
 if ! mountpoint -q /var/www/html/sites/default/files/receipts; then

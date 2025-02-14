@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y \
 # Install Whisper directly via pip
 RUN python3 -m pip install openai-whisper
 
+# Enable `user_allow_other` in `/etc/fuse.conf`
+RUN echo "user_allow_other" > /etc/fuse.conf && chmod 644 /etc/fuse.conf
+
 # Ensure correct permissions for /home/http/.cache
 RUN mkdir -p /home/http/.cache && \
     chown -R www-data:www-data /home/http/.cache

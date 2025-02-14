@@ -40,6 +40,9 @@ services:
       - SYS_ADMIN
     devices:
       - /dev/fuse
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
   # The MySQL container
   database:
     # Using the Lando MySQL image for compatibility

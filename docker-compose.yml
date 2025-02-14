@@ -36,6 +36,10 @@ services:
       - USER_ID=${HTTP_UID}
       - GROUP_ID=${HTTP_GID}
       - COMPOSER_AUTH=${COMPOSER_AUTH}
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse
   # The MySQL container
   database:
     # Using the Lando MySQL image for compatibility

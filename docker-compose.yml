@@ -6,7 +6,7 @@ services:
     # Using the Lando PHP image ensures compatibility
     build: .
     # image: devwithlando/php:8.1-apache-4
-    command: ["bash", "-c", "mount_sftp.sh && a2enmod rewrite && apache2-foreground"] 
+    command: ["bash", "-c", "/mount_sftp.sh && a2enmod rewrite && apache2-foreground"] 
     # Maps the ports between the host and the container
     ports:
       # Maps host port 80 to container's Apache HTTP port

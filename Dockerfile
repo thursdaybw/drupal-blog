@@ -61,7 +61,3 @@ COPY php-uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 
 # Copy mount script into the container
 COPY mount_sftp.sh /mount_sftp.sh
-
-# Ensure it's executable
-RUN chmod +x /mount_sftp.sh
-

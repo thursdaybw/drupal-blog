@@ -5,8 +5,10 @@ services:
     # command: sh -c "a2enmod rewrite && apache2-foreground"
     # Using the Lando PHP image ensures compatibility
     build: .
+    env_file:
+      - .env
     # image: devwithlando/php:8.1-apache-4
-    command: ["bash", "-c", "a2enmod rewrite && apache2-foreground"] 
+    #command: ["bash", "-c", "a2enmod rewrite && apache2-foreground"] 
     # Maps the ports between the host and the container
     ports:
       # Maps host port 80 to container's Apache HTTP port
@@ -21,12 +23,11 @@ services:
         target: /var/www/html/sites/default/files
         bind:
           propagation: shared
-      - type: bind
-        source: /root/.cache/whisper/medium.pt
-        target: /home/http/.cache/whisper/medium.pt
-        bind:
-          propagation: shared
-    user: "${HTTP_UID}:${HTTP_GID}"
+      #- type: bind
+      #  source: /root/.cache/whisper/medium.pt
+      #  target: /home/http/.cache/whisper/medium.pt
+      #  bind:
+      #    propagation: shared
     # Environment variables to set inside the container
     environment:
       - USER_ID=${HTTP_UID}

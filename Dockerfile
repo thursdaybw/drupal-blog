@@ -61,6 +61,3 @@ RUN fc-cache -f -v
 USER www-data
 
 COPY php-uploads.ini /usr/local/etc/php/conf.d/uploads.ini
-
-# Copy mount script into the container
-COPY mount_sftp.sh /mount_sftp.sh

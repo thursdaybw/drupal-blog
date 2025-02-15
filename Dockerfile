@@ -3,9 +3,9 @@ FROM devwithlando/php:8.1-apache-4
 
 # Install msmtp and other necessary packages
 RUN apt-get update && apt-get install -y \
-    sshfs && \
-    #msmtp \
-    #mailutils \
+    sshfs \
+    msmtp \
+    mailutils && \
     #ffmpeg \
     #python3-pip \
     #python3-venv && \
@@ -31,7 +31,7 @@ RUN chmod 644 /etc/msmtprc
 RUN touch /var/log/msmtp.log \
     && chmod 666 /var/log/msmtp.log
 
-#RUN echo "sendmail_path = /usr/bin/msmtp -t" > /usr/local/etc/php/conf.d/sendmail.ini
+RUN echo "sendmail_path = /usr/bin/msmtp -t" > /usr/local/etc/php/conf.d/sendmail.ini
 
 # msmtp end
 
@@ -64,12 +64,6 @@ RUN mkdir -p /home/http/.ssh && \
     chown www-data:www-data /home/http/.ssh && \
     chmod 700 /home/http/.ssh
 
-# Copy known_hosts into the image
-#COPY known_hosts /home/http/.ssh/known_hosts
-
-# Ensure the correct ownership and permissions
-#RUN chown www-data:www-data /home/http/.ssh/known_hosts && \
-#    chmod 644 /home/http/.ssh/known_hosts
 
 # Create SSHFS mount point
 RUN mkdir -p /var/tmp/sftp_mount && \
@@ -79,8 +73,6 @@ RUN mkdir -p /var/tmp/sftp_mount && \
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Switch to 'www-data' user
-#USER www-data
 USER root 
 ENTRYPOINT ["/entrypoint.sh"]
 

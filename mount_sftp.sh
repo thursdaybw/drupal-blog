@@ -10,7 +10,7 @@ mkdir -p "$SSHFS_MOUNT_POINT"
 chown www-data:www-data "$SSHFS_MOUNT_POINT"
 
 # Ensure the bind mount point exists
-#mkdir -p "$BIND_MOUNT_POINT"
+mkdir -p "$BIND_MOUNT_POINT"
 
 #if ! mountpoint -q "$SSHFS_MOUNT_POINT"; then
 #    echo "Mounting SSHFS at $SSHFS_MOUNT_POINT..."

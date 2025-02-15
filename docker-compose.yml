@@ -16,10 +16,6 @@ services:
     # Mounts directories between the host and the container
     volumes:
       - /root/.ssh:/root/.ssh:ro # Mount SSH keys for authentication
-      - type: tmpfs  # Temporary filesystem for mounting
-        target: /var/www/html/sites/default/files/receipts
-        tmpfs:
-          size: 100M  # Adjust as needed
       - type: bind
         source: ./html/sites/default/files
         target: /var/www/html/sites/default/files

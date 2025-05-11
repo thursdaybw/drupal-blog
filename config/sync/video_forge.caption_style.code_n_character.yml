@@ -1,9 +1,9 @@
-uuid: 2cc45033-1f0a-442e-ba52-53ff8f1d5226
+uuid: f9441ee5-77a8-4215-a8ae-3734abcab7ad
 langcode: en
 status: true
 dependencies: {  }
-id: greenandgold
-label: 'Green and Gold'
+id: code_n_character
+label: Code-n-Character
 description: null
 type: sequence
 fontName: 'Anton SC'
@@ -26,16 +26,16 @@ shadow: 0
 alignment: 2
 marginL: 200
 marginR: 200
-marginV: 300
+marginV: 200
 encoding: 1
 primaryHighlight:
   fontName: 'Anton SC'
   fontSize: '70'
-  primaryColour: '&H0029F602'
+  primaryColour: '&H00dcbe01'
   secondaryColour: '&H00000000'
   outlineColour: '&H00000000'
   backColour: '&H00000000'
-  bold: '1'
+  bold: '-1'
   italic: '0'
   underline: '0'
   strikeOut: '0'
@@ -54,11 +54,11 @@ primaryHighlight:
 secondaryHighlight:
   fontName: 'Anton SC'
   fontSize: '70'
-  primaryColour: '&H000aeaf1'
+  primaryColour: '&H000366fe'
   secondaryColour: '&H00000000'
   outlineColour: '&H00000000'
   backColour: '&H00000000'
-  bold: '-1'
+  bold: '0'
   italic: '0'
   underline: '0'
   strikeOut: '0'

@@ -1,18 +1,18 @@
-uuid: 2cc45033-1f0a-442e-ba52-53ff8f1d5226
+uuid: 08c8e484-92db-4275-95c7-ee0e9c03c971 
 langcode: en
 status: true
 dependencies: {  }
-id: greenandgold
-label: 'Green and Gold'
+id: bevan_s_bench_portrait
+label: "Bevan's Bench Portrait"
 description: null
 type: sequence
 fontName: 'Anton SC'
 fontSize: 70
-primaryColour: '&H00FFFFFF'
+primaryColour: '&H0065bdd7'
 secondaryColour: '&H00000000'
 outlineColour: '&H00000000'
 backColour: '&H00000000'
-bold: 0
+bold: 1
 italic: 0
 underline: 0
 strikeOut: '0'
@@ -26,12 +26,12 @@ shadow: 0
 alignment: 2
 marginL: 200
 marginR: 200
-marginV: 300
+marginV: 200
 encoding: 1
 primaryHighlight:
   fontName: 'Anton SC'
   fontSize: '70'
-  primaryColour: '&H0029F602'
+  primaryColour: '&H00e1c46b'
   secondaryColour: '&H00000000'
   outlineColour: '&H00000000'
   backColour: '&H00000000'
@@ -54,11 +54,11 @@ primaryHighlight:
 secondaryHighlight:
   fontName: 'Anton SC'
   fontSize: '70'
-  primaryColour: '&H000aeaf1'
+  primaryColour: '&H007a5d66'
   secondaryColour: '&H00000000'
   outlineColour: '&H00000000'
   backColour: '&H00000000'
-  bold: '-1'
+  bold: '1'
   italic: '0'
   underline: '0'
   strikeOut: '0'
@@ -72,5 +72,5 @@ secondaryHighlight:
   alignment: '2'
   marginL: '200'
   marginR: '200'
-  marginV: '300'
+  marginV: '200'
   encoding: '1'

@@ -1,0 +1,7 @@
+# Use the base DDEV web image
+
+# Install melt (MLT) and bc
+RUN apt-get update && \
+    apt-get install -y melt bc && \
+    rm -rf /var/lib/apt/lists/*
+

@@ -1,0 +1,10 @@
+services:
+  web:
+    volumes:
+      - /usr/share/fonts/:/usr/share/fonts/
+      - ~/.fonts/:/home/bevan/.fonts/
+      - type: bind
+        source: /home/bevan/.cache/whisper/medium.pt
+        target: /home/bevan/.cache/whisper/medium.pt
+        bind:
+          propagation: shared

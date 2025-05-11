@@ -1,0 +1,115 @@
+#!/bin/bash
+
+set -x
+
+## #ddev-generated
+## Description: Tail the main solr log
+## Usage: deploy [--dry-run]
+## Example: ddev deploy --dry-run 
+
+# Function to validate GitHub token on the production server
+validate_github_token_on_prod() {
+  ssh -t -A root@bevansbench.com <<'EOF'
+  # Extract the token from the .env file
+  if [ ! -f /root/workspace/drupal-blog/.env ]; then
+    echo "Error: .env file not found on production."
+    exit 1
+  fi
+
+  github_pat=$(grep "COMPOSER_AUTH" /root/workspace/drupal-blog/.env | sed 's/COMPOSER_AUTH={"github-oauth":{"github.com":"\(.*\)"}}/\1/')
+
+  if [ -z "$github_pat" ]; then
+    echo "Error: No GitHub token found in the .env file."
+    exit 1
+  fi
+
+  # Validate the token using GitHub API
+  response=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $github_pat" https://api.github.com/user)
+
+  if [ "$response" -eq 401 ]; then
+    echo "Error: GitHub token has expired or is invalid."
+    echo "Please generate a new token at https://github.com/settings/tokens and update the COMPOSER_AUTH variable in the .env file on production."
+    exit 1
+  elif [ "$response" -ne 200 ]; then
+    echo "Error: Failed to validate GitHub token. HTTP response code: $response"
+    echo "- perhaps update it in the env file on prod"
+    exit 1
+  else
+    echo "GitHub token is valid."
+  fi
+EOF
+
+  # Capture the exit code of the remote command
+  if [ $? -ne 0 ]; then
+    echo "GitHub token validation failed. Aborting deployment."
+    exit 1
+  fi
+}
+
+# Check if the dry-run flag is passed
+DRY_RUN=false
+if [[ "$1" == "--dry-run" ]]; then
+  DRY_RUN=true
+fi
+
+# Call the validation function on production
+validate_github_token_on_prod
+
+git push origin main
+
+# Function to generate drush cset commands from secrets.txt
+# the bit about the id_rsa_sftp key doesn't belong in here.
+# we need to move it, it's only here because here was the
+# only place reading the secrets.txt previously.
+generate_drush_commands() {
+  while IFS= read -r line; do
+    entity=$(echo "$line" | cut -d ' ' -f 1)
+    key=$(echo "$line" | cut -d ' ' -f 2)
+    value=$(echo "$line" | cut -d ' ' -f 3)
+    echo "./vendor/bin/drush cset $entity $key $value -y"
+  done < .ddev/secrets.txt
+}
+
+# Store the generated commands in a variable
+DRUSH_COMMANDS=$(generate_drush_commands)
+
+# Heredoc content stored in a variable, including dynamic commands
+SSH_COMMANDS=$(cat <<EOF
+
+
+cd /root/workspace/drupal-blog
+umount -f /root/workspace/drupal-blog/html/sites/default/files/receipts
+
+# Change ownership to root
+sudo chown -R root:root .
+
+# Pull the latest changes from the main branch
+git pull origin main
+
+# Change ownership to www-data
+sudo chown -R www-data:www-data .
+
+# Rebuild and restart the Docker containers
+docker-compose down && docker-compose build && docker-compose up -d
+
+# Now execute the rest of the commands, allowing \$DRUSH_COMMANDS to expand properly
+docker-compose exec -T -u www-data appserver bash -x -c "
+cd /var/www &&
+composer install &&
+./vendor/bin/drush updb -y &&
+./vendor/bin/drush cim -y &&
+$DRUSH_COMMANDS &&
+./vendor/bin/drush simple-oauth:generate-keys ../keys &&
+./vendor/bin/drush cr
+"
+
+EOF
+)
+
+if [ "$DRY_RUN" = true ]; then
+  echo "$SSH_COMMANDS"
+else
+  # Connect to the remote host with forced pseudo-terminal allocation
+  ssh -t -A root@bevansbench.com "$SSH_COMMANDS"
+fi
+

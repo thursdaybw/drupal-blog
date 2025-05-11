@@ -1,0 +1,55 @@
+#!/bin/bash
+
+set -x
+
+# This script restores the Drupal database and site files from the production environment
+# to the local DDEV-based development environment.
+#
+# Usage:
+# To restore the database and site files, simply run:
+# ddev restorefromdb
+#
+# The script performs the following steps:
+# 1. Drops the current local database.
+# 2. Connects to the production server to create and retrieve a compressed database dump.
+# 3. Imports the database dump into the local DDEV environment.
+# 4. Clears the Drupal cache.
+# 5. Synchronizes site files from the production server to the local environment.
+
+# Step 1-4: Restore the Drupal database
+# ddev drush sql-drop -y && ssh root@bevansbench.com "cd /root/workspace/drupal-blog && docker-compose exec -T -u www-data appserver bash -c \"cd /var/www && ./vendor/bin/drush sql-dump --gzip\"" | gunzip | ddev drush sqlc && ddev drush cr
+# - ddev drush sql-drop -y: Drops the current local database.
+#   - ddev: The DDEV command-line tool.
+#   - drush: The Drupal shell, used for managing Drupal sites.
+#   - sql-drop: Drush command to drop all tables in the database.
+#   - -y: Automatically answer 'yes' to all prompts, confirming the action.
+# - ssh root@bevansbench.com: Connects to the production server as the root user.
+# - "cd /root/workspace/drupal-blog && docker-compose exec -T -u www-data appserver bash -c \"cd /var/www && ./vendor/bin/drush sql-dump --gzip\"":
+#   - cd /root/workspace/drupal-blog: Navigate to the project directory.
+#   - docker-compose exec -T -u www-data appserver bash -c "cd /var/www && ./vendor/bin/drush sql-dump --gzip":
+#     - docker-compose exec -T: Run a command in a running container.
+#     - -u www-data: Execute the command as the www-data user (typical web server user).
+#     - appserver: The name of the container where the Drupal application is running.
+#     - bash -c "cd /var/www && ./vendor/bin/drush sql-dump --gzip": Change directory to /var/www and execute the Drush command to dump the database with gzip compression.
+# - | gunzip: Decompress the database dump.
+# - ddev drush sqlc: Import the decompressed database dump into the local DDEV environment.
+# - ddev drush cr: Clear the Drupal cache.
+
+ddev drush sql-drop -y && ssh root@bevansbench.com "cd /root/workspace/drupal-blog && docker-compose exec -T -u www-data appserver bash -c \"cd /var/www && ./vendor/bin/drush sql-dump --gzip\"" | gunzip | ddev drush sqlc && ddev drush cr
+ddev drush sql-query "DELETE FROM file_managed WHERE uri = 'public://banner2.png';"
+ddev drush cim -y
+ddev drush cset video_forge.settings ffmpeg_path "ffmpeg"  -y
+ddev drush cset video_forge.settings whisper_path "/home/bevan/.local/bin/whisper" -y
+
+# Step 5: Synchronize site files from the production server to the local environment
+# rsync -avz --delete root@bevansbench.com:/root/workspace/drupal-blog/html/sites/default/files/ /home/bevan/workspace/bevansbench.com/html/sites/default/files/
+# - rsync: A utility for efficiently transferring and synchronizing files between systems.
+# - -a: Archive mode, which preserves permissions, timestamps, symbolic links, and more.
+# - -v: Verbose, to give more detailed output.
+# - -z: Compress file data during the transfer.
+# - --delete: Delete files in the destination directory that no longer exist in the source directory.
+# This command ensures that any new or updated files are synchronized from the remote to your local directory
+# and that any files deleted on the remote are also deleted locally.
+
+#rsync -avz --delete root@bevansbench.com:/root/workspace/drupal-blog/html/sites/default/files/ /home/bevan/workspace/bevansbench.com/html/sites/default/files/
+

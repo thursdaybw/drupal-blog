@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -e
+
+REACT_DIR=/var/www/html/video-react
+TARGET_DIR=/var/www/html/html/video-react
+
+echo "🚀 Building React app in: $REACT_DIR"
+cd "$REACT_DIR"
+npm run build
+
+echo "🧹 Removing old build at: $TARGET_DIR"
+rm -rf "$TARGET_DIR"/*
+
+echo "📂 Copying new build to Drupal webroot: $TARGET_DIR"
+cp -r "$REACT_DIR/build/"* "$TARGET_DIR/"
+
+echo "✅ React app deployed to /video-react/"
+

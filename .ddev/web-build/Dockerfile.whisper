@@ -1,0 +1,25 @@
+# Use the base DDEV web image
+#ARG BASE_IMAGE
+#FROM ${BASE_IMAGE}
+
+# Install dependencies as root (no user switching here)
+RUN apt-get update && apt-get install -y \
+  ffmpeg python3-pip python3-venv pipx && \
+  rm -rf /var/lib/apt/lists/*
+
+#RUN pipx install "triton==2.0.0"
+
+# Temporarily comment out Whisper install to avoid 28-min wait
+USER $username
+RUN pipx install openai-whisper==20231117
+RUN pipx runpip openai-whisper install "numpy<2.0"
+RUN pipx runpip openai-whisper install "triton==2.0.0"
+
+#RUN mkdir -p /home/bevan/.local/bin && mv /root/.local/bin/whisper /home/bevan/.local/bin && chmod o+x /home/bevan/.local/bin/whisper
+
+# This is an example of creating a file in the home directory
+#RUN touch ~/${username}-was-here
+USER root
+
+# No user switch here — DDEV handles that for you
+

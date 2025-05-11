@@ -48,7 +48,7 @@ COPY ./apache-config.conf /etc/apache2/sites-enabled/000-default.conf
 # Copy the Drupal codebase into the container
 COPY . /var/www/
 
-# Set permissions 
+# Set permissions
 RUN chown -R www-data:www-data /var/www
 
 # Copy fonts to the container
@@ -73,6 +73,10 @@ RUN mkdir -p /var/tmp/sftp_mount && \
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-USER root 
-ENTRYPOINT ["/entrypoint.sh"]
+# Add NodeSource repo for modern Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+  && apt-get install -y nodejs \
+  && node -v && npm -v
 
+USER root
+ENTRYPOINT ["/entrypoint.sh"]

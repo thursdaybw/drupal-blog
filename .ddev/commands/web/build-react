@@ -2,8 +2,12 @@
 
 set -e
 
+set -x
+
 REACT_DIR=/var/www/html/video-react
 TARGET_DIR=/var/www/html/html/video-react
+
+mkdir -p $TARGET_DIR
 
 echo "🚀 Building React app in: $REACT_DIR"
 cd "$REACT_DIR"

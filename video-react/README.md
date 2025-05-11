@@ -102,6 +102,16 @@ http://localhost:3000
 
 Instead of relying on npm start, use the DDEV command:
 
+🔧 package.json homepage field
+
+This React app is served from a subfolder (/video-react/) under Drupal.
+
+To ensure all asset paths are generated correctly in production, package.json must include:
+
+"homepage": "/video-react"
+
+    ⚠️ If this value is incorrect (e.g., left as /video-forge), the app will build with broken asset paths and show a white screen in the browser.
+
 ddev build-react
 
 This command:

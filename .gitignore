@@ -48,6 +48,5 @@ docker-compose.override.yml
 html/sites/default/development.services.yml
 /keys/
 known_hosts
-.ddev/
 .env
 gpt-oauth.yml

@@ -43,3 +43,25 @@ rsync -avz -e "ssh" --progress root@85.31.234.104:/root/workspace/drupal-blog/ht
 docker run drupal-blog_appserver_1 -it /bin/bash
 ```
 
+
+Sample video editing schema:
+```
+{
+  "tracks": [
+    {
+      "type": "video",
+      "src": "clip.mp4"
+    },
+    {
+      "type": "image",
+      "src": "logo.png",
+      "effect": "pulse",
+      "position": { "x": "5%", "y": "-10%" }
+    },
+    {
+      "type": "subtitles",
+      "src": "captions.ass"
+    }
+  ]
+}
+```

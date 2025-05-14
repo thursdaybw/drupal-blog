@@ -11,6 +11,7 @@ function App() {
   const [pollUrl, setPollUrl]       = useState(null);
   const [audioURL, setAudioURL]     = useState(null);
   const [videoURL, setVideoURL]     = useState(null)
+  const [videoFile, setVideoFile]   = useState(null);
   const ffmpegRef = useRef(
     new FFmpeg({
       log: true,
@@ -165,13 +166,6 @@ function App() {
       setAudioURL(url);
       setStatus('Done!');
 
-      const link = document.createElement('a');
-      link.href     = url;
-      link.download = 'extracted.mp3';
-      link.textContent = 'Download MP3';
-      link.style.display = 'block';
-      document.body.appendChild(link);
-
     } catch (err) {
       console.error('🔥 extractAudio() threw:', err);
       setStatus('Error during extraction');
@@ -208,10 +202,23 @@ function App() {
     <input
     type="file"
     accept="video/*"
-    onChange={e => extractAudio(e.target.files[0])}
+    onChange={e => {
+      const file = e.target.files[0];
+      if (file) {
+        setVideoFile(file);
+        const fileURL = URL.createObjectURL(file);
+        setVideoURL(fileURL);
+      }
+    }}
     />
-    <button onClick={provisionTranscription} style={{ marginTop: '1rem' }}>
-    Start Transcription Provisioning
+    <button
+      onClick={async () => {
+        await extractAudio(videoFile);
+        await provisionTranscription();
+      }}
+      style={{ marginTop: '1rem' }}
+    >
+    Generate Captions
     </button>
     <p>Status: {status}</p>
     {videoURL && (
@@ -222,7 +229,7 @@ function App() {
       style={{ marginTop: '1rem', display: 'block' }}
       />
     )}
-    {audioURL && <audio controls src={audioURL} style={{ marginTop:'1rem' }} />}
+    {/*audioURL && <audio controls src={audioURL} style={{ marginTop:'1rem' }} />*/}
     </div>
   );
 }

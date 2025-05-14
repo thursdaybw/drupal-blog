@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { FFmpeg }    from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 
@@ -6,9 +6,11 @@ import { fetchFile } from '@ffmpeg/util';
 const base = window.location.pathname.replace(/\/$/, '');
 
 function App() {
-  const [status, setStatus]     = useState('Idle');
-  const [audioURL, setAudioURL] = useState(null);
-  const [videoURL, setVideoURL] = useState(null)
+  const [status, setStatus]         = useState('Idle');
+  const [taskId, setTaskId]         = useState(null);
+  const [pollUrl, setPollUrl]       = useState(null);
+  const [audioURL, setAudioURL]     = useState(null);
+  const [videoURL, setVideoURL]     = useState(null)
   const ffmpegRef = useRef(
     new FFmpeg({
       log: true,
@@ -44,6 +46,70 @@ function App() {
   useEffect(() => {
     checkDrupalUser();
   }, []);
+
+  useEffect(() => {
+    if (!pollUrl) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(pollUrl);
+        const json = await res.json();
+
+        if (json.status === 'ready') {
+          clearInterval(interval);
+          setStatus('Server ready – uploading audio...');
+          uploadAudio();
+        } else {
+          console.log('Polling… status =', json.status);
+          setStatus(`Waiting for server… (${json.status})`);
+        }
+      } catch (err) {
+        console.warn('Polling failed:', err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [pollUrl]);
+
+  useEffect(() => {
+    if (!taskId || !audioURL) return;
+
+    const pollTranscriptionStatus = async () => {
+      try {
+        const res = await fetch(`/video-forge/transcription-provision-status?task_id=${taskId}`);
+        const json = await res.json();
+
+        if (json.status === 'transcribed') {
+          setStatus('✅ Transcription complete! Captions ready.');
+          clearInterval(interval);
+        } else {
+          console.log('Polling transcription… status =', json.status);
+          setStatus(`Transcription in progress… (${json.status})`);
+        }
+      } catch (err) {
+        console.warn('Transcription polling failed:', err);
+      }
+    };
+
+    const interval = setInterval(pollTranscriptionStatus, 3000);
+    return () => clearInterval(interval);
+  }, [taskId, audioURL]);
+
+
+  const provisionTranscription = async () => {
+    try {
+      const res = await fetch('/video-forge/transcription-provision');
+      const json = await res.json();
+
+      console.log('Provisioning response:', json);
+      setPollUrl(json.poll_url);
+      setTaskId(json.task_id);
+      setStatus('Provisioning server...');
+    } catch (err) {
+      console.error('Provisioning failed:', err);
+      setStatus('Failed to provision server.');
+    }
+  };
 
   const extractAudio = async (file) => {
     try {
@@ -112,24 +178,51 @@ function App() {
     }
   };
 
+  const uploadAudio = useCallback(async () => {
+    if (!audioURL) {
+      alert('No audio to upload!');
+      return;
+    }
+
+    setStatus('Uploading audio to transcription server…');
+
+    try {
+      // Simulate a short delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      await fetch(`/admin/video-forge/set-task-status?task_id=${taskId}&status=uploaded`, {
+        credentials: 'include'
+      });
+
+      console.log('🎯 Simulated upload of:', audioURL);
+      setStatus('Upload complete! Transcription in progress...');
+    } catch (err) {
+      console.error('Upload failed:', err);
+      setStatus('Upload failed.');
+    }
+  }, [audioURL, taskId]);
+
   return (
     <div style={{ padding: '2rem' }}>
-      <h1>FFmpeg.wasm React Demo</h1>
-      <input
-        type="file"
-        accept="video/*"
-        onChange={e => extractAudio(e.target.files[0])}
+    <h1>FFmpeg.wasm React Demo</h1>
+    <input
+    type="file"
+    accept="video/*"
+    onChange={e => extractAudio(e.target.files[0])}
+    />
+    <button onClick={provisionTranscription} style={{ marginTop: '1rem' }}>
+    Start Transcription Provisioning
+    </button>
+    <p>Status: {status}</p>
+    {videoURL && (
+      <video
+      controls
+      src={videoURL}
+      width="480"
+      style={{ marginTop: '1rem', display: 'block' }}
       />
-      <p>Status: {status}</p>
-      {videoURL && (
-          <video
-          controls
-          src={videoURL}
-          width="480"
-          style={{ marginTop: '1rem', display: 'block' }}
-          />
-      )}
-      {audioURL && <audio controls src={audioURL} style={{ marginTop:'1rem' }} />}
+    )}
+    {audioURL && <audio controls src={audioURL} style={{ marginTop:'1rem' }} />}
     </div>
   );
 }

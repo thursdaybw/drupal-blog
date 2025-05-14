@@ -59,26 +59,29 @@ function App() {
     if (!pollUrl) return;
 
     let shouldContinue = true;
+    let hasUploaded = false;
 
     const pollProvisionStatus = async () => {
       try {
         const res = await fetch(pollUrl);
         const json = await res.json();
 
-        if (json.status === 'ready') {
+        const { status, meta = {} } = json;
+
+        if (status === 'ready' && !hasUploaded) {
           setStatus('Server ready – uploading audio...');
-          shouldContinue = false;
-          uploadAudio();
-        } else if (json.status === 'transcribed') {
+          await uploadAudio(); // This sets audioURL, but we don’t need it here anymore
+          hasUploaded = true;
+        } else if (status === 'transcribed') {
           setStatus('✅ Transcription complete! Captions ready.');
-          setAssUrl(json.ass_url || null);
+          setAssUrl(meta.ass_url || null);
           shouldContinue = false;
         } else {
-          console.log('Polling… status =', json.status);
-          setStatus(`Waiting for server… (${json.status})`);
+          console.log('Polling… status =', status);
+          setStatus(`Waiting for server… (${status})`);
         }
       } catch (err) {
-        console.warn('Provisioning polling failed:', err);
+        console.warn('Polling failed:', err);
       }
 
       if (shouldContinue) {
@@ -92,42 +95,6 @@ function App() {
       shouldContinue = false;
     };
   }, [pollUrl]);
-
-  // Polling Loop B: transcription status poll
-  useEffect(() => {
-    if (!taskId || !audioURL) return;
-
-    let shouldContinue = true;
-
-    const poll = async () => {
-      try {
-        const res = await fetch(`/video-forge/transcription-provision-status?task_id=${taskId}`);
-        const json = await res.json();
-
-        if (json.status === 'transcribed') {
-          setStatus('✅ Transcription complete! Captions ready.');
-          setAssUrl(json.ass_url || null);
-          shouldContinue = false;
-        } else {
-          console.log('Polling transcription… status =', json.status);
-          setStatus(`Transcription in progress… (${json.status})`);
-        }
-      } catch (err) {
-        console.warn('Transcription polling failed:', err);
-      }
-
-      if (shouldContinue) {
-        setTimeout(poll, 3000);
-      }
-    };
-
-    poll(); // Start polling
-
-    return () => {
-      shouldContinue = false;
-    };
-  }, [taskId, audioURL]);
-
 
   useEffect(() => {
     if (!assUrl || !videoRef.current) return;

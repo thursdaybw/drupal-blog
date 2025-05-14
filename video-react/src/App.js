@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { FFmpeg }    from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 
@@ -18,78 +18,99 @@ function App() {
 
   const ffmpeg = ffmpegRef.current;
 
-    ffmpeg.on('log', ({ message }) => {
-        console.log('[ffmpeg]', message);
-    });
+  ffmpeg.on('log', ({ message }) => {
+    console.log('[ffmpeg]', message);
+  });
 
-const extractAudio = async (file) => {
-  try {
-    // === Step A: start ===
-    console.log('⏳ extractAudio(): start');
-    console.log('Selected file:', file.name, file.type, file.size, 'bytes');
+  const checkDrupalUser = async () => {
+    try {
+      const res = await fetch('/jsonapi/user/user?filter[uid][value]=1', {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/vnd.api+json'
+        }
+      });
 
-    const fileURL = URL.createObjectURL(file); // ✅ preview video
-    setVideoURL(fileURL);
-
-    // === Step B: load core files ===
-    setStatus('Loading FFmpeg…');
-    await ffmpeg.load(); // ✅ uses corePath from constructor
-    console.log('✅ core files loaded');
-
-    // === Step C: read file from <input> ===
-    const inputData = await fetchFile(file);
-    console.log('🏊 fetchFile size:', inputData.length);
-
-    // === Step D: write to FS and confirm ===
-    await ffmpeg.writeFile('in.mp4', inputData);
-    const confirmIn = await ffmpeg.readFile('in.mp4');
-    console.log('📂 in.mp4 in FS size:', confirmIn.length);
-
-    // === Step E: run extraction ===
-    setStatus('Extracting audio…');
-    await ffmpeg.exec([
-      '-i', 'in.mp4',
-      '-q:a', '0',
-      '-map', 'a',
-      'out.mp3',
-    ]);
-    console.log('✅ ffmpeg.exec completed');
-
-    const files = await ffmpeg?.fs?.readdir?.('/');
-    console.log('📁 FS contents:', files);
-
-    // === Step F: read back output ===
-    const outData = await ffmpeg.readFile('out.mp3');
-    console.log('🔊 out.mp3 in FS size:', outData.length);
-
-    if (outData.length === 0) {
-      console.warn('⚠️ out.mp3 came back empty — no audio was extracted.');
-      setStatus('Error: no audio extracted.');
-      return;
+      const json = await res.json();
+      const user = json.data?.[0]?.attributes;
+      console.log('✅ JSON:API user:', user);
+      setStatus(`Logged in as: ${user.display_name}`);
+    } catch (err) {
+      console.warn('⚠️ Could not fetch user via JSON:API:', err);
+      setStatus('Anonymous or error');
     }
+  };
 
-    // === Step G: build blob / player / link ===
-    const blob = new Blob([outData.buffer], { type: 'audio/mpeg' });
-    const url  = URL.createObjectURL(blob);
-    console.log('🌐 Blob URL:', url);
+  useEffect(() => {
+    checkDrupalUser();
+  }, []);
 
-    setAudioURL(url);
-    setStatus('Done!');
+  const extractAudio = async (file) => {
+    try {
+      // === Step A: start ===
+      console.log('⏳ extractAudio(): start');
+      console.log('Selected file:', file.name, file.type, file.size, 'bytes');
 
-    const link = document.createElement('a');
-    link.href     = url;
-    link.download = 'extracted.mp3';
-    link.textContent = 'Download MP3';
-    link.style.display = 'block';
-    document.body.appendChild(link);
+      const fileURL = URL.createObjectURL(file); // ✅ preview video
+      setVideoURL(fileURL);
 
-  } catch (err) {
-    console.error('🔥 extractAudio() threw:', err);
-    setStatus('Error during extraction');
-  }
-};
+      // === Step B: load core files ===
+      setStatus('Loading FFmpeg…');
+      await ffmpeg.load(); // ✅ uses corePath from constructor
+      console.log('✅ core files loaded');
 
+      // === Step C: read file from <input> ===
+      const inputData = await fetchFile(file);
+      console.log('🏊 fetchFile size:', inputData.length);
 
+      // === Step D: write to FS and confirm ===
+      await ffmpeg.writeFile('in.mp4', inputData);
+      const confirmIn = await ffmpeg.readFile('in.mp4');
+      console.log('📂 in.mp4 in FS size:', confirmIn.length);
+
+      // === Step E: run extraction ===
+      setStatus('Extracting audio…');
+      await ffmpeg.exec([
+        '-i', 'in.mp4',
+        '-q:a', '0',
+        '-map', 'a',
+        'out.mp3',
+      ]);
+      console.log('✅ ffmpeg.exec completed');
+
+      const files = await ffmpeg?.fs?.readdir?.('/');
+      console.log('📁 FS contents:', files);
+
+      // === Step F: read back output ===
+      const outData = await ffmpeg.readFile('out.mp3');
+      console.log('🔊 out.mp3 in FS size:', outData.length);
+
+      if (outData.length === 0) {
+        console.warn('⚠️ out.mp3 came back empty — no audio was extracted.');
+        setStatus('Error: no audio extracted.');
+        return;
+      }
+
+      // === Step G: build blob / player / link ===
+      const blob = new Blob([outData.buffer], { type: 'audio/mpeg' });
+      const url  = URL.createObjectURL(blob);
+      console.log('🌐 Blob URL:', url);
+
+      setAudioURL(url);
+      setStatus('Done!');
+
+      const link = document.createElement('a');
+      link.href     = url;
+      link.download = 'extracted.mp3';
+      link.textContent = 'Download MP3';
+      link.style.display = 'block';
+      document.body.appendChild(link);
+
+    } catch (err) {
+      console.error('🔥 extractAudio() threw:', err);
+      setStatus('Error during extraction');
+    }
+  };
 
   return (
     <div style={{ padding: '2rem' }}>

@@ -136,7 +136,6 @@ function App() {
     alert('📝 ASS file ready! SubtitlesOctopus setup is currently disabled.');
 
     // TODO: Uncomment this once ready to test SubtitlesOctopus
-    /*
   const script = document.createElement('script');
   script.src = `${modulePath}/js/libass/package/dist/js/subtitles-octopus.js`;
 
@@ -160,7 +159,7 @@ function App() {
   return () => {
     document.body.removeChild(script);
   };
-  */
+
   }, [assUrl]);
 
   const provisionTranscription = async () => {
@@ -256,6 +255,13 @@ function App() {
 
       console.log('🎯 Simulated upload of:', audioURL);
       setStatus('Upload complete! Transcription in progress...');
+
+      setTimeout(async () => {
+        await fetch(`/admin/video-forge/set-task-status?task_id=${taskId}&status=transcribed`, {
+          credentials: 'include'
+        });
+      }, 5000);
+
     } catch (err) {
       console.error('Upload failed:', err);
       setStatus('Upload failed.');
@@ -281,7 +287,20 @@ function App() {
       <button
       onClick={async () => {
         await extractAudio(videoFile);
-        await provisionTranscription();
+        const res = await fetch('/video-forge/transcription-provision');
+        const json = await res.json();
+        console.log('Provisioning response:', json);
+
+        setPollUrl(json.poll_url);
+        setTaskId(json.task_id);
+        setStatus('Provisioning server...');
+
+        // ✅ Fake ready AFTER taskId is set
+        setTimeout(async () => {
+          await fetch(`/admin/video-forge/set-task-status?task_id=${json.task_id}&status=ready`, {
+            credentials: 'include',
+          });
+        }, 2000);
       }}
       style={{ marginTop: '1rem' }}
       >

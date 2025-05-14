@@ -1,4 +1,4 @@
-uuid: 08c8e484-92db-4275-95c7-ee0e9c03c971 
+uuid: 08c8e484-92db-4275-95c7-ee0e9c03c971
 langcode: en
 status: true
 dependencies: {  }
@@ -26,7 +26,7 @@ shadow: 0
 alignment: 2
 marginL: 200
 marginR: 200
-marginV: 200
+marginV: 300
 encoding: 1
 primaryHighlight:
   fontName: 'Anton SC'
@@ -72,5 +72,5 @@ secondaryHighlight:
   alignment: '2'
   marginL: '200'
   marginR: '200'
-  marginV: '200'
+  marginV: '300'
   encoding: '1'

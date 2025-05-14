@@ -246,21 +246,25 @@ function App() {
     setStatus('Uploading audio to transcription server…');
 
     try {
-      // Simulate a short delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await fetch(audioURL);
 
-      await fetch(`/admin/video-forge/set-task-status?task_id=${taskId}&status=uploaded`, {
-        credentials: 'include'
+      const audioBlob = await response.blob();
+
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.mp3');
+
+      const uploadRes = await fetch(`/video-forge/upload-audio?task_id=${taskId}`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
       });
 
-      console.log('🎯 Simulated upload of:', audioURL);
-      setStatus('Upload complete! Transcription in progress...');
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed with status ${uploadRes.status}`);
+      }
 
-      setTimeout(async () => {
-        await fetch(`/admin/video-forge/set-task-status?task_id=${taskId}&status=transcribed`, {
-          credentials: 'include'
-        });
-      }, 5000);
+      console.log('✅ Audio upload complete.');
+      setStatus('Upload complete! Transcription in progress...');
 
     } catch (err) {
       console.error('Upload failed:', err);
@@ -294,13 +298,6 @@ function App() {
         setPollUrl(json.poll_url);
         setTaskId(json.task_id);
         setStatus('Provisioning server...');
-
-        // ✅ Fake ready AFTER taskId is set
-        setTimeout(async () => {
-          await fetch(`/admin/video-forge/set-task-status?task_id=${json.task_id}&status=ready`, {
-            credentials: 'include',
-          });
-        }, 2000);
       }}
       style={{ marginTop: '1rem' }}
       >

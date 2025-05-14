@@ -2,7 +2,6 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { FFmpeg }    from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 
-// 👇 Add this just below imports
 const base = window.location.pathname.replace(/\/$/, '');
 
 function App() {
@@ -12,10 +11,17 @@ function App() {
   const [audioURL, setAudioURL]     = useState(null);
   const [videoURL, setVideoURL]     = useState(null)
   const [videoFile, setVideoFile]   = useState(null);
+  const [assUrl, setAssUrl]         = useState(null);
+
+  // TODO: Replace hardcoded modulePath with a dynamic lookup from Drupal (e.g. via JSON:API or injected config)
+  const modulePath = '/modules/contrib/video_forge';
+
+  const videoRef = useRef(null);
+
   const ffmpegRef = useRef(
     new FFmpeg({
       log: true,
-      corePath: `${base}/ffmpeg-core/ffmpeg-core.js`, // ✅ use base
+      corePath: `${base}/ffmpeg-core/ffmpeg-core.js`,
     })
   );
 
@@ -48,41 +54,60 @@ function App() {
     checkDrupalUser();
   }, []);
 
+  // Polling Loop A: provisioning status poll
   useEffect(() => {
     if (!pollUrl) return;
 
-    const interval = setInterval(async () => {
+    let shouldContinue = true;
+
+    const pollProvisionStatus = async () => {
       try {
         const res = await fetch(pollUrl);
         const json = await res.json();
 
         if (json.status === 'ready') {
-          clearInterval(interval);
           setStatus('Server ready – uploading audio...');
+          shouldContinue = false;
           uploadAudio();
+        } else if (json.status === 'transcribed') {
+          setStatus('✅ Transcription complete! Captions ready.');
+          setAssUrl(json.ass_url || null);
+          shouldContinue = false;
         } else {
           console.log('Polling… status =', json.status);
           setStatus(`Waiting for server… (${json.status})`);
         }
       } catch (err) {
-        console.warn('Polling failed:', err);
+        console.warn('Provisioning polling failed:', err);
       }
-    }, 3000);
 
-    return () => clearInterval(interval);
+      if (shouldContinue) {
+        setTimeout(pollProvisionStatus, 3000);
+      }
+    };
+
+    pollProvisionStatus();
+
+    return () => {
+      shouldContinue = false;
+    };
   }, [pollUrl]);
 
+  // Polling Loop B: transcription status poll
   useEffect(() => {
     if (!taskId || !audioURL) return;
 
-    const pollTranscriptionStatus = async () => {
+    let shouldContinue = true;
+
+    const poll = async () => {
       try {
         const res = await fetch(`/video-forge/transcription-provision-status?task_id=${taskId}`);
         const json = await res.json();
 
         if (json.status === 'transcribed') {
           setStatus('✅ Transcription complete! Captions ready.');
-          clearInterval(interval);
+          setAssUrl(json.ass_url || null);
+          shouldContinue = false;
         } else {
           console.log('Polling transcription… status =', json.status);
           setStatus(`Transcription in progress… (${json.status})`);
@@ -90,12 +115,53 @@ function App() {
       } catch (err) {
         console.warn('Transcription polling failed:', err);
       }
+
+      if (shouldContinue) {
+        setTimeout(poll, 3000);
+      }
     };
 
-    const interval = setInterval(pollTranscriptionStatus, 3000);
-    return () => clearInterval(interval);
+    poll(); // Start polling
+
+    return () => {
+      shouldContinue = false;
+    };
   }, [taskId, audioURL]);
 
+
+  useEffect(() => {
+    if (!assUrl || !videoRef.current) return;
+
+    console.log('📦 Received ASS file URL:', assUrl);
+    alert('📝 ASS file ready! SubtitlesOctopus setup is currently disabled.');
+
+    // TODO: Uncomment this once ready to test SubtitlesOctopus
+    /*
+  const script = document.createElement('script');
+  script.src = `${modulePath}/js/libass/package/dist/js/subtitles-octopus.js`;
+
+  script.onload = () => {
+    const options = {
+      video: videoRef.current,
+      subUrl: assUrl,
+      workerUrl: `${modulePath}/js/libass/package/dist/js/subtitles-octopus-worker.js`,
+      wasmUrl: `${modulePath}/js/libass/package/dist/js/subtitles-octopus-worker.wasm`,
+      fonts: [
+        `${modulePath}/js/libass/package/dist/js/AntonSC-Regular.ttf`
+      ],
+    };
+
+    // eslint-disable-next-line no-undef
+    new SubtitlesOctopus(options);
+  };
+
+  document.body.appendChild(script);
+
+  return () => {
+    document.body.removeChild(script);
+  };
+  */
+  }, [assUrl]);
 
   const provisionTranscription = async () => {
     try {
@@ -223,6 +289,7 @@ function App() {
     <p>Status: {status}</p>
     {videoURL && (
       <video
+      ref={videoRef}
       controls
       src={videoURL}
       width="480"

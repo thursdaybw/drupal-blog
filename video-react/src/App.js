@@ -277,15 +277,17 @@ function App() {
       }
     }}
     />
-    <button
+    {videoFile && (
+      <button
       onClick={async () => {
         await extractAudio(videoFile);
         await provisionTranscription();
       }}
       style={{ marginTop: '1rem' }}
-    >
-    Generate Captions
-    </button>
+      >
+      Generate Captions
+      </button>
+    )}
     <p>Status: {status}</p>
     {videoURL && (
       <video

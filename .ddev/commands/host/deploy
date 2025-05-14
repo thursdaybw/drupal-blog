@@ -5,7 +5,7 @@ set -x
 ## #ddev-generated
 ## Description: Tail the main solr log
 ## Usage: deploy [--dry-run]
-## Example: ddev deploy --dry-run 
+## Example: ddev deploy --dry-run
 
 # Function to validate GitHub token on the production server
 validate_github_token_on_prod() {
@@ -76,7 +76,6 @@ DRUSH_COMMANDS=$(generate_drush_commands)
 # Heredoc content stored in a variable, including dynamic commands
 SSH_COMMANDS=$(cat <<EOF
 
-
 cd /root/workspace/drupal-blog
 umount -f /root/workspace/drupal-blog/html/sites/default/files/receipts
 
@@ -93,16 +92,31 @@ sudo chown -R www-data:www-data .
 docker-compose down && docker-compose build && docker-compose up -d
 
 # Now execute the rest of the commands, allowing \$DRUSH_COMMANDS to expand properly
-docker-compose exec -T -u www-data appserver bash -x -c "
+docker-compose exec -T -u www-data appserver bash -x -c '
 cd /var/www &&
 composer install &&
 ./vendor/bin/drush updb -y &&
 ./vendor/bin/drush cim -y &&
-$DRUSH_COMMANDS &&
+'"$DRUSH_COMMANDS"' &&
 ./vendor/bin/drush simple-oauth:generate-keys ../keys &&
-./vendor/bin/drush cr
-"
+./vendor/bin/drush cr &&
 
+# React build and deploy
+cd /var/www/video-react &&
+echo "Installing React dependencies" &&
+npm install &&
+echo "Building React app" &&
+npm run build &&
+echo "Removing old build" &&
+rm -rf /var/www/html/video-react/* &&
+echo "Copying new build to web root" &&
+cp -r build/* /var/www/html/video-react/ &&
+echo "React app deployed to /video-react/"
+'
+
+# Clean up docker mess.
+docker system prune -af
+docker volume prune -f
 EOF
 )
 

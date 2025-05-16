@@ -5,8 +5,9 @@ FROM devwithlando/php:8.1-apache-4
 RUN apt-get update && apt-get install -y \
     sshfs \
     msmtp \
-    mailutils && \
-    python3-venv pipx && \
+    mailutils \
+    python3-venv \
+    pipx && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pipx install vastai

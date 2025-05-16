@@ -6,13 +6,11 @@ RUN apt-get update && apt-get install -y \
     sshfs \
     msmtp \
     mailutils && \
-    #ffmpeg \
-    #python3-pip \
-    #python3-venv && \
+    python3-venv pipx && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Whisper directly via pip
-#RUN python3 -m pip install openai-whisper
+RUN pipx install vastai
+RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${username}/.bashrc
 
 # Enable `user_allow_other` in `/etc/fuse.conf`
 RUN echo "user_allow_other" > /etc/fuse.conf && chmod 644 /etc/fuse.conf

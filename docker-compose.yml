@@ -8,7 +8,7 @@ services:
     env_file:
       - .env
     # image: devwithlando/php:8.1-apache-4
-    #command: ["bash", "-c", "a2enmod rewrite && apache2-foreground"] 
+    #command: ["bash", "-c", "a2enmod rewrite && apache2-foreground"]
     # Maps the ports between the host and the container
     ports:
       # Maps host port 80 to container's Apache HTTP port
@@ -23,6 +23,7 @@ services:
         target: /var/www/html/sites/default/files
         bind:
           propagation: shared
+      - /root/.ssh/vastai_deploy:/var/www/.ssh/id_rsa_vastai:ro
       #- type: bind
       #  source: /root/.cache/whisper/medium.pt
       #  target: /home/http/.cache/whisper/medium.pt

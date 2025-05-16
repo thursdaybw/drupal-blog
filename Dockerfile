@@ -8,11 +8,10 @@ RUN apt-get update && apt-get install -y \
     mailutils \
     python3-venv \
     python3-pip && \
-    pip install --no-cache-dir pipx && \
-    pipx ensurepath && \
+    pip install --no-cache-dir && \
     rm -rf /var/lib/apt/lists/*
 
-RUN pipx install vastai
+RUN pip install --no-cache-dir vastai
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${username}/.bashrc
 
 # Enable `user_allow_other` in `/etc/fuse.conf`

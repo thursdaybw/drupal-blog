@@ -15,11 +15,17 @@ RUN pipx install openai-whisper==20231117
 RUN pipx runpip openai-whisper install "numpy<2.0"
 RUN pipx runpip openai-whisper install "triton==2.0.0"
 
+RUN pipx install vastai
+RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${username}/.bashrc
+
 #RUN mkdir -p /home/bevan/.local/bin && mv /root/.local/bin/whisper /home/bevan/.local/bin && chmod o+x /home/bevan/.local/bin/whisper
 
 # This is an example of creating a file in the home directory
 #RUN touch ~/${username}-was-here
 USER root
+
+RUN mkdir -p /home/bevan/.cache && chown bevan:bevan /home/bevan/.cache
+
 
 # No user switch here — DDEV handles that for you
 

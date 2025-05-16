@@ -7,7 +7,9 @@ RUN apt-get update && apt-get install -y \
     msmtp \
     mailutils \
     python3-venv \
-    pipx && \
+    python3-pip && \
+    pip install --no-cache-dir pipx && \
+    pipx ensurepath && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pipx install vastai

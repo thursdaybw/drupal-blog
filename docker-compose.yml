@@ -23,7 +23,7 @@ services:
         target: /var/www/html/sites/default/files
         bind:
           propagation: shared
-      - /root/.ssh/vastai_deploy:/home/http/.ssh/id_rsa_vastai:ro
+      - /root/.ssh/vastai_deploy:/home/http/.ssh/id_rsa_vastai
       #- type: bind
       #  source: /root/.cache/whisper/medium.pt
       #  target: /home/http/.cache/whisper/medium.pt

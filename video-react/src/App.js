@@ -6,7 +6,6 @@ const base = window.location.pathname.replace(/\/$/, '');
 
 function App() {
   const [status, setStatus]         = useState('Idle');
-  const [taskId, setTaskId]         = useState(null);
   const [pollUrl, setPollUrl]       = useState(null);
   const [audioURL, setAudioURL]     = useState(null);
   const [videoURL, setVideoURL]     = useState(null)
@@ -68,11 +67,7 @@ function App() {
 
         const { status, meta = {} } = json;
 
-        if (status === 'ready' && !hasUploaded) {
-          setStatus('Server ready – uploading audio...');
-          await uploadAudio(); // This sets audioURL, but we don’t need it here anymore
-          hasUploaded = true;
-        } else if (status === 'transcribed') {
+        if (status === 'transcribed') {
           setStatus('✅ Transcription complete! Captions ready.');
           setAssUrl(meta.ass_url || null);
           shouldContinue = false;
@@ -129,19 +124,12 @@ function App() {
 
   }, [assUrl]);
 
-  const provisionTranscription = async () => {
-    try {
-      const res = await fetch('/video-forge/transcription-provision');
-      const json = await res.json();
+  const provisionTranscription = async (task_id) => {
+    const res = await fetch(`/video-forge/transcription-provision?task_id=${task_id}`);
+    const json = await res.json();
 
-      console.log('Provisioning response:', json);
-      setPollUrl(json.poll_url);
-      setTaskId(json.task_id);
-      setStatus('Provisioning server...');
-    } catch (err) {
-      console.error('Provisioning failed:', err);
-      setStatus('Failed to provision server.');
-    }
+    console.log('Provisioning response:', json);
+    setStatus('Provisioning server...');
   };
 
   const extractAudio = async (file) => {
@@ -196,7 +184,8 @@ function App() {
       console.log('🌐 Blob URL:', url);
 
       setAudioURL(url);
-      setStatus('Done!');
+      setStatus('Audio Extacted!');
+      return blob;
 
     } catch (err) {
       console.error('🔥 extractAudio() threw:', err);
@@ -204,23 +193,23 @@ function App() {
     }
   };
 
-  const uploadAudio = useCallback(async () => {
-    if (!audioURL) {
+  const uploadAudio = async (blob, task_id) => {
+    if (!blob) {
       alert('No audio to upload!');
+      return;
+    }
+    if (!task_id) {
+      alert('No task_id provided!');
       return;
     }
 
     setStatus('Uploading audio to transcription server…');
 
     try {
-      const response = await fetch(audioURL);
-
-      const audioBlob = await response.blob();
-
       const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.mp3');
+      formData.append('file', blob, 'audio.mp3');
 
-      const uploadRes = await fetch(`/video-forge/upload-audio?task_id=${taskId}`, {
+      const uploadRes = await fetch(`/video-forge/upload-audio?task_id=${task_id}`, {
         method: 'POST',
         body: formData,
         credentials: 'include',
@@ -232,12 +221,11 @@ function App() {
 
       console.log('✅ Audio upload complete.');
       setStatus('Upload complete! Transcription in progress...');
-
     } catch (err) {
       console.error('Upload failed:', err);
       setStatus('Upload failed.');
     }
-  }, [audioURL, taskId]);
+  };
 
   return (
     <div style={{ padding: '2rem' }}>
@@ -257,14 +245,27 @@ function App() {
     {videoFile && (
       <button
       onClick={async () => {
-        await extractAudio(videoFile);
-        const res = await fetch('/video-forge/transcription-provision');
+        // Step 1: Init task and get task ID and poll URL
+        const res = await fetch('/video-forge/transcription-task-init', { credentials: 'include' });
         const json = await res.json();
-        console.log('Provisioning response:', json);
+        const { task_id, poll_url } = json;
 
-        setPollUrl(json.poll_url);
-        setTaskId(json.task_id);
-        setStatus('Provisioning server...');
+        if (!task_id || !poll_url) {
+          console.log('Task Init:', 'Failed to initialize task');
+          setStatus('❌ Failed to initialize task');
+          return;
+        }
+        else {
+          console.log('Task Init: Task initialized with id', task_id);
+        }
+
+        setPollUrl(poll_url);
+
+        // Step 2: Extract, upload, provision
+        const audioBlob = await extractAudio(videoFile);
+        // TODO work on doing these concurrently.
+        await uploadAudio(audioBlob, task_id);
+        await provisionTranscription(task_id);
       }}
       style={{ marginTop: '1rem' }}
       >

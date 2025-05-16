@@ -58,6 +58,14 @@ fi
 
 ssh-keyscan -H hk-s020.rsync.net >> /home/http/.ssh/known_hosts
 
+# === Fix permissions for vastai key if present ===
+VAST_KEY="/home/http/.ssh/id_rsa_vastai"
+if [ -f "$VAST_KEY" ]; then
+  echo "🔧 Fixing permissions on Vast.ai key"
+  chmod 600 "$VAST_KEY"
+  chown www-data:www-data "$VAST_KEY"
+fi
+
 #exec runuser -u www-data -- apache2-foreground
 exec apache2-foreground
 

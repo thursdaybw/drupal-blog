@@ -8,7 +8,6 @@ RUN apt-get update && apt-get install -y \
     mailutils \
     python3-venv \
     python3-pip && \
-    pip install --no-cache-dir && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir vastai

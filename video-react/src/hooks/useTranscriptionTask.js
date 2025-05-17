@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAudioTranscription } from './useAudioTranscription';
 
-export function useTranscriptionTask({ onStatus }) {
+export function useTranscriptionTask({ onStatus, videoId }) {
   const [taskId, setTaskId] = useState(null);
   const [pollUrl, setPollUrl] = useState(null);
   const [inProgress, setInProgress] = useState(false);
@@ -15,7 +15,7 @@ export function useTranscriptionTask({ onStatus }) {
 
     try {
       onStatus?.('🔧 Initializing task...');
-      const res = await fetch('/video-forge/transcription-task-init', {
+      const res = await fetch(`/video-forge/transcription-task-init?video_id=${videoId}`, {
         credentials: 'include',
       });
       const json = await res.json();

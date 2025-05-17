@@ -5,15 +5,17 @@ import { useAudioTranscription } from './hooks/useAudioTranscription'; // adjust
 import { usePollTaskStatus } from './hooks/usePollTaskStatus';
 import { useSubtitleOverlay } from './hooks/useSubtitleOverlay';
 import { useTranscriptionTask } from './hooks/useTranscriptionTask';
+import { useVideoUpload } from './hooks/useVideoUpload';
+
 
 const base = window.location.pathname.replace(/\/$/, '');
 
 function App() {
-  const [status, setStatus]         = useState('Idle');
-  const [pollUrl, setPollUrl]       = useState(null);
-  const [audioURL, setAudioURL]     = useState(null);
-  const [videoURL, setVideoURL]     = useState(null)
-  const [videoFile, setVideoFile]   = useState(null);
+  const [status, setStatus]       = useState('Idle');
+  const [audioURL, setAudioURL]   = useState(null);
+  const [videoURL, setVideoURL]   = useState(null)
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoId, setVideoId]     = useState(null);
 
   const { extractAudio, uploadAudio } = useAudioTranscription({
     onStatus: setStatus
@@ -27,8 +29,16 @@ function App() {
     error,
   } = useTranscriptionTask({
     videoFile,
+    videoId,
     onStatus: setStatus,
   });
+
+  const {
+    uploadProgress,
+    uploadComplete,
+    uploadError,
+    startUpload
+  } = useVideoUpload({ onStatus: setStatus });
 
   const [assUrl, setAssUrl]         = useState(null);
 
@@ -97,18 +107,22 @@ function App() {
   return (
     <div style={{ padding: '2rem' }}>
     <h1>FFmpeg.wasm React Demo</h1>
+
     <input
     type="file"
     accept="video/*"
     onChange={e => {
       const file = e.target.files[0];
       if (file) {
+        const video_id = crypto.randomUUID(); // 🆕
         setVideoFile(file);
-        const fileURL = URL.createObjectURL(file);
-        setVideoURL(fileURL);
+        setVideoId(video_id); // 🆕
+        setVideoURL(URL.createObjectURL(file));
+        startUpload(file, video_id); // pass to uploader
       }
     }}
     />
+
     {videoFile && (
       <button
       onClick={() => startTranscription(videoFile)}
@@ -117,6 +131,7 @@ function App() {
       Generate Captions
       </button>
     )}
+
     <p>Status: {status}</p>
     {videoURL && (
       <video
@@ -127,7 +142,11 @@ function App() {
       style={{ marginTop: '1rem', display: 'block' }}
       />
     )}
-    {/*audioURL && <audio controls src={audioURL} style={{ marginTop:'1rem' }} />*/}
+
+    {uploadProgress > 0 && (
+      <p>Upload Progress: {uploadProgress}%</p>
+    )}
+
     </div>
   );
 }

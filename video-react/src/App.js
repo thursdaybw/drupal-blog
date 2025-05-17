@@ -3,6 +3,7 @@ import { FFmpeg }    from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import { useAudioTranscription } from './hooks/useAudioTranscription'; // adjust path
 import { usePollTaskStatus } from './hooks/usePollTaskStatus';
+import { useSubtitleOverlay } from './hooks/useSubtitleOverlay';
 
 const base = window.location.pathname.replace(/\/$/, '');
 
@@ -66,38 +67,11 @@ function App() {
     enabled: Boolean(pollUrl),
   });
 
-  useEffect(() => {
-    if (!assUrl || !videoRef.current) return;
-
-    console.log('📦 Received ASS file URL:', assUrl);
-    alert('📝 ASS file ready! SubtitlesOctopus setup is currently disabled.');
-
-    // TODO: Uncomment this once ready to test SubtitlesOctopus
-  const script = document.createElement('script');
-  script.src = `${modulePath}/js/libass/package/dist/js/subtitles-octopus.js`;
-
-  script.onload = () => {
-    const options = {
-      video: videoRef.current,
-      subUrl: assUrl,
-      workerUrl: `${modulePath}/js/libass/package/dist/js/subtitles-octopus-worker.js`,
-      wasmUrl: `${modulePath}/js/libass/package/dist/js/subtitles-octopus-worker.wasm`,
-      fonts: [
-        `${modulePath}/js/libass/package/dist/js/AntonSC-Regular.ttf`
-      ],
-    };
-
-    // eslint-disable-next-line no-undef
-    new SubtitlesOctopus(options);
-  };
-
-  document.body.appendChild(script);
-
-  return () => {
-    document.body.removeChild(script);
-  };
-
-  }, [assUrl]);
+  useSubtitleOverlay({
+    assUrl,
+    videoRef,
+    modulePath,
+  });
 
   const provisionTranscription = async (task_id) => {
     const res = await fetch(`/video-forge/transcription-provision?task_id=${task_id}`);

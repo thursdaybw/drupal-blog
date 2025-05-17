@@ -2,4 +2,6 @@ services:
   web:
     volumes:
       - ~/.cache/whisper:/var/www/.cache/whisper:cached
+    environment:
+      - VASTAI_BIN=/home/bevan/.local/bin/vastai
 

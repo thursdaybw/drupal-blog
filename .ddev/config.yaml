@@ -17,10 +17,9 @@ web_extra_exposed_ports:
     container_port: 8080
     http_port: 8080
     https_port: 8081
-
-#web_build:
-#  - Dockerfile.whisper
-#  - Dockerfile.melt
+web_build:
+  - Dockerfile.whisper
+  - Dockerfile.melt
 #  - Dockerfile.buildinfo
 
 # Key features of DDEV's config.yaml:

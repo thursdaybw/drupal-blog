@@ -4,6 +4,7 @@ import { fetchFile } from '@ffmpeg/util';
 import { useAudioTranscription } from './hooks/useAudioTranscription'; // adjust path
 import { usePollTaskStatus } from './hooks/usePollTaskStatus';
 import { useSubtitleOverlay } from './hooks/useSubtitleOverlay';
+import { useTranscriptionTask } from './hooks/useTranscriptionTask';
 
 const base = window.location.pathname.replace(/\/$/, '');
 
@@ -17,6 +18,18 @@ function App() {
   const { extractAudio, uploadAudio } = useAudioTranscription({
     onStatus: setStatus
   });
+
+  const {
+    startTranscription,
+    pollUrl,
+    taskId,
+    inProgress,
+    error,
+  } = useTranscriptionTask({
+    videoFile,
+    onStatus: setStatus,
+  });
+
   const [assUrl, setAssUrl]         = useState(null);
 
   // TODO: Replace hardcoded modulePath with a dynamic lookup from Drupal (e.g. via JSON:API or injected config)
@@ -98,29 +111,7 @@ function App() {
     />
     {videoFile && (
       <button
-      onClick={async () => {
-        // Step 1: Init task and get task ID and poll URL
-        const res = await fetch('/video-forge/transcription-task-init', { credentials: 'include' });
-        const json = await res.json();
-        const { task_id, poll_url } = json;
-
-        if (!task_id || !poll_url) {
-          console.log('Task Init:', 'Failed to initialize task');
-          setStatus('❌ Failed to initialize task');
-          return;
-        }
-        else {
-          console.log('Task Init: Task initialized with id', task_id);
-        }
-
-        setPollUrl(poll_url);
-
-        // Step 2: Extract, upload, provision
-        const audioBlob = await extractAudio(videoFile);
-        // TODO work on doing these concurrently.
-        await uploadAudio(audioBlob, task_id);
-        await provisionTranscription(task_id);
-      }}
+      onClick={() => startTranscription(videoFile)}
       style={{ marginTop: '1rem' }}
       >
       Generate Captions

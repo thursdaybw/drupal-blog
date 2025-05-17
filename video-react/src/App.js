@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { FFmpeg }    from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import { useAudioTranscription } from './hooks/useAudioTranscription'; // adjust path
+import { usePollTaskStatus } from './hooks/usePollTaskStatus';
 
 const base = window.location.pathname.replace(/\/$/, '');
 
@@ -58,43 +59,12 @@ function App() {
     checkDrupalUser();
   }, []);
 
-  // Polling Loop A: provisioning status poll
-  useEffect(() => {
-    if (!pollUrl) return;
-
-    let shouldContinue = true;
-    let hasUploaded = false;
-
-    const pollProvisionStatus = async () => {
-      try {
-        const res = await fetch(pollUrl);
-        const json = await res.json();
-
-        const { status, meta = {} } = json;
-
-        if (status === 'transcribed') {
-          setStatus('✅ Transcription complete! Captions ready.');
-          setAssUrl(meta.ass_url || null);
-          shouldContinue = false;
-        } else {
-          console.log('Polling… status =', status);
-          setStatus(`Waiting for server… (${status})`);
-        }
-      } catch (err) {
-        console.warn('Polling failed:', err);
-      }
-
-      if (shouldContinue) {
-        setTimeout(pollProvisionStatus, 3000);
-      }
-    };
-
-    pollProvisionStatus();
-
-    return () => {
-      shouldContinue = false;
-    };
-  }, [pollUrl]);
+  usePollTaskStatus({
+    pollUrl,
+    onStatus: setStatus,
+    onComplete: ({ assUrl }) => setAssUrl(assUrl),
+    enabled: Boolean(pollUrl),
+  });
 
   useEffect(() => {
     if (!assUrl || !videoRef.current) return;

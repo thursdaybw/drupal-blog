@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { FFmpeg }    from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
+import { useAudioTranscription } from './hooks/useAudioTranscription'; // adjust path
 
 const base = window.location.pathname.replace(/\/$/, '');
 
@@ -10,6 +11,10 @@ function App() {
   const [audioURL, setAudioURL]     = useState(null);
   const [videoURL, setVideoURL]     = useState(null)
   const [videoFile, setVideoFile]   = useState(null);
+
+  const { extractAudio, uploadAudio } = useAudioTranscription({
+    onStatus: setStatus
+  });
   const [assUrl, setAssUrl]         = useState(null);
 
   // TODO: Replace hardcoded modulePath with a dynamic lookup from Drupal (e.g. via JSON:API or injected config)
@@ -130,101 +135,6 @@ function App() {
 
     console.log('Provisioning response:', json);
     setStatus('Provisioning server...');
-  };
-
-  const extractAudio = async (file) => {
-    try {
-      // === Step A: start ===
-      console.log('⏳ extractAudio(): start');
-      console.log('Selected file:', file.name, file.type, file.size, 'bytes');
-
-      const fileURL = URL.createObjectURL(file); // ✅ preview video
-      setVideoURL(fileURL);
-
-      // === Step B: load core files ===
-      setStatus('Loading FFmpeg…');
-      await ffmpeg.load(); // ✅ uses corePath from constructor
-      console.log('✅ core files loaded');
-
-      // === Step C: read file from <input> ===
-      const inputData = await fetchFile(file);
-      console.log('🏊 fetchFile size:', inputData.length);
-
-      // === Step D: write to FS and confirm ===
-      await ffmpeg.writeFile('in.mp4', inputData);
-      const confirmIn = await ffmpeg.readFile('in.mp4');
-      console.log('📂 in.mp4 in FS size:', confirmIn.length);
-
-      // === Step E: run extraction ===
-      setStatus('Extracting audio…');
-      await ffmpeg.exec([
-        '-i', 'in.mp4',
-        '-q:a', '0',
-        '-map', 'a',
-        'out.mp3',
-      ]);
-      console.log('✅ ffmpeg.exec completed');
-
-      const files = await ffmpeg?.fs?.readdir?.('/');
-      console.log('📁 FS contents:', files);
-
-      // === Step F: read back output ===
-      const outData = await ffmpeg.readFile('out.mp3');
-      console.log('🔊 out.mp3 in FS size:', outData.length);
-
-      if (outData.length === 0) {
-        console.warn('⚠️ out.mp3 came back empty — no audio was extracted.');
-        setStatus('Error: no audio extracted.');
-        return;
-      }
-
-      // === Step G: build blob / player / link ===
-      const blob = new Blob([outData.buffer], { type: 'audio/mpeg' });
-      const url  = URL.createObjectURL(blob);
-      console.log('🌐 Blob URL:', url);
-
-      setAudioURL(url);
-      setStatus('Audio Extacted!');
-      return blob;
-
-    } catch (err) {
-      console.error('🔥 extractAudio() threw:', err);
-      setStatus('Error during extraction');
-    }
-  };
-
-  const uploadAudio = async (blob, task_id) => {
-    if (!blob) {
-      alert('No audio to upload!');
-      return;
-    }
-    if (!task_id) {
-      alert('No task_id provided!');
-      return;
-    }
-
-    setStatus('Uploading audio to transcription server…');
-
-    try {
-      const formData = new FormData();
-      formData.append('file', blob, 'audio.mp3');
-
-      const uploadRes = await fetch(`/video-forge/upload-audio?task_id=${task_id}`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-
-      if (!uploadRes.ok) {
-        throw new Error(`Upload failed with status ${uploadRes.status}`);
-      }
-
-      console.log('✅ Audio upload complete.');
-      setStatus('Upload complete! Transcription in progress...');
-    } catch (err) {
-      console.error('Upload failed:', err);
-      setStatus('Upload failed.');
-    }
   };
 
   return (

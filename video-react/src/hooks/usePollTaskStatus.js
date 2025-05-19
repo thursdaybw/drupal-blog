@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-export function usePollTaskStatus({ pollUrl, onStatus, onComplete, enabled = true }) {
+export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = true }) {
   useEffect(() => {
     if (!enabled || !pollUrl) return;
 
@@ -13,16 +13,28 @@ export function usePollTaskStatus({ pollUrl, onStatus, onComplete, enabled = tru
         const { status, meta = {} } = json;
 
         if (status === 'transcribed') {
-          onStatus?.('✅ Transcription complete!');
-          onComplete?.({ assUrl: meta.ass_url || null });
+          setStatus?.('✅ Transcription complete!');
+          onComplete({
+            assUrl: meta.ass_url || null,
+            renderUrl: meta.render_url || null,
+          });
           shouldContinue = false;
         } else {
           console.log('[poll]', status);
-          onStatus?.(`Waiting for server… (${status})`);
+          if (status === 'render_complete' && meta.render_url) {
+            setStatus?.('✅ Render complete!');
+            onComplete?.({
+              assUrl: meta.ass_url || null,
+              renderUrl: meta.render_url || null,
+            });
+            shouldContinue = false; // stop polling
+          } else {
+            setStatus?.(`Waiting for server… (${status})`);
+          }
         }
       } catch (err) {
         console.warn('[poll] failed:', err);
-        onStatus?.('⚠️ Polling failed');
+        setStatus?.('⚠️ Polling failed');
       }
 
       if (shouldContinue) {
@@ -35,6 +47,6 @@ export function usePollTaskStatus({ pollUrl, onStatus, onComplete, enabled = tru
     return () => {
       shouldContinue = false;
     };
-  }, [pollUrl, enabled, onStatus, onComplete]);
+  }, [pollUrl, enabled, setStatus, onComplete]);
 }
 

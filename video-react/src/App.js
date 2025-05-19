@@ -6,7 +6,7 @@ import { usePollTaskStatus } from './hooks/usePollTaskStatus';
 import { useSubtitleOverlay } from './hooks/useSubtitleOverlay';
 import { useTranscriptionTask } from './hooks/useTranscriptionTask';
 import { useVideoUpload } from './hooks/useVideoUpload';
-
+import { useRenderVideo } from './hooks/useRenderVideo';
 
 const base = window.location.pathname.replace(/\/$/, '');
 
@@ -16,9 +16,10 @@ function App() {
   const [videoURL, setVideoURL]   = useState(null)
   const [videoFile, setVideoFile] = useState(null);
   const [videoId, setVideoId]     = useState(null);
+  const [renderUrl, setRenderUrl] = useState(null);
 
   const { extractAudio, uploadAudio } = useAudioTranscription({
-    onStatus: setStatus
+    setStatus: setStatus
   });
 
   const {
@@ -30,6 +31,11 @@ function App() {
   } = useTranscriptionTask({
     videoFile,
     videoId,
+    setStatus: setStatus,
+  });
+
+  const { triggerRender, rendering } = useRenderVideo({
+    taskId,
     onStatus: setStatus,
   });
 
@@ -38,7 +44,7 @@ function App() {
     uploadComplete,
     uploadError,
     startUpload
-  } = useVideoUpload({ onStatus: setStatus });
+  } = useVideoUpload({ setStatus: setStatus });
 
   const [assUrl, setAssUrl]         = useState(null);
 
@@ -85,8 +91,11 @@ function App() {
 
   usePollTaskStatus({
     pollUrl,
-    onStatus: setStatus,
-    onComplete: ({ assUrl }) => setAssUrl(assUrl),
+    setStatus: setStatus,
+    onComplete: ({ assUrl, renderUrl }) => {
+      setAssUrl(assUrl);
+      setRenderUrl(renderUrl);
+    },
     enabled: Boolean(pollUrl),
   });
 
@@ -131,6 +140,22 @@ function App() {
       Generate Captions
       </button>
     )}
+    {videoFile && (
+      <button
+      onClick={triggerRender}
+      disabled={!taskId || !assUrl || rendering}
+      style={{
+        marginTop: '1rem',
+          backgroundColor: rendering ? '#ccc' : '#4CAF50',
+          color: '#fff',
+          padding: '0.5rem 1rem',
+          border: 'none',
+          cursor: rendering ? 'not-allowed' : 'pointer',
+      }}
+      >
+      {rendering ? 'Rendering…' : 'Render Final Video'}
+      </button>
+    )}
 
     <p>Status: {status}</p>
     {videoURL && (
@@ -141,6 +166,23 @@ function App() {
       width="480"
       style={{ marginTop: '1rem', display: 'block' }}
       />
+    )}
+
+    {renderUrl && (
+      <a
+      href={renderUrl}
+      download
+      style={{
+        display: 'inline-block',
+          marginTop: '1rem',
+          padding: '0.5rem 1rem',
+          backgroundColor: '#2196F3',
+          color: '#fff',
+          textDecoration: 'none',
+      }}
+      >
+      ⬇️ Download Rendered Video
+      </a>
     )}
 
     {uploadProgress > 0 && (

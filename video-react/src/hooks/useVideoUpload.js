@@ -1,14 +1,14 @@
 import { useState } from 'react';
 
-export function useVideoUpload({ onStatus }) {
+export function useVideoUpload({ setStatus }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadComplete, setUploadComplete] = useState(false);
   const [uploadError, setUploadError] = useState(null);
 
-  const startUpload = (videoFile, videoId) => {
-    if (!videoFile || !videoId) return;
+const startUpload = (videoFile, videoId) => {
+  if (!videoFile || !videoId) return;
 
-    onStatus?.('📤 Uploading video…');
+    setStatus?.('📤 Uploading video…');
     setUploadProgress(0);
     setUploadComplete(false);
     setUploadError(null);
@@ -28,19 +28,19 @@ export function useVideoUpload({ onStatus }) {
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        onStatus?.('✅ Video upload complete.');
+        setStatus?.('✅ Video upload complete.');
         setUploadComplete(true);
       } else {
         const msg = `❌ Upload failed with status ${xhr.status}`;
         setUploadError(msg);
-        onStatus?.(msg);
+        setStatus?.(msg);
       }
     };
 
     xhr.onerror = () => {
       const msg = '❌ Upload error';
       setUploadError(msg);
-      onStatus?.(msg);
+      setStatus?.(msg);
     };
 
     const formData = new FormData();

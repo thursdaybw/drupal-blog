@@ -1,20 +1,20 @@
 import { useState } from 'react';
 import { useAudioTranscription } from './useAudioTranscription';
 
-export function useTranscriptionTask({ onStatus, videoId }) {
+export function useTranscriptionTask({ setStatus, videoId }) {
   const [taskId, setTaskId] = useState(null);
   const [pollUrl, setPollUrl] = useState(null);
   const [inProgress, setInProgress] = useState(false);
   const [error, setError] = useState(null);
 
-  const { extractAudio, uploadAudio } = useAudioTranscription({ onStatus });
+  const { extractAudio, uploadAudio } = useAudioTranscription({ setStatus });
 
   const startTranscription = async (videoFile) => {
     setInProgress(true);
     setError(null);
 
     try {
-      onStatus?.('🔧 Initializing task...');
+      setStatus?.('🔧 Initializing task...');
       const res = await fetch(`/video-forge/transcription-task-init?video_id=${videoId}`, {
         credentials: 'include',
       });
@@ -28,24 +28,24 @@ export function useTranscriptionTask({ onStatus, videoId }) {
       setTaskId(task_id);
       setPollUrl(poll_url);
 
-      onStatus?.('🎧 Extracting audio…');
+      setStatus?.('🎧 Extracting audio…');
       const audioBlob = await extractAudio(videoFile);
 
-      onStatus?.('📤 Uploading audio...');
+      setStatus?.('📤 Uploading audio...');
       await uploadAudio(audioBlob, task_id);
 
-      onStatus?.('🚀 Triggering transcription...');
+      setStatus?.('🚀 Triggering transcription...');
       const provisionRes = await fetch(
         `/video-forge/transcription-provision?task_id=${task_id}`
       );
       const provisionJson = await provisionRes.json();
 
       console.log('✅ Provisioning response:', provisionJson);
-      onStatus?.('🔄 Transcription in progress...');
+      setStatus?.('🔄 Transcription in progress...');
     } catch (err) {
       console.error('🛑 Transcription task failed:', err);
       setError(err);
-      onStatus?.('❌ Failed to start transcription.');
+      setStatus?.('❌ Failed to start transcription.');
     } finally {
       setInProgress(false);
     }

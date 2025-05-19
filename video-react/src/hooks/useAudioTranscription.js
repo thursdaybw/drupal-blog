@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 
-export function useAudioTranscription({ onStatus }) {
+export function useAudioTranscription({ setStatus }) {
   const ffmpegRef = useRef(
     new FFmpeg({
       log: true,
@@ -18,7 +18,7 @@ export function useAudioTranscription({ onStatus }) {
 
   const extractAudio = async (file) => {
     try {
-      onStatus?.('Loading FFmpeg…');
+      setStatus?.('Loading FFmpeg…');
       await ffmpeg.load();
 
       const inputData = await fetchFile(file);
@@ -29,11 +29,11 @@ export function useAudioTranscription({ onStatus }) {
       if (!outData?.length) throw new Error('No audio extracted');
 
       const blob = new Blob([outData.buffer], { type: 'audio/mpeg' });
-      onStatus?.('Audio extracted!');
+      setStatus?.('Audio extracted!');
       return blob;
     } catch (err) {
       console.error('🛑 extractAudio error:', err);
-      onStatus?.('Error during audio extraction.');
+      setStatus?.('Error during audio extraction.');
       return null;
     }
   };
@@ -41,7 +41,7 @@ export function useAudioTranscription({ onStatus }) {
   const uploadAudio = async (blob, task_id) => {
     if (!blob || !task_id) return;
 
-    onStatus?.('Uploading audio…');
+    setStatus?.('Uploading audio…');
 
     try {
       const formData = new FormData();
@@ -54,10 +54,10 @@ export function useAudioTranscription({ onStatus }) {
       });
 
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      onStatus?.('Upload complete!');
+      setStatus?.('Upload complete!');
     } catch (err) {
       console.error('🛑 uploadAudio error:', err);
-      onStatus?.('Upload failed.');
+      setStatus?.('Upload failed.');
     }
   };
 

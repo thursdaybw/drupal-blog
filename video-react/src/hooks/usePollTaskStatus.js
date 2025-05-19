@@ -52,5 +52,15 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
       shouldContinue = false;
     };
   }, [pollUrl, enabled, setStatus, onComplete]);
+
+  useEffect(() => {
+    const resume = () => {
+      shouldContinue = true;
+      poll(); // re-run polling
+    };
+    window.addEventListener('resume-poll', resume);
+    return () => window.removeEventListener('resume-poll', resume);
+  }, []);
+
 }
 

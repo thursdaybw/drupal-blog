@@ -101,17 +101,17 @@ composer install &&
 ./vendor/bin/drush simple-oauth:generate-keys ../keys &&
 ./vendor/bin/drush cr &&
 
-# React build and deploy
 cd /var/www/video-react &&
 echo "Installing React dependencies" &&
-npm install &&
+npm install --legacy-peer-deps &&
 echo "Building React app" &&
 npm run build &&
-echo "Removing old build" &&
+test -d build || (echo "❌ Build failed — build/ folder not created!" && exit 1) &&
+echo "Clearing previous public build" &&
 rm -rf /var/www/html/video-react/* &&
-echo "Copying new build to web root" &&
-cp -r build/* /var/www/html/video-react/ &&
-echo "React app deployed to /video-react/"
+echo "Copying new React build to public folder" &&
+cp -r /var/www/video-react/build/* /var/www/html/video-react/ &&
+echo "✅ React app deployed to /video-react/"
 '
 
 # Clean up docker mess.

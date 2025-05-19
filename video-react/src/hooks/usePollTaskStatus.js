@@ -10,31 +10,35 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
       try {
         const res = await fetch(pollUrl);
         const json = await res.json();
-        const { status, meta = {} } = json;
+        const { status, meta = {}, error_message } = json;
 
         if (status === 'transcribed') {
           setStatus?.('✅ Transcription complete!');
-          onComplete({
+          onComplete?.({
             assUrl: meta.ass_url || null,
             renderUrl: meta.render_url || null,
           });
           shouldContinue = false;
+
+        } else if (status === 'error') {
+          setStatus?.(`❌ Server error: ${error_message || 'Unknown error'}`);
+          shouldContinue = false;
+
+        } else if (status === 'render_complete' && meta.render_url) {
+          setStatus?.('✅ Render complete!');
+          onComplete?.({
+            assUrl: meta.ass_url || null,
+            renderUrl: meta.render_url || null,
+          });
+          shouldContinue = false;
+
         } else {
           console.log('[poll]', status);
-          if (status === 'render_complete' && meta.render_url) {
-            setStatus?.('✅ Render complete!');
-            onComplete?.({
-              assUrl: meta.ass_url || null,
-              renderUrl: meta.render_url || null,
-            });
-            shouldContinue = false; // stop polling
-          } else {
-            setStatus?.(`Waiting for server… (${status})`);
-          }
+          setStatus?.(`Waiting for server… (${status})`);
         }
       } catch (err) {
         console.warn('[poll] failed:', err);
-        setStatus?.('⚠️ Polling failed');
+        setStatus?.('⚠️  Polling failed');
       }
 
       if (shouldContinue) {

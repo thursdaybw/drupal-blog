@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
     msmtp \
     mailutils \
     python3-venv \
-    python3-pip && \
+    python3-pip \
     melt && \
     rm -rf /var/lib/apt/lists/*
 

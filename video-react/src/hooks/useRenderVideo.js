@@ -20,19 +20,14 @@ export function useRenderVideo({ taskId, setStatus }) {
 
       if (json.error) {
         setRenderError(json.error);
-        setStatus?.(`⚠️  Render failed: ${json.error}`);
+        setStatus?.(`⚠️ Render failed: ${json.error}`);
       } else {
         setRenderSuccess(true);
         setStatus?.('🎬 Render job enqueued');
-
-        // ✅ Only resume polling if render was successfully enqueued
-        setTimeout(() => {
-          window.dispatchEvent(new Event('resume-poll'));
-        }, 100);
       }
     } catch (err) {
       setRenderError(err.message);
-      setStatus?.(`⚠️  Render error: ${err.message}`);
+      setStatus?.(`⚠️ Render error: ${err.message}`);
     }
 
     setRendering(false);

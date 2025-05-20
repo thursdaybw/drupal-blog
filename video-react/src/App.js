@@ -60,6 +60,8 @@ function App() {
     })
   );
 
+  const fileRef = useRef(null);
+
   const ffmpeg = ffmpegRef.current;
 
   ffmpeg.on('log', ({ message }) => {
@@ -123,10 +125,15 @@ function App() {
     onChange={e => {
       const file = e.target.files[0];
       if (file) {
-        const video_id = crypto.randomUUID(); // 🆕
+        const video_id = crypto.randomUUID();
+        const url = URL.createObjectURL(file);
+        fileRef.current = file;
         setVideoFile(file);
-        setVideoId(video_id); // 🆕
-        setVideoURL(URL.createObjectURL(file));
+        setVideoId(video_id);
+        if (videoURL) {
+          URL.revokeObjectURL(videoURL);
+        }
+        setVideoURL(url);
         startUpload(file, video_id); // pass to uploader
       }
     }}
@@ -164,6 +171,10 @@ function App() {
       controls
       src={videoURL}
       width="480"
+      onEnded={() => {
+        URL.revokeObjectURL(videoURL);
+        setVideoURL(null);
+      }}
       style={{ marginTop: '1rem', display: 'block' }}
       />
     )}

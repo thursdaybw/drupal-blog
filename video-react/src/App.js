@@ -126,15 +126,45 @@ function App() {
       const file = e.target.files[0];
       if (file) {
         const video_id = crypto.randomUUID();
-        const url = URL.createObjectURL(file);
         fileRef.current = file;
-        setVideoFile(file);
-        setVideoId(video_id);
-        if (videoURL) {
-          URL.revokeObjectURL(videoURL);
-        }
-        setVideoURL(url);
-        startUpload(file, video_id); // pass to uploader
+
+        // 🧠 Previously we used URL.createObjectURL(file) to generate a blob URL for video playback:
+        // const url = URL.createObjectURL(file);
+        // setVideoURL(url);
+        //
+        // This works well in most environments, but on mobile (especially Chrome on Android),
+        // it leads to instability when used alongside SubtitlesOctopus.
+        //
+        // SubtitlesOctopus loads the video into a Web Worker for subtitle rendering,
+        // which tries to access the same blob URL as the <video> element.
+        // On memory-constrained devices or under heavy load, this dual access causes
+        // Chrome to revoke or invalidate the blob mid-stream, triggering:
+        //   net::ERR_UPLOAD_FILE_CHANGED
+        //
+        // 🎯 To solve this, we now use FileReader to convert the video file to a base64-encoded
+        // data URI (data:video/mp4;base64,...). This ensures both the video element and
+        // SubtitlesOctopus can safely access the same source without memory collisions.
+        //
+        // 🔻 Drawbacks of this approach:
+        // - Base64 encoding increases memory usage (~33% larger than the original file)
+        // - Longer load time for large videos due to encoding delay
+        // - No revocation possible (data URIs persist for the page lifecycle)
+        //
+        // ✅ However, it's far more stable for mobile testing and avoids the playback crash.
+        //
+        // 🔄 If we switch away from SubtitlesOctopus (e.g. use native <track> subtitles,
+        // or handle caption rendering manually), we can safely revert to:
+        //   const url = URL.createObjectURL(file);
+        //   setVideoURL(url);
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          setVideoFile(file);
+          setVideoId(video_id);
+          setVideoURL(reader.result); // Base64 data URI (e.g. data:video/mp4;base64,...)
+          startUpload(file, video_id);
+        };
+        reader.readAsDataURL(file);
       }
     }}
     />
@@ -171,10 +201,6 @@ function App() {
       controls
       src={videoURL}
       width="480"
-      onEnded={() => {
-        URL.revokeObjectURL(videoURL);
-        setVideoURL(null);
-      }}
       style={{ marginTop: '1rem', display: 'block' }}
       />
     )}

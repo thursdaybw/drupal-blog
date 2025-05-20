@@ -11,9 +11,9 @@ RUN apt-get update && apt-get install -y \
 
 # Temporarily comment out Whisper install to avoid 28-min wait
 USER $username
-RUN pipx install openai-whisper==20231117
-RUN pipx runpip openai-whisper install "numpy<2.0"
-RUN pipx runpip openai-whisper install "triton==2.0.0"
+#RUN pipx install openai-whisper==20231117
+#RUN pipx runpip openai-whisper install "numpy<2.0"
+#RUN pipx runpip openai-whisper install "triton==2.0.0"
 
 RUN pipx install vastai
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${username}/.bashrc

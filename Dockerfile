@@ -9,7 +9,9 @@ RUN apt-get update && apt-get install -y \
     python3-venv \
     python3-pip \
     melt \
-    xvfb \
+    ffmpeg \
+    libass9 \
+    libass-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir --upgrade "vastai>=0.3.1"

@@ -43,6 +43,50 @@ rsync -avz -e "ssh" --progress root@85.31.234.104:/root/workspace/drupal-blog/ht
 docker run drupal-blog_appserver_1 -it /bin/bash
 ```
 
+Sure — here’s a section you can drop into your project’s README to document how cron is configured on your **production VPS**:
+
+---
+
+## 🕰️ Cron Configuration (Production)
+
+On the production server, Drupal's cron is **triggered externally** via the host system's crontab. It runs every minute using the following entry:
+
+```cron
+* * * * * docker exec -i drupal-blog_appserver_1 /var/www/vendor/bin/drush -r /var/www/html cron > /dev/null 2>&1
+```
+
+### 💡 Notes
+
+* This cron job runs **outside the container**, from the VPS host.
+* It uses `docker exec` to call `drush cron` inside the running Drupal container.
+* Output is silenced via `> /dev/null 2>&1`.
+
+### 🔧 To Disable Temporarily
+
+You can disable cron (e.g., for manual queue testing) by commenting it out:
+
+```bash
+crontab -e
+```
+
+Then change:
+
+```cron
+* * * * * docker exec ...
+```
+
+To:
+
+```cron
+# * * * * * docker exec ...
+```
+
+Save and exit. Cron will no longer run automatically until you uncomment the line.
+
+---
+
+
+
 
 Sample video editing schema:
 ```
@@ -65,3 +109,4 @@ Sample video editing schema:
   ]
 }
 ```
+

@@ -12,8 +12,6 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-    rm -rf /var/lib/apt/lists/*
-
 RUN pip install --no-cache-dir --upgrade "vastai>=0.3.1"
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${username}/.bashrc
 

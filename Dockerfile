@@ -1,5 +1,15 @@
 # Use your current image as the base
-FROM devwithlando/php:8.1-apache-4
+FROM ddev/ddev-webserver:v1.24.6
+
+# Install msmtp and other necessary packages
+RUN apt-get update && apt-get install -y \
+    sshfs \
+    msmtp \
+    mailutils \
+    python3-venv \
+    python3-pip \
+    melt && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install msmtp and other necessary packages
 RUN apt-get update && apt-get install -y \

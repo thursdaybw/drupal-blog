@@ -8,7 +8,10 @@ RUN apt-get update && apt-get install -y \
     mailutils \
     python3-venv \
     python3-pip \
-    melt && \
+    melt \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
     rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir --upgrade "vastai>=0.3.1"

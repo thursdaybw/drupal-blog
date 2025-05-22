@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
 
 export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = true }) {
+
+  const [errorMessage, setErrorMessage] = useState(null);
+
   useEffect(() => {
+
     if (!enabled || !pollUrl) return;
 
     let shouldContinue = true;

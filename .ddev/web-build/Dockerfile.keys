@@ -1,0 +1,12 @@
+# Step 1: create dir as root
+#USER root
+#RUN mkdir -p /home/http/.ssh && chown -R $username:$username /home/http/.ssh
+
+# Step 2: switch to user to copy the key
+USER $username
+COPY id_rsa_vastai /home/$username/.ssh/id_rsa_vastai
+
+USER root
+# Step 3: fix permissions (still as user)
+RUN chown $username:$username /home/$username/.ssh/id_rsa_vastai
+RUN chmod 600 /home/$username/.ssh/id_rsa_vastai

@@ -11,12 +11,14 @@ import { useRenderVideo } from './hooks/useRenderVideo';
 const base = window.location.pathname.replace(/\/$/, '');
 
 function App() {
-  const [status, setStatus]       = useState('Idle');
-  const [audioURL, setAudioURL]   = useState(null);
-  const [videoURL, setVideoURL]   = useState(null)
-  const [videoFile, setVideoFile] = useState(null);
-  const [videoId, setVideoId]     = useState(null);
-  const [renderUrl, setRenderUrl] = useState(null);
+  const [status, setStatus]               = useState('Idle');
+  const [audioURL, setAudioURL]           = useState(null);
+  const [videoURL, setVideoURL]           = useState(null)
+  const [videoFile, setVideoFile]         = useState(null);
+  const [videoId, setVideoId]             = useState(null);
+  const [renderUrl, setRenderUrl]         = useState(null);
+  const [transcriptUrl, setTranscriptUrl] = useState(null);
+  const [transcriptText, setTranscriptText] = useState('');
 
   const { extractAudio, uploadAudio } = useAudioTranscription({
     setStatus: setStatus
@@ -94,12 +96,29 @@ function App() {
   usePollTaskStatus({
     pollUrl,
     setStatus: setStatus,
-    onComplete: ({ assUrl, renderUrl }) => {
+    onComplete: ({ assUrl, renderUrl, transcriptUrl }) => {
       setAssUrl(assUrl);
       setRenderUrl(renderUrl);
+      setTranscriptUrl(transcriptUrl); // <-- same pattern
     },
     enabled: Boolean(pollUrl),
   });
+
+  useEffect(() => {
+    if (!transcriptUrl) return;
+
+    const fetchTranscript = async () => {
+      try {
+        const res = await fetch(transcriptUrl);
+        const json = await res.json();
+        setTranscriptText(json.text || '');
+      } catch (err) {
+        console.warn('❌ Failed to fetch transcript JSON:', err);
+      }
+    };
+
+    fetchTranscript();
+  }, [transcriptUrl]);
 
   useSubtitleOverlay({
     assUrl,
@@ -225,6 +244,16 @@ function App() {
     {uploadProgress > 0 && (
       <p>Upload Progress: {uploadProgress}%</p>
     )}
+
+    {transcriptText && (
+      <textarea
+      value={transcriptText}
+      readOnly
+      rows={10}
+      style={{ width: '100%', marginTop: '1rem' }}
+      />
+    )}
+
 
     </div>
   );

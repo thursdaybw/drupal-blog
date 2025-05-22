@@ -17,6 +17,7 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
           onComplete?.({
             assUrl: meta.ass_url || null,
             renderUrl: meta.render_url || null,
+            transcriptUrl: meta.transcript_url || null,
           });
           shouldContinue = false;
 

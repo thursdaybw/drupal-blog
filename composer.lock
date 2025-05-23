@@ -8667,12 +8667,12 @@
             "source": {
                 "type": "git",
                 "url": "git@github.com:thursdaybw/video_forge.git",
-                "reference": "25ea9ce80aca0e90bfd24b4f5cb41b5c48c469ae"
+                "reference": "00a0762a3990b3f6f5150e5df63acae47d496ccb"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thursdaybw/video_forge/zipball/25ea9ce80aca0e90bfd24b4f5cb41b5c48c469ae",
-                "reference": "25ea9ce80aca0e90bfd24b4f5cb41b5c48c469ae",
+                "url": "https://api.github.com/repos/thursdaybw/video_forge/zipball/00a0762a3990b3f6f5150e5df63acae47d496ccb",
+                "reference": "00a0762a3990b3f6f5150e5df63acae47d496ccb",
                 "shasum": ""
             },
             "require": {
@@ -8688,7 +8688,7 @@
                 "source": "https://github.com/thursdaybw/video_forge/tree/main",
                 "issues": "https://github.com/thursdaybw/video_forge/issues"
             },
-            "time": "2025-05-22T23:57:22+00:00"
+            "time": "2025-05-23T03:01:09+00:00"
         },
         {
             "name": "twig/twig",

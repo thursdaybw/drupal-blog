@@ -110,3 +110,17 @@ Sample video editing schema:
 }
 ```
 
+
+### How to change the faster-whisper model in vast ai:
+
+✅ How to change the model
+
+Build with default (small) or override like:
+
+docker build --build-arg WHISPER_MODEL=base -t bevanw/faster-whisper:base .
+
+Or change it at runtime (Vast doesn’t support this, but you can test it locally):
+
+docker run -e WHISPER_MODEL=medium ...
+
+

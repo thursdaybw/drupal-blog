@@ -123,4 +123,25 @@ Or change it at runtime (Vast doesn’t support this, but you can test it locall
 
 docker run -e WHISPER_MODEL=medium ...
 
+## 📘 **README Updates** (Vision & Feature Notes)
 
+### 🔮 Planned Features (Roadmap)
+
+* **Text-to-Speech Overlays**
+  Integration with Dia TTS model for generating narration, translation, or voice remastering of segments.
+
+* **Persistent GPU Workflows**
+  Use Vast.ai Local Volumes to maintain Whisper models, cache assets, and accelerate queued tasks without redundant transfers.
+
+* **Remote Access & Debugging**
+  Cloudflare Tunnel support from Vast.ai’s Instance Portal to expose HTTPS GUIs (e.g., SubtitleOctopus preview, logs).
+
+* **LLM Integrations (Future)**
+  Consider LLaMA or similar local LLMs to:
+
+  * Auto-title or summarize transcripts
+  * Suggest short-form video cuts
+  * Power an “editing copilot” UX
+
+* **Custom Deploy Recipes**
+  Potential to offer a user-friendly launch process via tools like Pinokio Desktop or Docker templates.

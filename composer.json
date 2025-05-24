@@ -36,6 +36,7 @@
         "drupal/openapi_rest": "^2.0@RC",
         "drupal/openapi_ui": "^1.0@RC",
         "drupal/pathauto": "^1.11",
+        "drupal/queue_ui": "^3.2",
         "drupal/recaptcha": "^3.2",
         "drupal/restui": "^1.21",
         "drupal/simple_oauth": "^5.2",

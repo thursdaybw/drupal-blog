@@ -111,7 +111,9 @@ function App() {
       try {
         const res = await fetch(transcriptUrl);
         const json = await res.json();
-        setTranscriptText(json.text || '');
+        setTranscriptText(
+          json.segments?.map(seg => seg.text.trim()).join(' ') || ''
+        );
       } catch (err) {
         console.warn('❌ Failed to fetch transcript JSON:', err);
       }
@@ -253,7 +255,6 @@ function App() {
       style={{ width: '100%', marginTop: '1rem' }}
       />
     )}
-
 
     </div>
   );

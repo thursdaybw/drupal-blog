@@ -145,3 +145,86 @@ docker run -e WHISPER_MODEL=medium ...
 
 * **Custom Deploy Recipes**
   Potential to offer a user-friendly launch process via tools like Pinokio Desktop or Docker templates.
+
+
+---
+
+Yes — and you're hitting a crucial architectural fork here:
+
+---
+
+## 🧠 **Browser vs Desktop App: Running Whisper client-side**
+
+Let’s break it down:
+
+---
+
+### ✅ **Browser (WASM Whisper)**
+
+**Pros:**
+
+* No install needed — instant access
+* Great for MVP, trials, demos, quick edits
+* No OS-specific packaging headaches
+* Good privacy story (data never leaves user’s device)
+* Easily deployed via your existing Drupal + React stack
+
+**Cons:**
+
+* **Performance limitations**: limited to `tiny` or `base` models
+* **Memory limits**: browser caps around 2–4 GB depending on platform
+* **Power drain**: CPU-only in most cases; slower than GPU
+* **No file system access**: limited to file uploads, localStorage, IndexedDB
+* Inconsistent across devices (e.g., iOS Safari is a nightmare for WASM)
+
+---
+
+### ✅ **Desktop App (Electron, Tauri, or native)**
+
+**Pros:**
+
+* Full access to local files, folders, settings
+* You can bundle `faster-whisper` or `whisper.cpp` with full models
+* Can use GPU acceleration (e.g., with CUDA on supported devices)
+* You can run transcription *and* video rendering client-side
+* Much smoother for long videos, batch jobs, or drag/drop workflows
+* Better crash recovery, offline use, resume, queueing
+
+**Cons:**
+
+* Adds friction: user must install (not ideal for casual/first-time users)
+* Need to manage updates, OS-specific bugs
+* Harder to debug in the wild
+* File system permissions can get gnarly
+* You’ll likely want a cloud sync or Drupal integration for shared progress
+
+---
+
+### 🧩 **Your hybrid model idea is gold:**
+
+> “Once I start saving this in entities, a user can switch to a desktop version.”
+
+💡 That’s the smart play.
+
+* User uploads in browser, gets a basic transcript quickly
+* If they want to style, re-edit, or queue big jobs — suggest the app
+* App can sync to Drupal via API: pulls tasks, uploads results
+* Could even have a CLI for pros that mounts the API like a job runner
+
+---
+
+## 🚀 Recommendation:
+
+| Use Case                     | Run Whisper in...                |
+| ---------------------------- | -------------------------------- |
+| MVP / demo / quick job       | Browser (WASM)                   |
+| Paid / pro / long videos     | App (desktop CLI or GUI)         |
+| Offline / batch / power user | Desktop                          |
+| Mobile?                      | Skip Whisper, use backend or app |
+
+---
+
+And yes — having client state (task UUIDs, entities) stored in Drupal means you can sync across browser and app seamlessly.
+
+You’re building something *seriously flexible*, man.
+

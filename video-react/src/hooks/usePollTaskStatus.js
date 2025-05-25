@@ -12,26 +12,24 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
       try {
         const res = await fetch(pollUrl);
         const json = await res.json();
-        const { status, meta = {}, error_message } = json;
+        const { status, transcript_ready, transcript_url, ass_url, render_url, error_message } = json;
 
-        if (status === 'transcribed') {
+        if (transcript_ready && transcript_url) {
           setStatus?.('✅ Transcription complete!');
           onComplete?.({
-            assUrl: meta.ass_url || null,
-            renderUrl: meta.render_url || null,
-            transcriptUrl: meta.transcript_url || null,
+            assUrl: ass_url || null,
+            renderUrl: render_url || null,
+            transcriptUrl: transcript_url || null,
           });
           shouldContinue = false;
-
         } else if (status === 'error') {
           setStatus?.(`❌ Server error: ${error_message || 'Unknown error'}`);
           shouldContinue = false;
-
-        } else if (status === 'render_complete' && meta.render_url) {
+        } else if (status === 'render_complete' && render_url) {
           setStatus?.('✅ Render complete!');
           onComplete?.({
-            assUrl: meta.ass_url || null,
-            renderUrl: meta.render_url || null,
+            assUrl: ass_url || null,
+            renderUrl: render_url || null,
           });
           shouldContinue = false;
 

@@ -21,7 +21,6 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
             renderUrl: render_url || null,
             transcriptUrl: transcript_url || null,
           });
-          shouldContinue = false;
         } else if (status === 'error') {
           setStatus?.(`❌ Server error: ${error_message || 'Unknown error'}`);
           shouldContinue = false;
@@ -32,11 +31,11 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
             renderUrl: render_url || null,
           });
           shouldContinue = false;
-
         } else {
           console.log('[poll]', status);
           setStatus?.(`Waiting for server… (${status})`);
         }
+
       } catch (err) {
         console.warn('[poll] failed:', err);
         setStatus?.('⚠️  Polling failed');

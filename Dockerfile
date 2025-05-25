@@ -78,7 +78,8 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Add NodeSource repo for modern Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x -o /tmp/nodesetup.sh && \
+    bash /tmp/nodesetup.sh && \
     apt-get install -y nodejs && \
     node -v && npm -v
 

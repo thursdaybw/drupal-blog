@@ -1,0 +1,13 @@
+uuid: b95dbdb2-98ac-41fb-b08e-56b0e0e317fa
+langcode: en
+status: true
+dependencies:
+  module:
+    - video_forge_tasks
+_core:
+  default_config_hash: winAsUeNhGXuNg2ISRqtPfs6rNqEnKUgT93Bjp2Gxio
+id: video_forge_tasks_save_action
+label: 'Save video forge taskss'
+type: video_forge_tasks
+plugin: 'entity:save_action:video_forge_tasks'
+configuration: {  }

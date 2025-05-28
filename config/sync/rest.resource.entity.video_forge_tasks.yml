@@ -1,0 +1,38 @@
+uuid: 70005c4b-0c58-4a34-b79a-ee03f1e75836
+langcode: en
+status: true
+dependencies:
+  module:
+    - serialization
+    - user
+    - video_forge_tasks
+_core:
+  default_config_hash: pMRGq993zgp1X8Y9Egaqcsr3-7dZ0UMXHKlc5X3kAa4
+id: entity.video_forge_tasks
+plugin_id: 'entity:video_forge_tasks'
+granularity: method
+configuration:
+  GET:
+    supported_formats:
+      - json
+      - xml
+    supported_auth:
+      - cookie
+  POST:
+    supported_formats:
+      - json
+      - xml
+    supported_auth:
+      - cookie
+  PATCH:
+    supported_formats:
+      - json
+      - xml
+    supported_auth:
+      - cookie
+  DELETE:
+    supported_formats:
+      - json
+      - xml
+    supported_auth:
+      - cookie

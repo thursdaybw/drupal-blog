@@ -72,6 +72,7 @@ module:
   user: 0
   video_forge: 0
   video_forge_dev: 0
+  video_forge_tasks: 0
   views_ui: 0
   pathauto: 1
   views: 10

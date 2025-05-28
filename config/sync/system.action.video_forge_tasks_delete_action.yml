@@ -1,0 +1,13 @@
+uuid: 8e861749-ae31-4d4f-823b-8f1b0d39c5b8
+langcode: en
+status: true
+dependencies:
+  module:
+    - video_forge_tasks
+_core:
+  default_config_hash: kN74osegusTNc5RTj0rHhbrGn3wmpcUdxkomiucuyHM
+id: video_forge_tasks_delete_action
+label: 'Delete video forge taskss'
+type: video_forge_tasks
+plugin: 'entity:delete_action:video_forge_tasks'
+configuration: {  }

@@ -26,6 +26,7 @@ export function useTranscriptionTask({ setStatus, videoId }) {
       }
 
       setTaskId(task_id);
+      console.log('🧠 Task UUID from init:', task_id);
       setPollUrl(poll_url);
 
       setStatus?.('🎧 Extracting audio…');

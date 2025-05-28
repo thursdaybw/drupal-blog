@@ -26,7 +26,7 @@ shadow: 0
 alignment: 2
 marginL: 200
 marginR: 200
-marginV: 300
+marginV: 175
 encoding: 1
 primaryHighlight:
   fontName: 'Anton SC'
@@ -49,7 +49,7 @@ primaryHighlight:
   alignment: '2'
   marginL: '200'
   marginR: '200'
-  marginV: '300'
+  marginV: '175'
   encoding: '1'
 secondaryHighlight:
   fontName: 'Anton SC'
@@ -72,5 +72,5 @@ secondaryHighlight:
   alignment: '2'
   marginL: '200'
   marginR: '200'
-  marginV: '300'
+  marginV: '175'
   encoding: '1'

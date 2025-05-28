@@ -5,8 +5,8 @@ export function useVideoUpload({ setStatus }) {
   const [uploadComplete, setUploadComplete] = useState(false);
   const [uploadError, setUploadError] = useState(null);
 
-const startUpload = (videoFile, videoId) => {
-  if (!videoFile || !videoId) return;
+  const startUpload = (videoFile, videoId, taskId) => {
+    if (!videoFile || !videoId) return;
 
     setStatus?.('📤 Uploading video…');
     setUploadProgress(0);
@@ -15,8 +15,8 @@ const startUpload = (videoFile, videoId) => {
 
     const xhr = new XMLHttpRequest();
 
-    xhr.open('POST', `/video-forge/upload-video?video_id=${videoId}`, true);
-
+    const uploadUrl = `/video-forge/upload-video?video_id=${videoId}` + (taskId ? `&task_id=${taskId}` : '');
+    xhr.open('POST', uploadUrl, true);
     xhr.withCredentials = true;
 
     xhr.upload.onprogress = (e) => {
@@ -48,6 +48,7 @@ const startUpload = (videoFile, videoId) => {
 
     xhr.send(formData);
   };
+
 
   return {
     uploadProgress,

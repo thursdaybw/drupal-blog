@@ -1,0 +1,89 @@
+uuid: 8c2f89cb-d1ae-44b1-b6f3-4c3c4df7f2f1
+langcode: en
+status: true
+dependencies:
+  module:
+  - taxonomy
+  - user
+_core:
+  default_config_hash: ''
+id: book_forge_genre_term
+label: Books by Genre
+module: views
+description: Displays Listable Books tagged with a specific main genre.
+tag: default
+base_table: book_forge_book
+base_field: id
+display:
+  default:
+    id: default
+    display_title: Master
+    display_plugin: default
+    position: 0
+    display_options:
+      access:
+        type: perm
+        options:
+          perm: access content
+      cache:
+        type: tag
+        options: {}
+      query:
+        type: views_query
+        options: {}
+      exposed_form:
+        type: basic
+        options: {}
+      pager:
+        type: mini
+        options:
+          items_per_page: 10
+          offset: 0
+      style:
+        type: default
+        options: {}
+      row:
+        type: entity:book_forge_book
+        options:
+          view_mode: full
+      arguments:
+        field_genre_main:
+          id: field_genre_main
+          table: book_forge_book
+          field: field_genre_main
+          plugin_id: entity_reference
+          default_action: not found
+          title_enable: true
+          title: '{{ arguments.field_genre_main }}'
+          default_argument_type: fixed
+          default_argument_options:
+            argument: ''
+          summary_options:
+            base_path: ''
+            count: true
+          specify_validation: true
+          validate:
+            type: entity:taxonomy_term
+            options:
+              bundles: []
+              access: true
+      filters:
+        status:
+          id: status
+          table: book_forge_book
+          field: status
+          value: '1'
+          plugin_id: boolean
+          group: 1
+  page_1:
+    id: page_1
+    display_title: Page
+    display_plugin: page
+    position: 1
+    display_options:
+      path: book-genre/%
+      menu: {}
+      access:
+        type: perm
+        options:
+          perm: access content

@@ -1,0 +1,5 @@
+book_forge_book.add_form:
+  title: 'Add listable book'
+  route_name: entity.book_forge_book.add_form
+  appears_on:
+    - entity.book_forge_book.collection

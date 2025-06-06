@@ -1,0 +1,7 @@
+entity.book_forge_book.settings:
+  path: 'admin/structure/book-forge-book'
+  defaults:
+    _form: '\Drupal\book_forge\Form\ListableBookSettingsForm'
+    _title: 'Listable Book'
+  requirements:
+    _permission: 'administer book_forge_book'

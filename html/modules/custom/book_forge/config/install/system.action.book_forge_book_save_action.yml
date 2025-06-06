@@ -1,0 +1,10 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - book_forge
+id: book_forge_book_save_action
+label: 'Save listable books'
+type: book_forge_book
+plugin: entity:save_action:book_forge_book
+configuration: {  }

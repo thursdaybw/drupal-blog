@@ -1,0 +1,11 @@
+entity.book_forge_book.settings:
+  title: 'Listable Book'
+  description: 'Configure a Listable Book entity type.'
+  route_name:  entity.book_forge_book.settings
+  parent: system.admin_structure
+
+entity.book_forge_book.collection:
+  title: 'Listable Books'
+  description: 'List of listable books.'
+  route_name: entity.book_forge_book.collection
+  parent: system.admin_content

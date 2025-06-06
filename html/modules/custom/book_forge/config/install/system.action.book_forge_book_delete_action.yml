@@ -1,0 +1,10 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - book_forge
+id: book_forge_book_delete_action
+label: 'Delete listable books'
+type: book_forge_book
+plugin: entity:delete_action:book_forge_book
+configuration: {  }

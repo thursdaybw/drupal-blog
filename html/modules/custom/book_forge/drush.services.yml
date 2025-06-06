@@ -1,0 +1,6 @@
+services:
+  book_forge.drush_commands:
+    class: Drupal\book_forge\Drush\Commands\BookForgeCommands
+    tags:
+      - { name: drush.command }
+

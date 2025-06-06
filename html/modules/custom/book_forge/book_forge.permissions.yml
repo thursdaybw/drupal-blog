@@ -1,0 +1,3 @@
+administer book_forge_book:
+  title: 'Administer listable books'
+  restrict access: true

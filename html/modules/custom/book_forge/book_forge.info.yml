@@ -1,0 +1,5 @@
+name: 'Book Forge'
+type: module
+description: 'Categorises books'
+package: Forge
+core_version_requirement: ^10 || ^11

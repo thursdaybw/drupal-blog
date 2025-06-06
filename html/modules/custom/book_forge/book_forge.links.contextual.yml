@@ -1,0 +1,10 @@
+entity.book_forge_book.edit_form:
+  route_name: entity.book_forge_book.edit_form
+  group: book_forge_book
+  title: 'Edit'
+
+entity.book_forge_book.delete_form:
+  route_name: entity.book_forge_book.delete_form
+  group: book_forge_book
+  title: 'Delete'
+  weight: 10

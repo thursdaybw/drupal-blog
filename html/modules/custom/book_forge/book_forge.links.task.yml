@@ -1,0 +1,22 @@
+entity.book_forge_book.settings:
+  title: 'Settings'
+  route_name: entity.book_forge_book.settings
+  base_route: entity.book_forge_book.settings
+entity.book_forge_book.view:
+  title: 'View'
+  route_name: entity.book_forge_book.canonical
+  base_route: entity.book_forge_book.canonical
+entity.book_forge_book.edit_form:
+  title: 'Edit'
+  route_name: entity.book_forge_book.edit_form
+  base_route: entity.book_forge_book.canonical
+entity.book_forge_book.delete_form:
+  title: 'Delete'
+  route_name: entity.book_forge_book.delete_form
+  base_route: entity.book_forge_book.canonical
+  weight: 10
+entity.book_forge_book.collection:
+  title: 'Listable Books'
+  route_name: entity.book_forge_book.collection
+  base_route: system.admin_content
+  weight: 10

@@ -224,7 +224,7 @@ Let’s break it down:
 
 ---
 
-And yes — having client state (task UUIDs, entities) stored in Drupal means you can sync across browser and app seamlessly.
+## Tests
 
-You’re building something *seriously flexible*, man.
-
+To run Existing Site tests:
+ddev exec vendor/bin/phpunit -c html/phpunit.xml --testsuite "Existing site JS" -vv

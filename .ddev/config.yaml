@@ -11,7 +11,11 @@ database:
     version: "10.4"
 use_dns_when_possible: true
 composer_version: "2"
-web_environment: []
+web_environment:
+  # Override .ddev/config.selenium-standalone-chrome.yaml settings.. To be specific we're removing --headless
+  #- DTT_MINK_DRIVER_ARGS=["chrome",{"goog:chromeOptions":{"args":["--disable-gpu","--no-sandbox","--window-size=1280,800"]}},"http://selenium-chrome:4444/wd/hub"] #actually can't do this here.. so look in my custom override .ddev/config.selenium-standalone-chrome.1.yaml
+
+
 web_extra_exposed_ports:
   - name: webpack
     container_port: 8080

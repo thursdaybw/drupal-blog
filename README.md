@@ -227,4 +227,12 @@ Let’s break it down:
 ## Tests
 
 To run Existing Site tests:
-ddev exec vendor/bin/phpunit -c html/phpunit.xml --testsuite "Existing site JS" -vv
+ddev exec vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/bevansbench_test/tests/src/ExistingSiteJavascript/
+
+Watching existing site tests:
+You don’t actually need to install your own VNC add-on in the web container — the Selenium standalone container that DDEV’s add-on spins up already includes a noVNC endpoint you can watch in your browser. Here’s how to hook into it:
+1. Open the noVNC UI
+
+Before you run your mobile test, point your host browser at:
+
+https://bevansbench.com.ddev.site:7900

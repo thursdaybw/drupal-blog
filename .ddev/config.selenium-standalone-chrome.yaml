@@ -12,7 +12,7 @@ web_environment:
   # Use disable-dev-shm-usage instead of setting shm_usage
   # https://developers.google.com/web/tools/puppeteer/troubleshooting#tips
   # The format of chromeOptions is defined at https://chromedriver.chromium.org/capabilities
-  - MINK_DRIVER_ARGS_WEBDRIVER=[\"chrome\", {\"browserName\":\"chrome\",\"goog:chromeOptions\":{\"w3c\":false,\"args\":[\"--disable-gpu\",\"--headless\", \"--no-sandbox\", \"--disable-dev-shm-usage\"]}}, \"http://selenium-chrome:4444/wd/hub\"]
+  #- MINK_DRIVER_ARGS_WEBDRIVER=[\"chrome\", {\"browserName\":\"chrome\",\"goog:chromeOptions\":{\"w3c\":false,\"args\":[\"--disable-gpu\",\"--headless\", \"--no-sandbox\", \"--disable-dev-shm-usage\"]}}, \"http://selenium-chrome:4444/wd/hub\"]
   # Nightwatch
   - DRUPAL_TEST_BASE_URL=http://web
   - DRUPAL_TEST_DB_URL=mysql://db:db@db/db
@@ -26,4 +26,36 @@ web_environment:
   - DRUPAL_NIGHTWATCH_OUTPUT=reports/nightwatch
   # DTT
   - DTT_BASE_URL=http://web
-  - DTT_MINK_DRIVER_ARGS=[\"chrome\", {\"browserName\":\"chrome\",\"goog:chromeOptions\":{\"w3c\":false,\"args\":[\"--disable-gpu\",\"--headless\", \"--no-sandbox\", \"--disable-dev-shm-usage\"]}}, \"http://selenium-chrome:4444/wd/hub\"]
+
+  # By default, the DDEV Selenium add-on still launches Chrome with `--headless`—even though noVNC/Fluxbox support has been added. In other words, it’s a cargo-cult default that never got updated to match the core use case of local interactive debugging.
+
+  # ### Why the default `--headless` flag makes no sense for DDEV local-dev
+  #
+  # Over time you’ll hear defenders trot out a handful of excuses for shipping headless Chrome by default. None of them hold up once you look at DDEV’s documented purpose and the add-on’s own architecture:
+  #
+  # | **Common Rationalisation**                                | **Why it’s illogical here**                                                                                                                                                       |
+  # |-----------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+  # | **1. “No GUI plumbing required”**                         | The add-on already bundles Fluxbox, noVNC and all X11 libraries—there’s a full GUI stack in place. “Avoiding” it by using headless does nothing to reduce dependencies.            |
+  # | **2. “Lower resource footprint”**                         | In a local-dev environment, the extra CPU/RAM for a headful Chrome window is trivial compared to the productivity cost of invisible tests. The marginal footprint isn’t worth it. |
+  # | **3. “Works without an X server”**                        | By including noVNC and a window manager, the add-on explicitly assumes an X-capable container. Declaring headless as the only option contradicts its own GUI plumbing.            |
+  # | **4. “CI-first mindset”**                                  | DDEV is explicitly designed for _local_ development (its docs advise against CI use). Defaults should prioritize the local-dev experience, not headless CI-only runs.              |
+  # | **5. “Consistency across platforms”**                     | No platform (Linux/Mac/Windows) prevents running a headful container when noVNC is available. Every DDEV user can simply open `https://<project>.ddev.site:7900` to see it.      |
+  #
+  # In short, defaulting to `--headless` in a tool built for interactive local development is a flawed, cargo-cult relic. We strip out `--headless` so our tests are visible in noVNC and we can debug mobile emulation live.
+
+
+  # Since local interactive debugging is our primary use case, we override it here:
+
+  # ```yaml
+  # # .ddev/config.selenium-standalone-chrome.zoverride.yaml
+  # # Remove --headless so Chrome is visible in noVNC.
+  # web_environment:
+  #   - DTT_MINK_DRIVER_ARGS=[
+  #       "chrome",
+  #       {"goog:chromeOptions":{"args":["--disable-gpu","--no-sandbox","--window-size=1280,800"]}},
+  #       "http://selenium-chrome:4444/wd/hub"
+  #     ]
+  #- DTT_MINK_DRIVER_ARGS=[\"chrome\", {\"browserName\":\"chrome\",\"goog:chromeOptions\":{\"w3c\":false,\"args\":[\"--disable-gpu\",\"--no-sandbox\", \"--disable-dev-shm-usage\"]}}, \"http://selenium-chrome:4444/wd/hub\"]
+  #- DTT_MINK_DRIVER_ARGS=[\"chrome\", {\"browserName\":\"chrome\",\"chromeOptions\":{\"mobileEmulation\":{\"deviceName\":\"Pixel 2\"},\"args\":[\"--window-size=412,732\",\"--disable-gpu\",\"--no-sandbox\"]}}, \"http://selenium-chrome:4444/wd/hub\"]
+  - DTT_MINK_DRIVER_ARGS=
+

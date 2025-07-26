@@ -1,0 +1,7 @@
+name: Bevansbench Test
+type: module
+description: Holds our site-wide DTT Selenium E2E tests.
+core_version_requirement: ^10
+package: Testing
+dependencies:
+  - dtt_multi_device_test_base

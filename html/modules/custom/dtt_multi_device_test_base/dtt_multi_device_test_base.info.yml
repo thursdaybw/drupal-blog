@@ -1,5 +1,0 @@
-name:   'DTT Multi-Device Test Base'
-type:   module
-description: 'Reusable base classes for running Drupal Test Traits (DTT) tests in multiple browser/device contexts — such as desktop, mobile, tablet, or anything Selenium supports.'
-core_version_requirement: ^10
-package: Testing

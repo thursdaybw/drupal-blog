@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2fb094bdcb3e04ea8e24413f6bdc4c42",
+    "content-hash": "8ed2e71150d8226ddf6c96aa17e520ed",
     "packages": [
         {
             "name": "asm89/stack-cors",
@@ -11973,6 +11973,41 @@
             "time": "2024-03-03T12:36:25+00:00"
         },
         {
+            "name": "thursdaybw/dtt_multi_device_test_base",
+            "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/thursdaybw/dtt_multi_device_test_base.git",
+                "reference": "351ad81780fb570604d5960c337818030453efb6"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/thursdaybw/dtt_multi_device_test_base/zipball/351ad81780fb570604d5960c337818030453efb6",
+                "reference": "351ad81780fb570604d5960c337818030453efb6",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1",
+                "weitzman/drupal-test-traits": "^2.6"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "thursdaybw\\DttMultiDeviceTestBase\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Reusable base classes for running Drupal Test Traits (DTT) tests in multiple browser/device contexts — such as desktop, mobile, tablet, or anything Selenium supports.",
+            "support": {
+                "source": "https://github.com/thursdaybw/dtt_multi_device_test_base/tree/main",
+                "issues": "https://github.com/thursdaybw/dtt_multi_device_test_base/issues"
+            },
+            "time": "2025-07-26T10:19:48+00:00"
+        },
+        {
             "name": "weitzman/drupal-test-traits",
             "version": "2.6.0",
             "source": {
@@ -12047,6 +12082,7 @@
         "drupal/openai": 15,
         "drupal/openapi_rest": 5,
         "drupal/openapi_ui": 5,
+        "thursdaybw/dtt_multi_device_test_base": 20,
         "thursdaybw/video_forge": 20
     },
     "prefer-stable": true,

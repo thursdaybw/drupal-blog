@@ -1,7 +1,7 @@
 <?php
 namespace Drupal\Tests\bevansbench_test\ExistingSiteJavascript;
 
-use Drupal\Tests\dtt_multi_device_test_base\ExistingSiteJavascript\Base\MobileTestBase;
+use thursdaybw\DttMultiDeviceTestBase\MobileTestBase;
 
 class GenerateCaptionsMobileTest extends MobileTestBase {
   public function testLoginLinkVisible() {

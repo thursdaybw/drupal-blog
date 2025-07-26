@@ -16,7 +16,11 @@
 	{
 	    "type": "vcs",
 	    "url": "git@github.com:thursdaybw/video_forge.git"
-	}
+	},
+      {
+    "type": "vcs",
+    "url": "git@github.com:thursdaybw/dtt_multi_device_test_base.git"
+  }
     ],
     "require": {
         "composer/installers": "^2.0",
@@ -144,6 +148,7 @@
         "behat/mink-selenium2-driver": "^1.4",
         "phpunit/phpunit": "^9",
         "symfony/phpunit-bridge": "^7.3",
+        "thursdaybw/dtt_multi_device_test_base": "dev-main",
         "weitzman/drupal-test-traits": "^2.6"
     }
 }

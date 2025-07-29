@@ -11978,12 +11978,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/thursdaybw/dtt_multi_device_test_base.git",
-                "reference": "351ad81780fb570604d5960c337818030453efb6"
+                "reference": "654b9bf53245687077f51e76217f5dd44ebbbd5a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/thursdaybw/dtt_multi_device_test_base/zipball/351ad81780fb570604d5960c337818030453efb6",
-                "reference": "351ad81780fb570604d5960c337818030453efb6",
+                "url": "https://api.github.com/repos/thursdaybw/dtt_multi_device_test_base/zipball/654b9bf53245687077f51e76217f5dd44ebbbd5a",
+                "reference": "654b9bf53245687077f51e76217f5dd44ebbbd5a",
                 "shasum": ""
             },
             "require": {
@@ -12005,7 +12005,7 @@
                 "source": "https://github.com/thursdaybw/dtt_multi_device_test_base/tree/main",
                 "issues": "https://github.com/thursdaybw/dtt_multi_device_test_base/issues"
             },
-            "time": "2025-07-26T10:19:48+00:00"
+            "time": "2025-07-26T13:42:20+00:00"
         },
         {
             "name": "weitzman/drupal-test-traits",

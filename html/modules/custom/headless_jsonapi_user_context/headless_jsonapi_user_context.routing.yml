@@ -1,0 +1,8 @@
+headless_jsonapi_user_context.me:
+  path: '/jsonapi/me'
+  defaults:
+    _controller: '\Drupal\headless_jsonapi_user_context\Controller\CurrentUserController::handle'
+    _format: 'json'
+  requirements:
+    _permission: 'access content'
+

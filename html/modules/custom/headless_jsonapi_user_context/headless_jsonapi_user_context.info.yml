@@ -1,0 +1,7 @@
+name: 'Headless JSONAPI User Context'
+type: module
+description: 'Exposes the current user’s identity and context to JavaScript frontends via a stable, minimal JSON endpoint.'
+package: Headless
+core_version_requirement: ^10 || ^11
+dependencies:
+  - jsonapi:jsonapi

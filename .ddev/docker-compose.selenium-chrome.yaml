@@ -28,7 +28,7 @@ services:
       # To enable file uploads in E2E tests.
       - ${DDEV_APPROOT}:/var/www/html:r
       - ".:/mnt/ddev_config"
-
+      - ${DDEV_APPROOT}/html/modules/custom/bevansbench_test/tests/fixtures:/fixtures:ro
   web:
     links:
       - selenium-chrome

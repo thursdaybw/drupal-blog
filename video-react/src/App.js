@@ -136,6 +136,19 @@ function App() {
     setStatus('Provisioning server...');
   };
 
+  /*
+  const inputRef = useRef(null);
+  useEffect(() => {
+    window._test_triggerReactUpload = () => {
+      const input = inputRef.current;
+      if (input) {
+        const event = new Event('change', { bubbles: true });
+        input.dispatchEvent(event);
+      }
+    };
+  }, []);
+  */
+
   return (
     <div style={{ padding: '2rem' }}>
     <h1>FFmpeg.wasm React Demo</h1>
@@ -143,10 +156,17 @@ function App() {
     <input
     type="file"
     accept="video/*"
+    name="video-upload"
+    id="video-upload"
     onChange={e => {
       const file = e.target.files[0];
       if (file) {
-        const video_id = crypto.randomUUID();
+        const video_id = (crypto.randomUUID?.() || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+          const r = Math.random() * 16 | 0;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        }));
+
         fileRef.current = file;
 
         // 🧠 Previously we used URL.createObjectURL(file) to generate a blob URL for video playback:

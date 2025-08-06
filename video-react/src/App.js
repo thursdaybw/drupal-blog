@@ -167,6 +167,15 @@ function App() {
           return v.toString(16);
         }));
 
+        // ✅ Test hook: expose UUID for Selenium if ?test=1
+        if (new URLSearchParams(window.location.search).get('test') === '1') {
+          const testDiv = document.createElement('div');
+          testDiv.id = 'video-id';
+          testDiv.dataset.uuid = video_id;
+          testDiv.style.display = 'none';
+          document.body.appendChild(testDiv);
+        }
+
         fileRef.current = file;
 
         // 🧠 Previously we used URL.createObjectURL(file) to generate a blob URL for video playback:

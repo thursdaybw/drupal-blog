@@ -46,6 +46,7 @@
         "drupal/restui": "^1.21",
         "drupal/simple_oauth": "^5.2",
         "drupal/vani": "^10.0",
+        "drupaltest/queue-runner-trait": "^1.2",
         "drush/drush": "^12.1",
         "league/commonmark": "^1.0",
         "thursdaybw/video_forge": "dev-main",

@@ -1,10 +1,13 @@
 <?php
 namespace Drupal\Tests\bevansbench_test\ExistingSiteJavascript;
 
+use DrupalTest\QueueRunnerTrait\QueueRunnerTrait;
 use thursdaybw\DttMultiDeviceTestBase\MobileTestBase;
 use Symfony\Component\HttpFoundation\Request;
 
 class GenerateCaptionsMobileTest extends MobileTestBase {
+
+  use QueueRunnerTrait;
 
   public function testLoginLinkVisible() {
     $this->visit('/');
@@ -39,7 +42,7 @@ class GenerateCaptionsMobileTest extends MobileTestBase {
   }
 
   public function testSuccessfulVideoUploadCreatesMedia(): void {
-
+/*
     $user = \Drupal::entityTypeManager()
       ->getStorage('user')
       ->loadByProperties(['name' => 'bevan']);
@@ -47,9 +50,20 @@ class GenerateCaptionsMobileTest extends MobileTestBase {
     $this->assertNotNull($user);
 
     $this->drupalLogin($user);
+ */
+    $this->visit('https://www.bevansbench.com/user/login');
+
+    $this->submitForm([
+      'name' => 'admin',
+      'pass' => 'LeiYoh6a',
+    ], 'Log in');
+
+    $this->assertSession()->addressEquals('/user/1');
+    $this->assertSession()->pageTextContains('Member for');
 
     // 2. Visit the video upload page in test mode (?test=1 enables UUID hook).
-    $this->visit('/video-react?test=1');
+    //$this->visit('/video-react?test=1');
+    $this->visit('https://www.bevansbench.com/video-react?test=1');
 
     // 3. Wait for file input to appear.
     $this->assertSession()->waitForElementVisible('css', '#video-upload');
@@ -59,7 +73,8 @@ class GenerateCaptionsMobileTest extends MobileTestBase {
 
     // 5. Wait for upload status message.
     $this->assertSession()->waitForText('video upload complete', 10000);
-    sleep(5);
+
+    $this->assertSession()->waitForText('Upload Progress: 100%', 10000);
 
     // 6. Extract the generated video_id from the React DOM test hook.
     $video_id = $this->getSession()->evaluateScript("document.getElementById('video-id')?.dataset.uuid");
@@ -86,6 +101,44 @@ class GenerateCaptionsMobileTest extends MobileTestBase {
       $linked_media = $task->get('field_media_video_file')->entity;
       $this->assertEquals($media->id(), $linked_media->id(), 'Media entity linked to video_forge_task.');
     }
+
+
+    $this->getSession()->getPage()->pressButton('Generate Captions');
+
+    $this->assertSession()->waitForText('Waiting for server… (status: queued)', 10000);
+
+
+    $queue = \Drupal::service('queue')->get('video_forge_provision');
+
+    $count = $queue->numberOfItems();
+
+    if (!is_int($count)) {
+      throw new \RuntimeException('numberOfItems() returned non-int: ' . print_r($count, true));
+    }
+
+    $this->assertGreaterThan(0, $count, 'Queue has items');
+
+    $connection = \Drupal::service('database');
+    $items = $connection->select('queue', 'q')
+                        ->fields('q')
+                        ->condition('name', 'video_forge_provision')
+                        ->execute()
+                        ->fetchAll();
+    //throw new \RuntimeException('Queue contains ' . count($items) . ' items');
+    /*
+    foreach ($items as $item) {
+      throw new \RuntimeException(print_r($item, true));
+    }
+     */
+
+    $this->runQueue('video_forge_provision');
+    //$this->exec('drush queue-run video_forge_provision');
+
+    $this->assertSession()->waitForText('✅ Transcription complete!', 60000);
+    sleep(60);
+    //$this->assertSession()->waitForText('✅ Render complete!', 120000);
+    //$this->runQueue('video_forge_caption_generation');
+    //$this->runQueue('video_forge_caption_rendering');
 
     // 🔄 10. Clean up: delete media, file, and task (if created).
     $media->delete();

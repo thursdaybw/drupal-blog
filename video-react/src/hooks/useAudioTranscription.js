@@ -49,28 +49,25 @@ export function useAudioTranscription({ setStatus }) {
   };
 
   const uploadAudio = async (blob, task_id) => {
-    if (!blob || !task_id) return;
-
-    setStatus?.('Uploading audio…');
-
-    try {
-      const formData = new FormData();
-      formData.append('file', blob, 'audio.mp3');
-
-      const res = await fetch(`/video-forge/upload-audio?task_id=${task_id}`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-
+     if (!blob || !task_id) return;
+     setStatus?.('Uploading audio…');
+     try {
+       const formData = new FormData();
+       formData.append('file', blob, 'audio.mp3');
+       const res = await fetch(`/video-forge/upload-audio?task_id=${task_id}`, {
+         method: 'POST',
+         body: formData,
+         credentials: 'include',
+       });
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      setStatus?.('Upload complete!');
+       setStatus?.('Upload complete!');
+      return true;
     } catch (err) {
-      console.error('🛑 uploadAudio error:', err);
-      setStatus?.('Upload failed.');
-    }
-  };
-
+       console.error('🛑 uploadAudio error:', err);
+       setStatus?.('Upload failed.');
+      return false;
+     }
+   };
   return { extractAudio, uploadAudio };
 }
 

@@ -1,3 +1,19 @@
+offsmall_mobile:
+  - "chrome"
+  - chromeOptions:
+      mobileEmulation: { deviceName: "Pixel 2" }
+      args:
+        - "--window-size=412,732"
+        - "--disable-gpu"
+        - "--no-sandbox"
+        - "--enable-features=SharedArrayBuffer"
+        - "--js-flags=--shared-array-buffer"
+        - "--disable-features=CrossOriginOpenerPolicy,CrossOriginEmbedderPolicy"
+        - "--no-sandbox"
+        - "--disable-dev-shm-usage"
+        #- "--user-data-dir=/tmp/chrome-user"
+  - "http://selenium-chrome:4444/wd/hub"
+
 small_mobile:
   - "chrome"
   - chromeOptions:
@@ -10,4 +26,5 @@ desktop:
   - chromeOptions:
       args: ["--window-size=1920,1080", "--disable-gpu", "--no-sandbox"]
   - "http://selenium-chrome:4444/wd/hub"
+
 

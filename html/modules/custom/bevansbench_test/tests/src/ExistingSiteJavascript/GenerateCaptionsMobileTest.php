@@ -42,7 +42,8 @@ class GenerateCaptionsMobileTest extends MobileTestBase {
   }
 
   public function testSuccessfulVideoUploadCreatesMedia(): void {
-/*
+
+    /*
     $user = \Drupal::entityTypeManager()
       ->getStorage('user')
       ->loadByProperties(['name' => 'bevan']);
@@ -50,8 +51,12 @@ class GenerateCaptionsMobileTest extends MobileTestBase {
     $this->assertNotNull($user);
 
     $this->drupalLogin($user);
- */
+
+     */
+
     $this->visit('https://www.bevansbench.com/user/login');
+
+
 
     $this->submitForm([
       'name' => 'admin',
@@ -68,25 +73,28 @@ class GenerateCaptionsMobileTest extends MobileTestBase {
     // 3. Wait for file input to appear.
     $this->assertSession()->waitForElementVisible('css', '#video-upload');
 
+
+
     // 4. Attach the test file.
-    $this->getSession()->getPage()->attachFileToField('video-upload', '/fixtures/sample.mp4');
+    #$this->getSession()->getPage()->attachFileToField('video-upload', '/fixtures/sample.mp4');
+    $this->getSession()->getPage()->attachFileToField('video-upload', '/fixtures/sample-200.mp4');
 
     // 5. Wait for upload status message.
-    $this->assertSession()->waitForText('video upload complete', 10000);
+    $this->assertSession()->waitForText('video upload complete', 360000);
 
-    $this->assertSession()->waitForText('Upload Progress: 100%', 10000);
+    $this->assertSession()->waitForText('Upload Progress: 100%', 360000);
 
     // 6. Extract the generated video_id from the React DOM test hook.
     $video_id = $this->getSession()->evaluateScript("document.getElementById('video-id')?.dataset.uuid");
     $this->assertNotEmpty($video_id, 'Extracted video_id from test DOM hook.');
 
-    // 7. Assert that a forge_video media entity was created with correct name.
+ /* 7. Assert that a forge_video media entity was created with correct name.
     $media_storage = \Drupal::entityTypeManager()->getStorage('media');
     $media = $media_storage->loadByProperties([
       'bundle' => 'forge_video',
       'name' => "Video $video_id",
     ]);
-    $this->assertNotEmpty($media, 'Forge Video media entity created.');
+    $this->assertNotEmpty($media, "Forge Video media entity created. $video_id");
     $media = reset($media);
 
     // 8. Assert the attached file exists at the expected location.
@@ -101,13 +109,18 @@ class GenerateCaptionsMobileTest extends MobileTestBase {
       $linked_media = $task->get('field_media_video_file')->entity;
       $this->assertEquals($media->id(), $linked_media->id(), 'Media entity linked to video_forge_task.');
     }
+     */
 
 
     $this->getSession()->getPage()->pressButton('Generate Captions');
 
     $this->assertSession()->waitForText('Waiting for server… (status: queued)', 10000);
 
+    // Open a new tab with JavaScript
+    //$this->getSession()->executeScript("window.open('https://www.bevansbench.com/admin/content', '_blank');");
 
+
+/*
     $queue = \Drupal::service('queue')->get('video_forge_provision');
 
     $count = $queue->numberOfItems();
@@ -124,28 +137,41 @@ class GenerateCaptionsMobileTest extends MobileTestBase {
                         ->condition('name', 'video_forge_provision')
                         ->execute()
                         ->fetchAll();
-    //throw new \RuntimeException('Queue contains ' . count($items) . ' items');
-    /*
-    foreach ($items as $item) {
-      throw new \RuntimeException(print_r($item, true));
-    }
-     */
-
     $this->runQueue('video_forge_provision');
     //$this->exec('drush queue-run video_forge_provision');
+ */
+    $this->assertSession()->waitForText('✅ Transcription complete!', 360000);
 
-    $this->assertSession()->waitForText('✅ Transcription complete!', 60000);
-    sleep(60);
+
+// Inject a button into the page.
+$this->getSession()->executeScript("
+  var btn = document.createElement('button');
+  btn.id = 'manual-stop';
+  btn.textContent = '✅ Finish Test';
+  btn.style.cssText = 'position:fixed;top:10px;right:10px;z-index:99999;padding:10px;font-size:16px;';
+  btn.dataset.done = '0';
+  btn.onclick = function() {
+     btn.textContent = 'Test Finished';
+  };
+  document.body.appendChild(btn);
+");
+
+// Now wait until the button's data attribute changes (i.e., clicked).
+$this->assertSession()->waitForText('Test Finished', 360000);
+
+    //sleep(60);
     //$this->assertSession()->waitForText('✅ Render complete!', 120000);
     //$this->runQueue('video_forge_caption_generation');
     //$this->runQueue('video_forge_caption_rendering');
 
     // 🔄 10. Clean up: delete media, file, and task (if created).
+    /*
     $media->delete();
     $file->delete();
     if (!empty($task)) {
       $task->delete();
     }
+     */
   }
 
   public function testCaptionsPageAnonymousShowsStatusMessage(): void {

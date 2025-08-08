@@ -19,7 +19,17 @@ export function useAudioTranscription({ setStatus }) {
   const extractAudio = async (file) => {
     try {
       setStatus?.('Loading FFmpeg…');
-      await ffmpeg.load();
+
+      ffmpeg.setLogger(({ type, message }) => {
+        console.log(`[FFmpeg ${type}] ${message}`);
+      });
+
+      try {
+        await ffmpeg.load();
+        console.log('✅ ffmpeg loaded');
+      } catch (e) {
+        console.error('❌ ffmpeg failed to load', e);
+      }
 
       const inputData = await fetchFile(file);
       await ffmpeg.writeFile('in.mp4', inputData);

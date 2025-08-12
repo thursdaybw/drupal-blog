@@ -1,11 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
+import { useRef } from 'react';
 
 export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = true }) {
   const errorLocked = useRef(false);
 
   useEffect(() => {
-    // reset sticky error when deps change
-    errorLocked.current = false;
 
     if (!enabled || !pollUrl) return;
 
@@ -19,23 +18,20 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
 
         switch (status) {
           case 'error':
-            // make error sticky and stop polling
-            errorLocked.current = true;
             setStatus?.(`❌ Server error: ${error_message || 'Unknown error'} (status: ${status})`);
+            errorLocked.current = true;            // <-- make error sticky
             shouldContinue = false;
             break;
 
           case 'rendering':
-            if (!errorLocked.current) {
-              setStatus?.(`Rendering in progress… (status: ${status})`);
-            }
+            setStatus?.(`Rendering in progress… (status: ${status})`);
+            if (errorLocked.current) return;
             break;
 
           case 'render_complete':
             if (render_url) {
-              if (!errorLocked.current) {
-                setStatus?.(`✅ Render complete! (status: ${status})`);
-              }
+              if (errorLocked.current) return;
+              setStatus?.(`✅ Render complete! (status: ${status})`);
               onComplete?.({
                 assUrl: ass_url || null,
                 renderUrl: render_url || null,
@@ -47,24 +43,24 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
 
           default:
             if (transcript_ready && transcript_url) {
-              if (!errorLocked.current) {
-                setStatus?.(`✅ Transcription complete! (status: ${status})`);
-              }
+              if (errorLocked.current) return;
+              setStatus?.(`✅ Transcription complete! (status: ${status})`);
               onComplete?.({
                 assUrl: ass_url || null,
                 renderUrl: render_url || null,
                 transcriptUrl: transcript_url || null,
               });
             } else {
-              if (!errorLocked.current) {
-                console.log('[poll]', status);
-                setStatus?.(`Waiting for server… (status: ${status})`);
-              }
+              console.log('[poll]', status);
+              setStatus?.(`Waiting for server… (status: ${status})`);
             }
         }
+
+
       } catch (err) {
         console.warn('[poll] failed:', err);
-        if (!errorLocked.current) setStatus?.('⚠️ Polling failed');
+        setStatus?.('⚠️  Polling failed');
+        if (!errorLocked.current) setStatus?.('⚠️  Polling failed');
       }
 
       if (shouldContinue) {

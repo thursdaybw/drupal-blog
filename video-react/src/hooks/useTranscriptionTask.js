@@ -12,28 +12,20 @@ export function useTranscriptionTask({ setStatus, videoId }) {
   const startTranscription = async (videoFile) => {
     setInProgress(true);
     setError(null);
-
     try {
       setStatus?.('🔧 Initializing task...');
-      const res = await fetch(`/video-forge/transcription-task-init?video_id=${videoId}`, {
-        credentials: 'include',
-      });
+      const res = await fetch(`/video-forge/transcription-task-init?video_id=${videoId}`, { credentials: 'include' });
       const json = await res.json();
       const { task_id, poll_url } = json;
-
-      if (!task_id || !poll_url) {
-        throw new Error('Task init failed');
-      }
-
-      setTaskId(task_id);
-      console.log('🧠 Task UUID from init:', task_id);
-      setPollUrl(poll_url);
+      if (!task_id || !poll_url) throw new Error('Task init failed');
+      setTaskId(task_id); setPollUrl(poll_url);
 
       setStatus?.('🎧 Extracting audio…');
       const audioBlob = await extractAudio(videoFile);
-
+      if (!audioBlob) throw new Error('Audio extraction failed');
       setStatus?.('📤 Uploading audio...');
-      await uploadAudio(audioBlob, task_id);
+      const ok = await uploadAudio(audioBlob, task_id);
+      if (!ok) { setStatus?.('❌ Upload failed — not provisioning'); return; }
 
       setStatus?.('🚀 Triggering transcription...');
       const provisionRes = await fetch(

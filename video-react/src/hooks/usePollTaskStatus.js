@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
+import { useRef } from 'react';
 
 export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = true }) {
+  const errorLocked = useRef(false);
 
   useEffect(() => {
 
@@ -17,15 +19,18 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
         switch (status) {
           case 'error':
             setStatus?.(`❌ Server error: ${error_message || 'Unknown error'} (status: ${status})`);
+            errorLocked.current = true;            // <-- make error sticky
             shouldContinue = false;
             break;
 
           case 'rendering':
             setStatus?.(`Rendering in progress… (status: ${status})`);
+            if (errorLocked.current) return;
             break;
 
           case 'render_complete':
             if (render_url) {
+              if (errorLocked.current) return;
               setStatus?.(`✅ Render complete! (status: ${status})`);
               onComplete?.({
                 assUrl: ass_url || null,
@@ -38,6 +43,7 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
 
           default:
             if (transcript_ready && transcript_url) {
+              if (errorLocked.current) return;
               setStatus?.(`✅ Transcription complete! (status: ${status})`);
               onComplete?.({
                 assUrl: ass_url || null,
@@ -54,6 +60,7 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
       } catch (err) {
         console.warn('[poll] failed:', err);
         setStatus?.('⚠️  Polling failed');
+        if (!errorLocked.current) setStatus?.('⚠️  Polling failed');
       }
 
       if (shouldContinue) {

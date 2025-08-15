@@ -17,7 +17,6 @@ function App() {
   const [videoFile, setVideoFile]         = useState(null);
   const [videoId, setVideoId]             = useState(null);
   const [renderUrl, setRenderUrl]         = useState(null);
-  const [transcriptUrl, setTranscriptUrl] = useState(null);
   const [transcriptText, setTranscriptText] = useState('');
 
   const { extractAudio, uploadAudio } = useAudioTranscription({
@@ -96,31 +95,13 @@ function App() {
   usePollTaskStatus({
     pollUrl,
     setStatus: setStatus,
-    onComplete: ({ assUrl, renderUrl, transcriptUrl }) => {
+    onComplete: ({ assUrl, renderUrl, transcriptText }) => {
       setAssUrl(assUrl);
       setRenderUrl(renderUrl);
-      setTranscriptUrl(transcriptUrl); // <-- same pattern
+      setTranscriptText(transcriptText || '');
     },
     enabled: Boolean(pollUrl),
   });
-
-  useEffect(() => {
-    if (!transcriptUrl) return;
-
-    const fetchTranscript = async () => {
-      try {
-        const res = await fetch(transcriptUrl);
-        const json = await res.json();
-        setTranscriptText(
-          json.segments?.map(seg => seg.text.trim()).join(' ') || ''
-        );
-      } catch (err) {
-        console.warn('❌ Failed to fetch transcript JSON:', err);
-      }
-    };
-
-    fetchTranscript();
-  }, [transcriptUrl]);
 
   useSubtitleOverlay({
     assUrl,

@@ -15,7 +15,7 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
       try {
         const res = await fetch(pollUrl);
         const json = await res.json();
-        const { status, transcript_ready, transcript_url, ass_url, render_url, error_message } = json;
+        const { status, transcript_ready, transcript_text, ass_url, render_url, error_message } = json;
 
         switch (status) {
           case 'error':
@@ -34,19 +34,19 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
               onComplete?.({
                 assUrl: ass_url || null,
                 renderUrl: render_url || null,
-                transcriptUrl: transcript_url || null,
+                transcriptText: transcript_text|| null,
               });
               shouldContinue = false;
             }
             break;
 
           default:
-            if (transcript_ready && transcript_url) {
+            if (transcript_ready && transcript_text) {
               if (!errorLocked.current) setStatus?.(`✅ Transcription complete! (status: ${status})`);
               onComplete?.({
                 assUrl: ass_url || null,
                 renderUrl: render_url || null,
-                transcriptUrl: transcript_url || null,
+                transcriptText: transcript_text || null,
               });
             } else {
               if (!errorLocked.current) {

@@ -1,15 +1,15 @@
+// usePollTaskStatus.js
 import { useEffect, useRef } from 'react';
 
 export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = true }) {
   const errorLocked = useRef(false);
 
   useEffect(() => {
-    // reset sticky error when deps change
     errorLocked.current = false;
-
     if (!enabled || !pollUrl) return;
 
     let shouldContinue = true;
+    let timeoutId;
 
     const poll = async () => {
       try {
@@ -19,23 +19,18 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
 
         switch (status) {
           case 'error':
-            // make error sticky and stop polling
             errorLocked.current = true;
             setStatus?.(`❌ Server error: ${error_message || 'Unknown error'} (status: ${status})`);
             shouldContinue = false;
             break;
 
           case 'rendering':
-            if (!errorLocked.current) {
-              setStatus?.(`Rendering in progress… (status: ${status})`);
-            }
+            if (!errorLocked.current) setStatus?.(`Rendering in progress… (status: ${status})`);
             break;
 
           case 'render_complete':
             if (render_url) {
-              if (!errorLocked.current) {
-                setStatus?.(`✅ Render complete! (status: ${status})`);
-              }
+              if (!errorLocked.current) setStatus?.(`✅ Render complete! (status: ${status})`);
               onComplete?.({
                 assUrl: ass_url || null,
                 renderUrl: render_url || null,
@@ -47,9 +42,7 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
 
           default:
             if (transcript_ready && transcript_url) {
-              if (!errorLocked.current) {
-                setStatus?.(`✅ Transcription complete! (status: ${status})`);
-              }
+              if (!errorLocked.current) setStatus?.(`✅ Transcription complete! (status: ${status})`);
               onComplete?.({
                 assUrl: ass_url || null,
                 renderUrl: render_url || null,
@@ -67,15 +60,20 @@ export function usePollTaskStatus({ pollUrl, setStatus, onComplete, enabled = tr
         if (!errorLocked.current) setStatus?.('⚠️ Polling failed');
       }
 
-      if (shouldContinue) {
-        setTimeout(poll, 3000);
-      }
+      if (shouldContinue) timeoutId = setTimeout(poll, 3000);
     };
+
+    const onVisibilityChange = () => {
+      if (!document.hidden && shouldContinue) poll(); // snap back on wake
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     poll();
 
     return () => {
       shouldContinue = false;
+      clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [pollUrl, enabled, setStatus, onComplete]);
 }

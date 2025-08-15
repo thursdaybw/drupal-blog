@@ -10,15 +10,13 @@ export function useAudioTranscription({ setStatus }) {
     })
   );
 
-  const ffmpeg = ffmpegRef.current;
-
-  ffmpeg.on('log', ({ message }) => {
-    console.log('[ffmpeg]', message);
-  });
-
   const extractAudio = async (file) => {
     try {
+
       setStatus?.('Loading FFmpeg…');
+
+      const ffmpeg = new FFmpeg({ log: true, corePath: '/video-react/ffmpeg-core/ffmpeg-core.js' });
+      ffmpeg.on('log', ({ message }) => console.log('[ffmpeg]', message));
 
       try {
         await ffmpeg.load();

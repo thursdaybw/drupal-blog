@@ -1,0 +1,8 @@
+.git
+.ddev
+node_modules
+vendor
+html/sites/default/files/**
+!html/sites/default/files/.htaccess
+!html/sites/default/files/README.txt
+

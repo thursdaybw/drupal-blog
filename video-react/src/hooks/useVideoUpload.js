@@ -5,7 +5,7 @@ export function useVideoUpload({ setStatus }) {
   const [uploadComplete, setUploadComplete] = useState(false);
   const [uploadError, setUploadError] = useState(null);
 
-  const startUpload = (videoFile, videoId, taskId) => {
+  const startUpload = async (videoFile, videoId, taskId) => {
     console.log('[useVideoUpload] startUpload called');
     console.log('File:', videoFile?.name, videoFile?.size, videoFile?.type);
     console.log('videoId:', videoId, 'taskId:', taskId);
@@ -20,56 +20,50 @@ export function useVideoUpload({ setStatus }) {
     setUploadComplete(false);
     setUploadError(null);
 
-    const xhr = new XMLHttpRequest();
+    try {
+      const chunkSize = 5 * 1024 * 1024; // 5MB
+      const uploadId = (crypto.randomUUID?.() || String(Date.now()));
+      const total = Math.ceil(videoFile.size / chunkSize);
+      console.log('[useVideoUpload] Using chunked upload. totalChunks=', total, 'uploadId=', uploadId);
 
-    const uploadUrl = `/video-forge/upload-video?video_id=${videoId}` + (taskId ? `&task_id=${taskId}` : '');
-    console.log('[useVideoUpload] Opening POST to', uploadUrl);
-    xhr.open('POST', uploadUrl, true);
-    xhr.withCredentials = true;
+      for (let index = 0; index < total; index++) {
+        const start = index * chunkSize;
+        const end = Math.min(start + chunkSize, videoFile.size);
+        const blob = videoFile.slice(start, end);
 
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 100);
-        console.log('[useVideoUpload] Progress:', e.loaded, '/', e.total, `(${percent}%)`);
+        console.log(`[useVideoUpload] Preparing chunk ${index + 1}/${total}, bytes ${start}-${end}`);
+
+        const formData = new FormData();
+        formData.append('file', blob, `part-${index}.bin`);
+
+        let uploadUrl = `/video-forge/upload-video?video_id=${videoId}&upload_id=${uploadId}&index=${index}&total=${total}`;
+        if (taskId) uploadUrl += `&task_id=${taskId}`;
+
+        console.log('[useVideoUpload] Sending chunk to', uploadUrl);
+
+        const res = await fetch(uploadUrl, { method: 'POST', body: formData, credentials: 'include' });
+
+        if (!res.ok) {
+          const msg = `❌ Upload failed on chunk ${index + 1}/${total} with status ${res.status}`;
+          console.error('[useVideoUpload]', msg);
+          setUploadError(msg);
+          setStatus?.(msg);
+          return;
+        }
+
+        const percent = Math.round(((index + 1) / total) * 100);
+        console.log('[useVideoUpload] Progress:', percent, '%');
         setUploadProgress(percent);
-      } else {
-        console.log('[useVideoUpload] Progress event: length not computable');
       }
-    };
 
-    xhr.onload = () => {
-      console.log('[useVideoUpload] onload fired. Status:', xhr.status);
-      if (xhr.status >= 200 && xhr.status < 300) {
-        setStatus?.('✅ Video upload complete.');
-        setUploadComplete(true);
-      } else {
-        const msg = `❌ Upload failed with status ${xhr.status}`;
-        setUploadError(msg);
-        setStatus?.(msg);
-      }
-    };
-
-    xhr.onerror = () => {
-      console.error('[useVideoUpload] onerror fired');
+      setStatus?.('✅ Video upload complete.');
+      setUploadComplete(true);
+    } catch (err) {
+      console.error('[useVideoUpload] Upload error', err);
       const msg = '❌ Upload error';
       setUploadError(msg);
       setStatus?.(msg);
-    };
-
-    xhr.onabort = () => {
-      console.warn('[useVideoUpload] onabort fired');
-    };
-
-    xhr.ontimeout = () => {
-      console.error('[useVideoUpload] ontimeout fired');
-    };
-
-    const formData = new FormData();
-    console.log('[useVideoUpload] Appending file to FormData');
-    formData.append('file', videoFile, videoFile.name);
-
-    console.log('[useVideoUpload] Sending XHR');
-    xhr.send(formData);
+    }
   };
 
   return {

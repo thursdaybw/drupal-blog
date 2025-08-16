@@ -16,11 +16,11 @@ web_environment:
   #- DTT_MINK_DRIVER_ARGS=["chrome",{"goog:chromeOptions":{"args":["--disable-gpu","--no-sandbox","--window-size=1280,800"]}},"http://selenium-chrome:4444/wd/hub"] #actually can't do this here.. so look in my custom override .ddev/config.selenium-standalone-chrome.1.yaml
 
 
-web_extra_exposed_ports:
-  - name: webpack
-    container_port: 8080
-    http_port: 8080
-    https_port: 8081
+#web_extra_exposed_ports:
+#  - name: webpack
+#    container_port: 8080
+#    http_port: 8080
+#    https_port: 8081
 web_build:
   - Dockerfile.whisper
   - Dockerfile.melt

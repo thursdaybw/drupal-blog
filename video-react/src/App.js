@@ -139,7 +139,7 @@ function App() {
     accept="video/*"
     name="video-upload"
     id="video-upload"
-    onChange={e => {
+    onChange={async e => {
       const file = e.target.files[0];
       if (file) {
         const video_id = (crypto.randomUUID?.() || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -159,43 +159,87 @@ function App() {
 
         fileRef.current = file;
 
-        // 🧠 Previously we used URL.createObjectURL(file) to generate a blob URL for video playback:
-        // const url = URL.createObjectURL(file);
-        // setVideoURL(url);
-        //
-        // This works well in most environments, but on mobile (especially Chrome on Android),
-        // it leads to instability when used alongside SubtitlesOctopus.
-        //
-        // SubtitlesOctopus loads the video into a Web Worker for subtitle rendering,
-        // which tries to access the same blob URL as the <video> element.
-        // On memory-constrained devices or under heavy load, this dual access causes
-        // Chrome to revoke or invalidate the blob mid-stream, triggering:
-        //   net::ERR_UPLOAD_FILE_CHANGED
-        //
-        // 🎯 To solve this, we now use FileReader to convert the video file to a base64-encoded
-        // data URI (data:video/mp4;base64,...). This ensures both the video element and
-        // SubtitlesOctopus can safely access the same source without memory collisions.
-        //
-        // 🔻 Drawbacks of this approach:
-        // - Base64 encoding increases memory usage (~33% larger than the original file)
-        // - Longer load time for large videos due to encoding delay
-        // - No revocation possible (data URIs persist for the page lifecycle)
-        //
-        // ✅ However, it's far more stable for mobile testing and avoids the playback crash.
-        //
-        // 🔄 If we switch away from SubtitlesOctopus (e.g. use native <track> subtitles,
-        // or handle caption rendering manually), we can safely revert to:
-        //   const url = URL.createObjectURL(file);
-        //   setVideoURL(url);
+        try {
+          // ---- OPFS SNAPSHOT (stable copy, no full-RAM load) ----
+          if (navigator?.storage?.getDirectory) {
+            const root = await navigator.storage.getDirectory();
+            const fh = await root.getFileHandle(`video-${video_id}.tmp`, { create: true });
+            const writable = await fh.createWritable();
+            await file.stream().pipeTo(writable); // stream copy to OPFS
+            const opfsFile = await (await fh.getFile()).slice(0, file.size, file.type);
+            // -------------------------------------------------------
 
-        const reader = new FileReader();
-        reader.onload = () => {
-          setVideoFile(file);
-          setVideoId(video_id);
-          setVideoURL(reader.result); // Base64 data URI (e.g. data:video/mp4;base64,...)
-          startUpload(file, video_id);
-        };
-        reader.readAsDataURL(file);
+            // 🧠 Previously we used URL.createObjectURL(file) to generate a blob URL for video playback:
+            // const url = URL.createObjectURL(file);
+            // setVideoURL(url);
+            //
+            // This works well in most environments, but on mobile (especially Chrome on Android),
+            // it leads to instability when used alongside SubtitlesOctopus.
+            //
+            // SubtitlesOctopus loads the video into a Web Worker for subtitle rendering,
+            // which tries to access the same blob URL as the <video> element.
+            // On memory-constrained devices or under heavy load, this dual access causes
+            // Chrome to revoke or invalidate the blob mid-stream, triggering:
+            //   net::ERR_UPLOAD_FILE_CHANGED
+            //
+            // 🎯 To solve this, we now use FileReader to convert the video file to a base64-encoded
+            // data URI (data:video/mp4;base64,...). This ensures both the video element and
+            // SubtitlesOctopus can safely access the same source without memory collisions.
+            //
+            // 🔻 Drawbacks of this approach:
+            // - Base64 encoding increases memory usage (~33% larger than the original file)
+            // - Longer load time for large videos due to encoding delay
+            // - No revocation possible (data URIs persist for the page lifecycle)
+            //
+            // ✅ However, it's far more stable for mobile testing and avoids the playback crash.
+            //
+            // 🔄 If we switch away from SubtitlesOctopus (e.g. use native <track> subtitles,
+            // or handle caption rendering manually), we can safely revert to:
+            //   const url = URL.createObjectURL(file);
+            //   setVideoURL(url);
+            // 🗄️ We’ve also added support for OPFS (Origin Private File System):
+            // - Instead of holding the file entirely in RAM (via Blob or base64),
+            //   we can persist it directly into the browser’s private filesystem.
+            // - This gives us stable random-access reads/writes, which avoids
+            //   Chrome’s “file handle changed” errors on Android when streaming.
+            // - OPFS is backed by disk, not memory, so large videos won’t blow out
+            //   RAM alongside ffmpeg.wasm.
+            // - Files survive for the lifetime of the origin (until cleared by the
+            //   browser), making it safer for long-running uploads and rendering.
+            const reader = new FileReader();
+            reader.onload = () => {
+              setVideoFile(opfsFile);           // use stable OPFS file everywhere
+              setVideoId(video_id);
+              setVideoURL(reader.result);       // keep your existing data-URI preview
+              startUpload(opfsFile, video_id);  // upload from OPFS (stable)
+            };
+            reader.readAsDataURL(opfsFile);     // preview from OPFS (not picker handle)
+            return; // done via OPFS path
+          }
+
+          // If OPFS API not present, fall through to fallback.
+          console.warn('OPFS not available; falling back to FileReader/data URI on original file.');
+          const reader = new FileReader();
+          reader.onload = () => {
+            setVideoFile(file);              // use original picker file
+            setVideoId(video_id);
+            setVideoURL(reader.result);      // existing data-URI preview
+            startUpload(file, video_id);     // upload from original file
+          };
+          reader.readAsDataURL(file);
+        } catch (opfsErr) {
+          // Any OPFS errors (e.g., iOS/Firefox quirks) → fallback
+          console.warn('OPFS attempt failed; using fallback. Error:', opfsErr);
+          const reader = new FileReader();
+          reader.onload = () => {
+            setVideoFile(file);              // use original picker file
+            setVideoId(video_id);
+            setVideoURL(reader.result);      // existing data-URI preview
+            startUpload(file, video_id);     // upload from original file
+          };
+          reader.readAsDataURL(file);
+        }
+
       }
     }}
     />

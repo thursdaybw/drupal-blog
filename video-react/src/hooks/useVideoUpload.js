@@ -26,7 +26,20 @@ export function useVideoUpload({ setStatus }) {
       const total = Math.ceil(videoFile.size / chunkSize);
       console.log('[useVideoUpload] Using chunked upload. totalChunks=', total, 'uploadId=', uploadId);
 
+      console.log('[useVideoUpload] file.size=', videoFile.size, 'lastModified=', videoFile.lastModified);
+      const _initialSize = videoFile.size;
+      const _initialLastModified = videoFile.lastModified;
+
       for (let index = 0; index < total; index++) {
+
+        if (videoFile.size !== _initialSize || videoFile.lastModified !== _initialLastModified) {
+          console.error('[useVideoUpload] Source file metadata changed during upload', {
+            initialSize: _initialSize, currentSize: videoFile.size,
+            initialLastModified: _initialLastModified, currentLastModified: videoFile.lastModified,
+            index, total
+          });
+        }
+
         const start = index * chunkSize;
         const end = Math.min(start + chunkSize, videoFile.size);
         const blob = videoFile.slice(start, end);

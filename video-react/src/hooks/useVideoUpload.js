@@ -21,7 +21,8 @@ export function useVideoUpload({ setStatus }) {
     setUploadError(null);
 
     try {
-      const chunkSize = 5 * 1024 * 1024; // 5MB
+      // const chunkSize = 5 * 1024 * 1024; // 5MB
+      const chunkSize = 1 * 1024 * 1024; // 1MB
       const uploadId = (crypto.randomUUID?.() || String(Date.now()));
       const total = Math.ceil(videoFile.size / chunkSize);
       console.log('[useVideoUpload] Using chunked upload. totalChunks=', total, 'uploadId=', uploadId);

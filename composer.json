@@ -146,7 +146,10 @@
       },
     "require-dev": {
         "behat/mink": "^1.11",
+        "behat/mink-browserkit-driver": "^2.2",
         "behat/mink-selenium2-driver": "^1.4",
+        "mikey179/vfsstream": "^1.6",
+        "phpspec/prophecy-phpunit": "^2.4",
         "phpunit/phpunit": "^9",
         "symfony/phpunit-bridge": "^7.3",
         "thursdaybw/dtt_multi_device_test_base": "dev-main",

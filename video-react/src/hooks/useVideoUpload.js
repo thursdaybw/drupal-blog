@@ -55,9 +55,24 @@ export function useVideoUpload({ setStatus }) {
 
         console.log('[useVideoUpload] Sending chunk to', uploadUrl);
 
-        const res = await fetch(uploadUrl, { method: 'POST', body: formData, credentials: 'include' });
+        let attempt = 0;
+        while (true) {
+          attempt++;
+          const res = await fetch(uploadUrl, { method: 'POST', body: formData, credentials: 'include' });
 
-        if (!res.ok) {
+          if (res.ok) {
+            break; // success
+          }
+
+          if (attempt < 7 && (res.status >= 500 || res.status === 429)) {
+            console.warn(`[useVideoUpload] Retry ${attempt} on chunk ${index + 1}/${total}`);
+            setStatus?.(`⏳ Retrying chunk ${index + 1}/${total} (attempt ${attempt})`);
+            const backoff = 800 * 2 ** (attempt - 1);
+            const jitter = Math.random() * 250;
+            await new Promise(r => setTimeout(r, backoff + jitter));
+            continue;
+          }
+
           const msg = `❌ Upload failed on chunk ${index + 1}/${total} with status ${res.status}`;
           console.error('[useVideoUpload]', msg);
           setUploadError(msg);

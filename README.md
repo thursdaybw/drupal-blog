@@ -230,6 +230,8 @@ To run Existing Site tests:
 ddev exec vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/bevansbench_test/tests/src/ExistingSiteJavascript/
 ### Run a more specific test class or method:
 ddev exec vendor/bin/phpunit -c phpunit.dtt.xml -vv --filter testCaptionsPageLoggedIn html/modules/custom/bevansbench_test/tests/src/ExistingSiteJavascript/GenerateCaptionsMobileTest.php
+ddev exec vendor/bin/phpunit -c /var/www/html/phpunit.browser.xml html/modules/contrib/video_forge/tests/src/Functional/VideoUploadControllerTest.php
+
 
 Watching existing site tests:
 You don’t actually need to install your own VNC add-on in the web container — the Selenium standalone container that DDEV’s add-on spins up already includes a noVNC endpoint you can watch in your browser. Here’s how to hook into it:
@@ -238,3 +240,96 @@ You don’t actually need to install your own VNC add-on in the web container �
 Before you run your mobile test, point your host browser at:
 
 https://bevansbench.com.ddev.site:7900
+
+
+Todos:
+
+Yes mate, you’re thinking exactly right — the big end-to-end test is valuable, but it’s a blunt instrument:
+
+* It only catches *this race* if the timing + file size align.
+* It can’t cover all the subtle edge cases we’ve now uncovered.
+
+Whereas unit and kernel tests can target the brittle seams we identified.
+
+---
+
+### 🎯 Areas worth kernel/unit tests (based on what we saw today)
+
+1. **TaskStateService::markTranscriptReady()**
+
+   * Unit/kernel test:
+
+     * Given a task with a `video` set, when `markTranscriptReady()` runs, the video reference is *preserved*.
+     * Given a task without a video, transcript fields are still set.
+   * This locks in the fix we added (so nobody “simplifies” it later and re-introduces the bug).
+
+2. **VideoUploadController::upload()**
+
+   * Kernel test (no JS/browser needed):
+
+     * Simulate chunked upload finalization.
+     * Assert it creates `File`, `Media`, and attaches media to an existing `video_forge_tasks` row.
+     * Assert it logs Before/After save.
+   * This avoids the E2E timing flakiness — you’re testing the core logic directly.
+
+3. **TaskStateService::initializeTask()**
+
+   * Kernel test:
+
+     * When a media already exists for the `video_ref_id`, the new task gets linked to that media.
+     * When no media exists, task starts unlinked.
+
+4. **Concurrency simulation (clobber protection)**
+
+   * Unit test (no DB needed, you can mock storage):
+
+     * Fake an entity with `video` set.
+     * Call `markTranscriptReady()` and assert `video` survives.
+     * That isolates the “field preservation” behaviour without queues/cron/upload noise.
+
+5. **ProvisioningService / TranscriptionProvisionWorker**
+
+   * Kernel test:
+
+     * Enqueue a dummy task ID.
+     * Run the worker.
+     * Assert it calls `provision()` → `transcribe()` sequence, and updates task status.
+   * Doesn’t need real Vast.ai or SSH; you can mock the `RemoteSessionServiceFactory` and `AudioUploadService`.
+
+---
+
+### 📐 Why kernel vs unit here
+
+* **Unit**: For logic you can isolate (e.g. preserve `video` field).
+* **Kernel**: For things that depend on entity storage (`File`, `Media`, `video_forge_tasks`).
+* **Functional/Browser**: Only for the real integration path (upload form → React app → queue). You already have that.
+
+---
+
+### 🔨 Concrete examples
+
+* **Kernel test for `markTranscriptReady`**:
+
+  ```php
+  $task = $this->createTaskWithVideo($media_id);
+  $this->taskState->markTranscriptReady($task->uuid(), $json, $ass, 'hello');
+  $task = $this->reloadTask($task);
+  $this->assertEquals($media_id, $task->get('video')->target_id);
+  ```
+
+* **Kernel test for `VideoUploadController`**:
+
+  ```php
+  $request = Request::create("/video-forge/upload-video", 'POST', [
+    'video_id' => $uuid,
+    'upload_id' => 'x',
+    'index' => 0,
+    'total' => 1,
+  ], [], ['file' => $fakeFile]);
+
+  $response = $this->controller->upload($request);
+  $this->assertEquals(200, $response->getStatusCode());
+  $task = $this->loadTaskByVideoId($uuid);
+  $this->assertNotEmpty($task->get('video')->target_id);
+  ```
+

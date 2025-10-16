@@ -17,7 +17,9 @@ RUN apt-get update && apt-get install -y \
 
 # Pin vastai to 0.3.0 because newer versions require Python >= 3.10
 # TODO: Upgrade base image to Python 3.11+ and unpin when ready.
+# Pin vastai cleanly — wipe old copies first
 RUN echo "⚠️  WARNING: vastai pinned at 0.3.0 — newer releases require Python >= 3.10" && \
+    pip uninstall -y vastai || true && \
     pip install --no-cache-dir "vastai==0.3.0" && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${username}/.bashrc
 

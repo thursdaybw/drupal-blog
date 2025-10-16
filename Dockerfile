@@ -15,8 +15,11 @@ RUN apt-get update && apt-get install -y \
     libass-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --upgrade "vastai>=0.3.1"
-RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${username}/.bashrc
+# Pin vastai to 0.3.0 because newer versions require Python >= 3.10
+# TODO: Upgrade base image to Python 3.11+ and unpin when ready.
+RUN echo "⚠️  WARNING: vastai pinned at 0.3.0 — newer releases require Python >= 3.10" && \
+    pip install --no-cache-dir "vastai==0.3.0" && \
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${username}/.bashrc
 
 # Enable `user_allow_other` in `/etc/fuse.conf`
 RUN echo "user_allow_other" > /etc/fuse.conf && chmod 644 /etc/fuse.conf

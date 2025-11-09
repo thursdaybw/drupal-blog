@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+const STATE_KEY = 'videoUploadState';
+
 export function useVideoUpload({ setStatus }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -7,13 +9,8 @@ export function useVideoUpload({ setStatus }) {
 
   const startUpload = async (videoFile, videoId, taskId) => {
     console.log('[useVideoUpload] startUpload called');
-    console.log('File:', videoFile?.name, videoFile?.size, videoFile?.type);
-    console.log('videoId:', videoId, 'taskId:', taskId);
 
-    if (!videoFile || !videoId) {
-      console.warn('[useVideoUpload] Missing file or videoId');
-      return;
-    }
+    if (!videoFile || !videoId) return;
 
     setStatus?.('📤 Uploading video…');
     setUploadProgress(0);
@@ -21,85 +18,79 @@ export function useVideoUpload({ setStatus }) {
     setUploadError(null);
 
     try {
-      // const chunkSize = 5 * 1024 * 1024; // 5MB
-      const chunkSize = 1 * 1024 * 1024; // 1MB
-      const uploadId = (crypto.randomUUID?.() || String(Date.now()));
+      const chunkSize = 1 * 1024 * 1024;
       const total = Math.ceil(videoFile.size / chunkSize);
-      console.log('[useVideoUpload] Using chunked upload. totalChunks=', total, 'uploadId=', uploadId);
 
-      console.log('[useVideoUpload] file.size=', videoFile.size, 'lastModified=', videoFile.lastModified);
-      const _initialSize = videoFile.size;
-      const _initialLastModified = videoFile.lastModified;
+      // try to resume
+      const saved = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+      let uploadId;
+      let resumeIndex = 0;
+      if (saved.videoId === videoId && saved.uploadId) {
+        uploadId = saved.uploadId;
+        resumeIndex = saved.index + 1;
+        console.log(`[useVideoUpload] Resuming from chunk ${resumeIndex + 1}`);
+      } else {
+        uploadId = crypto.randomUUID?.() || String(Date.now());
+      }
 
-      for (let index = 0; index < total; index++) {
-
-        if (videoFile.size !== _initialSize || videoFile.lastModified !== _initialLastModified) {
-          console.error('[useVideoUpload] Source file metadata changed during upload', {
-            initialSize: _initialSize, currentSize: videoFile.size,
-            initialLastModified: _initialLastModified, currentLastModified: videoFile.lastModified,
-            index, total
-          });
-        }
-
+      for (let index = resumeIndex; index < total; index++) {
         const start = index * chunkSize;
         const end = Math.min(start + chunkSize, videoFile.size);
         const blob = videoFile.slice(start, end);
 
-        console.log(`[useVideoUpload] Preparing chunk ${index + 1}/${total}, bytes ${start}-${end}`);
-
         const formData = new FormData();
         formData.append('file', blob, `part-${index}.bin`);
-
         let uploadUrl = `/video-forge/upload-video?video_id=${videoId}&upload_id=${uploadId}&index=${index}&total=${total}`;
         if (taskId) uploadUrl += `&task_id=${taskId}`;
 
-        console.log('[useVideoUpload] Sending chunk to', uploadUrl);
+        const controller = new AbortController();
+        const visibilityHandler = () => {
+          if (document.hidden) controller.abort();
+        };
+        document.addEventListener('visibilitychange', visibilityHandler);
 
-        let attempt = 0;
-        while (true) {
-          attempt++;
-          const res = await fetch(uploadUrl, { method: 'POST', body: formData, credentials: 'include' });
-
-          if (res.ok) {
-            break; // success
+        try {
+          const res = await fetch(uploadUrl, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include',
+            signal: controller.signal,
+          });
+          if (!res.ok) throw new Error(`status ${res.status}`);
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            console.warn('[useVideoUpload] Aborted due to tab hidden');
+          } else {
+            console.warn(`[useVideoUpload] Chunk ${index} failed:`, err.message);
           }
-
-          if (attempt < 7 && (res.status >= 500 || res.status === 429)) {
-            console.warn(`[useVideoUpload] Retry ${attempt} on chunk ${index + 1}/${total}`);
-            setStatus?.(`⏳ Retrying chunk ${index + 1}/${total} (attempt ${attempt})`);
-            const backoff = 800 * 2 ** (attempt - 1);
-            const jitter = Math.random() * 250;
-            await new Promise(r => setTimeout(r, backoff + jitter));
-            continue;
-          }
-
-          const msg = `❌ Upload failed on chunk ${index + 1}/${total} with status ${res.status}`;
-          console.error('[useVideoUpload]', msg);
-          setUploadError(msg);
-          setStatus?.(msg);
+          setUploadError('❌ Upload interrupted');
+          setStatus?.('❌ Upload interrupted');
+          document.removeEventListener('visibilitychange', visibilityHandler);
           return;
         }
 
+        document.removeEventListener('visibilitychange', visibilityHandler);
+
+        // save state every successful chunk
+        localStorage.setItem(
+          STATE_KEY,
+          JSON.stringify({ uploadId, videoId, index, total })
+        );
+
         const percent = Math.round(((index + 1) / total) * 100);
-        console.log('[useVideoUpload] Progress:', percent, '%');
         setUploadProgress(percent);
       }
 
+      localStorage.removeItem(STATE_KEY);
       setStatus?.('✅ Video upload complete.');
       setUploadComplete(true);
     } catch (err) {
       console.error('[useVideoUpload] Upload error', err);
-      const msg = '❌ Upload error';
-      setUploadError(msg);
-      setStatus?.(msg);
+      setUploadError('❌ Upload error');
+      setStatus?.('❌ Upload error');
     }
   };
 
-  return {
-    uploadProgress,
-    uploadComplete,
-    uploadError,
-    startUpload,
-  };
+  return { uploadProgress, uploadComplete, uploadError, startUpload };
 }
 

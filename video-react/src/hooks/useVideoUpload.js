@@ -60,13 +60,20 @@ export function useVideoUpload({ setStatus }) {
         } catch (err) {
           if (err.name === 'AbortError') {
             console.warn('[useVideoUpload] Aborted due to tab hidden');
-          } else {
-            console.warn(`[useVideoUpload] Chunk ${index} failed:`, err.message);
+            setStatus?.('⏸ Upload paused');
+
+            // automatically resume when tab becomes visible again
+            const resumeHandler = () => {
+              if (!document.hidden) {
+                document.removeEventListener('visibilitychange', resumeHandler);
+                console.log('[useVideoUpload] Resuming upload after tab restore');
+                startUpload(videoFile, videoId, taskId);
+              }
+            };
+            document.addEventListener('visibilitychange', resumeHandler, { once: true });
+            document.removeEventListener('visibilitychange', visibilityHandler);
+            return;
           }
-          setUploadError('❌ Upload interrupted');
-          setStatus?.('❌ Upload interrupted');
-          document.removeEventListener('visibilitychange', visibilityHandler);
-          return;
         }
 
         document.removeEventListener('visibilitychange', visibilityHandler);
@@ -93,4 +100,5 @@ export function useVideoUpload({ setStatus }) {
 
   return { uploadProgress, uploadComplete, uploadError, startUpload };
 }
+
 

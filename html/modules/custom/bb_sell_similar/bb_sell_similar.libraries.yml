@@ -1,0 +1,6 @@
+ajax_new_tab:
+  js:
+    js/open-new-tab.js: {}
+  dependencies:
+    - core/drupal.ajax
+

@@ -1,0 +1,8 @@
+bb_sell_similar.sell_similar:
+  path: '/sell-similar'
+  defaults:
+    _form: '\Drupal\bb_sell_similar\Form\SellSimilarForm'
+    _title: 'Sell Similar Generator'
+  requirements:
+    _permission: 'access content'
+

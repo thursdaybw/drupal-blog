@@ -85,6 +85,10 @@ sudo chown -R root:root .
 # Pull the latest changes from the main branch
 git pull origin main
 
+# Ensure submodules (e.g. html/framesmith) are present at the commit pinned by main.
+git submodule sync --recursive
+git submodule update --init --recursive
+
 # Change ownership to www-data
 sudo chown -R www-data:www-data .
 
@@ -126,4 +130,3 @@ else
   # Connect to the remote host with forced pseudo-terminal allocation
   ssh -t -A root@bevansbench.com "$SSH_COMMANDS"
 fi
-

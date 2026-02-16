@@ -1,0 +1,6 @@
+services:
+  web:
+    volumes:
+      - type: bind
+        source: ../../webcodecs-test
+        target: /var/www/html/html/framesmith

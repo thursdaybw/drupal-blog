@@ -1,0 +1,4 @@
+[submodule "html/framesmith"]
+	path = html/framesmith
+	url = https://github.com/thursdaybw/FrameSmith.git
+	branch = audio

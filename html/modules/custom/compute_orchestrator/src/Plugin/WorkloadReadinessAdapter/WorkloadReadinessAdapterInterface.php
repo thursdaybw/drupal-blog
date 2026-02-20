@@ -19,4 +19,6 @@ interface WorkloadReadinessAdapterInterface extends PluginInspectionInterface {
 
   public function classifyFailure(array $probeResults): string;
 
+  public function detectForwardProgress(array $previousProbeResults, array $currentProbeResults): bool;
+
 }

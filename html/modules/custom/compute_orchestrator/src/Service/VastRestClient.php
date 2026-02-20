@@ -4,25 +4,30 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
 use Drupal\compute_orchestrator\Plugin\WorkloadReadinessAdapterManager;
 use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Process\Process;
 
 final class VastRestClient implements VastRestClientInterface {
 
   private ClientInterface $httpClient;
   private string $apiKey;
+  private LoggerInterface $logger;
 
   public function __construct(
     ClientInterface $http_client,
     private readonly BadHostRegistry $badHosts,
     private readonly WorkloadReadinessAdapterManager $workloadAdapterManager,
     private readonly SshProbeExecutor $sshProbeExecutor,
+    LoggerChannelFactoryInterface $loggerFactory,
   ) {
     $this->httpClient = $http_client;
+    $this->logger = $loggerFactory->get('compute_orchestrator');
 
     $apiKey = getenv('VAST_API_KEY');
     if (!$apiKey) {
@@ -173,7 +178,13 @@ final class VastRestClient implements VastRestClientInterface {
 
     $start = time();
     $adapter = $this->workloadAdapterManager->createInstance($workload);
-    $totalTimeout = $timeoutSeconds + $adapter->getStartupTimeoutSeconds();
+    $absoluteSafetyTimeout = max(5400, $timeoutSeconds + $adapter->getStartupTimeoutSeconds());
+    $stallThresholdSeconds = 600;
+    $sshLossThresholdSeconds = 300;
+    $lastProgressAt = $start;
+    $sshLostSince = null;
+    $sshWasReachable = false;
+    $previousProbeResults = [];
 
     $lastCurState = null;
     $lastActualStatus = null;
@@ -188,12 +199,12 @@ final class VastRestClient implements VastRestClientInterface {
 
       $this->logWithTime('Polling instance ' . $instanceId);
 
-      if ((time() - $start) > $totalTimeout) {
+      if ((time() - $start) > $absoluteSafetyTimeout) {
         $extra = '';
         if ($lastProbeKind && $lastProbeWhy) {
           $extra = ' Last probe failure (' . $lastProbeKind . '): ' . $lastProbeWhy;
         }
-        throw new \RuntimeException('Instance did not become ready within timeout for workload ' . $workload . '.' . $extra);
+        throw new \RuntimeException('Instance exceeded absolute safety timeout for workload ' . $workload . '.' . $extra);
       }
 
       $info = $this->showInstance($instanceId);
@@ -228,6 +239,7 @@ final class VastRestClient implements VastRestClientInterface {
         $lastStatusMsg = $statusMsg;
         $lastSshHost = $sshHost;
         $lastSshPort = $sshPort;
+        $lastProgressAt = time();
       }
 
       // Hard fail: Docker/container runtime error reported by Vast.
@@ -261,34 +273,78 @@ final class VastRestClient implements VastRestClientInterface {
         $sshCheck = $this->sshLoginCheck($sshHost, (int) $sshPort, $user);
         if (!$sshCheck['ok']) {
           $why = (string) $sshCheck['why'];
+          if ($sshWasReachable && $sshLostSince === null) {
+            $sshLostSince = time();
+          }
+          $sshLossSeconds = $sshLostSince !== null ? (time() - $sshLostSince) : 0;
           if ($lastProbeKind !== 'ssh' || $lastProbeWhy !== $why) {
             $this->logWithTime('PROBE ssh not ready: ' . $why);
+            $this->logger->notice('WORKLOAD ssh not ready: {why}', ['why' => $why]);
             $lastProbeKind = 'ssh';
             $lastProbeWhy = $why;
           }
+          if ($sshWasReachable && $sshLossSeconds >= $sshLossThresholdSeconds) {
+            throw new \RuntimeException('Connectivity loss: SSH probe unavailable for ' . $sshLossSeconds . ' seconds.');
+          }
           sleep(30);
           continue;
         }
+        $sshLostSince = null;
+        $sshWasReachable = true;
 
         $probeResults = $this->executeWorkloadProbesViaSsh($adapter->getReadinessProbeCommands(), $sshHost, (int) $sshPort, $user);
-        if (!$adapter->isReadyFromProbeResults($probeResults)) {
-          $classification = $adapter->classifyFailure($probeResults);
-          $why = $this->formatProbeFailure($classification, $probeResults);
-
-          if (in_array($classification, [FailureClass::INFRA_FATAL, FailureClass::WORKLOAD_FATAL], true)) {
-            throw new WorkloadReadinessException($classification, 'Fatal workload startup failure: ' . $why);
-          }
-
-          if ($lastProbeKind !== 'workload' || $lastProbeWhy !== $why) {
-            $this->logWithTime('PROBE workload not ready: ' . $why);
-            $lastProbeKind = 'workload';
-            $lastProbeWhy = $why;
-          }
-          sleep(30);
-          continue;
+        if ($adapter->isReadyFromProbeResults($probeResults)) {
+          $this->logger->notice('WORKLOAD ready - adapter={adapter} instance={instance}', [
+            'adapter' => $workload,
+            'instance' => $instanceId,
+          ]);
+          return $info;
         }
 
-        return $info;
+        $classification = $adapter->classifyFailure($probeResults);
+        $why = $this->formatProbeFailure($classification, $probeResults);
+
+        if (in_array($classification, [FailureClass::INFRA_FATAL, FailureClass::WORKLOAD_FATAL], true)) {
+          throw new WorkloadReadinessException($classification, 'Fatal workload startup failure: ' . $why);
+        }
+
+        $forwardProgress = $adapter->detectForwardProgress($previousProbeResults, $probeResults);
+        $previousProbeResults = $probeResults;
+
+        if ($forwardProgress) {
+          $lastProgressAt = time();
+          $this->logger->notice('WORKLOAD warmup - forward progress detected (class={class}) instance={instance}', [
+            'class' => $classification,
+            'instance' => $instanceId,
+          ]);
+        } else {
+          $stalledFor = time() - $lastProgressAt;
+          $this->logger->warning('WORKLOAD warmup - stalled {stalled}/{threshold} seconds (class={class}) instance={instance}', [
+            'stalled' => (string) $stalledFor,
+            'threshold' => (string) $stallThresholdSeconds,
+            'class' => $classification,
+            'instance' => $instanceId,
+          ]);
+          if ($stalledFor >= $stallThresholdSeconds) {
+            throw new \RuntimeException('Workload stalled for ' . $stalledFor . ' seconds without forward progress.');
+          }
+        }
+
+        if ($lastProbeKind !== 'workload' || $lastProbeWhy !== $why) {
+          $this->logWithTime('PROBE workload not ready: ' . $why);
+          $lastProbeKind = 'workload';
+          $lastProbeWhy = $why;
+        }
+
+        sleep(30);
+        continue;
+      }
+
+      $stalledFor = time() - $lastProgressAt;
+      if ($stalledFor >= $stallThresholdSeconds) {
+        throw new \RuntimeException(
+          'Instance stalled before workload readiness for ' . $stalledFor . ' seconds.'
+        );
       }
 
       sleep(30);
@@ -543,19 +599,33 @@ final class VastRestClient implements VastRestClientInterface {
       return [
         'ssh_key' => [
           'ok' => false,
+          'transport_ok' => false,
+          'failure_kind' => 'transport',
           'exit_code' => null,
           'stdout' => '',
           'stderr' => 'SSH key not found at: ' . ($this->getSshKeyCandidate() ?: '(empty)'),
-          'exception' => null,
+          'exception' => 'missing_ssh_key',
         ],
       ];
     }
+
+    $context = new SshConnectionContext(
+      host: $sshHost,
+      port: $sshPort,
+      user: $sshUser,
+      keyPath: $keyPath,
+    );
 
     $results = [];
     foreach ($commands as $name => $meta) {
       $command = (string) ($meta['command'] ?? '');
       $timeout = (int) ($meta['timeout'] ?? 10);
-      $results[$name] = $this->sshProbeExecutor->run($sshHost, $sshPort, $sshUser, $keyPath, $command, $timeout);
+      $request = new SshProbeRequest(
+        name: (string) $name,
+        command: $command,
+        timeoutSeconds: $timeout,
+      );
+      $results[$name] = $this->sshProbeExecutor->run($context, $request);
     }
 
     return $results;
@@ -565,11 +635,14 @@ final class VastRestClient implements VastRestClientInterface {
     $parts = ['class=' . $classification];
     foreach ($probeResults as $name => $result) {
       $parts[] = sprintf(
-        '%s(ok=%s exit=%s stderr=%s)',
+        '%s(ok=%s transport_ok=%s kind=%s exit=%s stderr=%s exception=%s)',
         (string) $name,
         ($result['ok'] ?? false) ? '1' : '0',
+        ($result['transport_ok'] ?? false) ? '1' : '0',
+        (string) ($result['failure_kind'] ?? 'unknown'),
         isset($result['exit_code']) ? (string) $result['exit_code'] : 'null',
-        trim((string) ($result['stderr'] ?? '')) !== '' ? trim((string) ($result['stderr'] ?? '')) : '(empty)'
+        trim((string) ($result['stderr'] ?? '')) !== '' ? trim((string) ($result['stderr'] ?? '')) : '(empty)',
+        trim((string) ($result['exception'] ?? '')) !== '' ? trim((string) ($result['exception'] ?? '')) : '(none)'
       );
     }
 

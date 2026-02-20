@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
+use Drupal\compute_orchestrator\Plugin\WorkloadReadinessAdapterManager;
+use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use Symfony\Component\Process\Process;
@@ -16,6 +19,8 @@ final class VastRestClient implements VastRestClientInterface {
   public function __construct(
     ClientInterface $http_client,
     private readonly BadHostRegistry $badHosts,
+    private readonly WorkloadReadinessAdapterManager $workloadAdapterManager,
+    private readonly SshProbeExecutor $sshProbeExecutor,
   ) {
     $this->httpClient = $http_client;
 
@@ -164,9 +169,11 @@ final class VastRestClient implements VastRestClientInterface {
     return $valid[0];
   }
 
-  public function waitForRunningAndSsh(string $instanceId, int $timeoutSeconds = 180): array {
+  public function waitForRunningAndSsh(string $instanceId, string $workload = 'vllm', int $timeoutSeconds = 180): array {
 
     $start = time();
+    $adapter = $this->workloadAdapterManager->createInstance($workload);
+    $totalTimeout = $timeoutSeconds + $adapter->getStartupTimeoutSeconds();
 
     $lastCurState = null;
     $lastActualStatus = null;
@@ -181,12 +188,12 @@ final class VastRestClient implements VastRestClientInterface {
 
       $this->logWithTime('Polling instance ' . $instanceId);
 
-      if ((time() - $start) > $timeoutSeconds) {
+      if ((time() - $start) > $totalTimeout) {
         $extra = '';
         if ($lastProbeKind && $lastProbeWhy) {
           $extra = ' Last probe failure (' . $lastProbeKind . '): ' . $lastProbeWhy;
         }
-        throw new \RuntimeException('Instance did not become ready within timeout.' . $extra);
+        throw new \RuntimeException('Instance did not become ready within timeout for workload ' . $workload . '.' . $extra);
       }
 
       $info = $this->showInstance($instanceId);
@@ -246,7 +253,7 @@ final class VastRestClient implements VastRestClientInterface {
         }
       }
 
-      // Ready check: instance running AND we can SSH AND vLLM answers locally.
+      // Ready check: instance running AND we can SSH AND workload probe passes.
       if ($curState === 'running' && $sshHost !== '' && $sshPort !== '') {
 
         $user = (string) ($info['ssh_user'] ?? 'root');
@@ -263,15 +270,18 @@ final class VastRestClient implements VastRestClientInterface {
           continue;
         }
 
-        $vCheck = $this->vllmReadyCheckViaSsh($sshHost, (int) $sshPort, $user);
-        if (!$vCheck['ok']) {
-          $why = (string) $vCheck['why'];
-          if ($this->isFatalVllmProbeFailure($why)) {
-            throw new \RuntimeException('Fatal vLLM startup failure: ' . $why);
+        $probeResults = $this->executeWorkloadProbesViaSsh($adapter->getReadinessProbeCommands(), $sshHost, (int) $sshPort, $user);
+        if (!$adapter->isReadyFromProbeResults($probeResults)) {
+          $classification = $adapter->classifyFailure($probeResults);
+          $why = $this->formatProbeFailure($classification, $probeResults);
+
+          if (in_array($classification, [FailureClass::INFRA_FATAL, FailureClass::WORKLOAD_FATAL], true)) {
+            throw new WorkloadReadinessException($classification, 'Fatal workload startup failure: ' . $why);
           }
-          if ($lastProbeKind !== 'vllm' || $lastProbeWhy !== $why) {
-            $this->logWithTime('PROBE vllm not ready: ' . $why);
-            $lastProbeKind = 'vllm';
+
+          if ($lastProbeKind !== 'workload' || $lastProbeWhy !== $why) {
+            $this->logWithTime('PROBE workload not ready: ' . $why);
+            $lastProbeKind = 'workload';
             $lastProbeWhy = $why;
           }
           sleep(30);
@@ -308,6 +318,7 @@ final class VastRestClient implements VastRestClientInterface {
 
     $preferSuccessHosts = (bool) ($createOptions['prefer_success_hosts'] ?? true);
     $preserveOnFailure = (bool) ($createOptions['preserve_on_failure'] ?? false);
+    $workload = (string) ($createOptions['workload'] ?? 'vllm');
 
     $persistedBadHosts = $this->badHosts->all();
     $globalBlacklist = $this->getGlobalBlacklist();
@@ -408,6 +419,7 @@ final class VastRestClient implements VastRestClientInterface {
 
         $info = $this->waitForRunningAndSsh(
           $contractId,
+          $workload,
           $bootTimeoutSeconds
         );
 
@@ -424,6 +436,9 @@ final class VastRestClient implements VastRestClientInterface {
 
         $lastFailureMessage = $e->getMessage();
         $isInfraFatal = $this->isInfrastructureFatalFailure($lastFailureMessage);
+        if ($e instanceof WorkloadReadinessException) {
+          $isInfraFatal = $e->getFailureClass() === FailureClass::INFRA_FATAL;
+        }
         if ($isInfraFatal && $hostId !== '') {
           $this->recordHostInfraFailure($hostId);
           $this->addToGlobalBlacklist($hostId);
@@ -522,123 +537,48 @@ final class VastRestClient implements VastRestClientInterface {
     ];
   }
 
-  private function vllmReadyCheckViaSsh(string $sshHost, int $sshPort, string $sshUser): array {
-
+  private function executeWorkloadProbesViaSsh(array $commands, string $sshHost, int $sshPort, string $sshUser): array {
     $keyPath = $this->resolveSshKeyPath();
-
     if (!$keyPath) {
       return [
-        'ok' => false,
-        'why' => 'SSH key not found at: ' . ($this->getSshKeyCandidate() ?: '(empty)'),
-      ];
-    }
-
-    $portFailures = [];
-
-    foreach ([8000, 8080] as $port) {
-      $process = new Process([
-        'ssh',
-        '-o', 'BatchMode=yes',
-        '-o', 'StrictHostKeyChecking=no',
-        '-o', 'UserKnownHostsFile=/dev/null',
-        '-o', 'LogLevel=ERROR',
-        '-o', 'ConnectTimeout=5',
-        '-i', $keyPath,
-        '-p', (string) $sshPort,
-        $sshUser . '@' . $sshHost,
-        'curl', '-fsS', '-o', '/dev/null', 'http://127.0.0.1:' . (string) $port . '/v1/models',
-      ]);
-
-      $process->setTimeout(10);
-
-      try {
-        $process->run();
-      } catch (\Throwable $e) {
-        return [
+        'ssh_key' => [
           'ok' => false,
-          'why' => 'vllm probe exception: ' . $e->getMessage(),
-        ];
-      }
-
-      if ($process->isSuccessful()) {
-        return ['ok' => true, 'why' => ''];
-      }
-
-      $stderr = trim($process->getErrorOutput());
-      $stdout = trim($process->getOutput());
-
-      // Exit code 7 is connection refused; try alternate known port.
-      if ((int) $process->getExitCode() === 7) {
-        $portFailures[] = sprintf(
-          'port=%s exit=%s stderr=%s',
-          (string) $port,
-          (string) $process->getExitCode(),
-          $stderr !== '' ? $stderr : '(empty)'
-        );
-        continue;
-      }
-
-      return [
-        'ok' => false,
-        'why' => sprintf(
-          'vllm probe failed on port %s: exit=%s stderr=%s stdout=%s',
-          (string) $port,
-          (string) $process->getExitCode(),
-          $stderr !== '' ? $stderr : '(empty)',
-          $stdout !== '' ? $stdout : '(empty)'
-        ),
+          'exit_code' => null,
+          'stdout' => '',
+          'stderr' => 'SSH key not found at: ' . ($this->getSshKeyCandidate() ?: '(empty)'),
+          'exception' => null,
+        ],
       ];
     }
 
-    return [
-      'ok' => false,
-      'why' => sprintf(
-        'vllm probe failed on ports 8000 and 8080 (connection refused). Failures: %s. Diagnostics: %s',
-        !empty($portFailures) ? implode(' | ', $portFailures) : '(none)',
-        $this->collectVllmDiagnosticsViaSsh($sshHost, $sshPort, $sshUser, $keyPath)
-      ),
-    ];
+    $results = [];
+    foreach ($commands as $name => $meta) {
+      $command = (string) ($meta['command'] ?? '');
+      $timeout = (int) ($meta['timeout'] ?? 10);
+      $results[$name] = $this->sshProbeExecutor->run($sshHost, $sshPort, $sshUser, $keyPath, $command, $timeout);
+    }
+
+    return $results;
   }
 
-  private function collectVllmDiagnosticsViaSsh(string $sshHost, int $sshPort, string $sshUser, string $keyPath): string {
-    $diagnosticCmd = "bash -lc 'echo \"ports:\"; (ss -lntp 2>/dev/null || netstat -lntp 2>/dev/null || true); "
-      . "echo \"procs:\"; (ps -ef | grep -E \"vllm|api_server|openai\" | grep -v grep || true); "
-      . "echo \"vllm_log:\"; (tail -n 40 /tmp/vllm.log 2>/dev/null || echo \"(missing /tmp/vllm.log)\")'";
-
-    $process = new Process([
-      'ssh',
-      '-o', 'BatchMode=yes',
-      '-o', 'StrictHostKeyChecking=no',
-      '-o', 'UserKnownHostsFile=/dev/null',
-      '-o', 'LogLevel=ERROR',
-      '-o', 'ConnectTimeout=5',
-      '-i', $keyPath,
-      '-p', (string) $sshPort,
-      $sshUser . '@' . $sshHost,
-      $diagnosticCmd,
-    ]);
-
-    $process->setTimeout(20);
-
-    try {
-      $process->run();
-    } catch (\Throwable $e) {
-      return 'diagnostic probe exception: ' . $e->getMessage();
+  private function formatProbeFailure(string $classification, array $probeResults): string {
+    $parts = ['class=' . $classification];
+    foreach ($probeResults as $name => $result) {
+      $parts[] = sprintf(
+        '%s(ok=%s exit=%s stderr=%s)',
+        (string) $name,
+        ($result['ok'] ?? false) ? '1' : '0',
+        isset($result['exit_code']) ? (string) $result['exit_code'] : 'null',
+        trim((string) ($result['stderr'] ?? '')) !== '' ? trim((string) ($result['stderr'] ?? '')) : '(empty)'
+      );
     }
 
-    $stdout = trim($process->getOutput());
-    $stderr = trim($process->getErrorOutput());
-
-    if ($process->isSuccessful()) {
-      return $stdout !== '' ? $stdout : '(empty diagnostics output)';
+    $logs = trim((string) ($probeResults['logs']['stdout'] ?? ''));
+    if ($logs !== '') {
+      $parts[] = 'logs=' . $logs;
     }
 
-    return sprintf(
-      'diagnostic probe failed: exit=%s stdout=%s stderr=%s',
-      (string) $process->getExitCode(),
-      $stdout !== '' ? $stdout : '(empty)',
-      $stderr !== '' ? $stderr : '(empty)'
-    );
+    return implode(' | ', $parts);
   }
 
   private function getHostStats(): array {
@@ -708,7 +648,6 @@ final class VastRestClient implements VastRestClientInterface {
       'oci runtime create failed',
       'cuda',
       'gpu error, unable to start instance',
-      'engine core initialization failed',
       'unsupported display driver / cuda driver combination',
     ] as $marker) {
       if (str_contains($lower, $marker)) {
@@ -740,23 +679,6 @@ final class VastRestClient implements VastRestClientInterface {
     }
 
     return rtrim($home, '/') . '/.ssh/id_rsa_vastai';
-  }
-
-  private function isFatalVllmProbeFailure(string $why): bool {
-    $lower = strtolower($why);
-    foreach ([
-      'unsupported display driver / cuda driver combination',
-      'engine core initialization failed',
-      'runtimeerror:',
-      'cuda error',
-      'cudagetdevicecount',
-    ] as $marker) {
-      if (str_contains($lower, $marker)) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   private function logWithTime(string $message): void {

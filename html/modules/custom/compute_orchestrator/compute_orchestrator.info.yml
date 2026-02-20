@@ -1,0 +1,5 @@
+name: 'Compute Orchestrator'
+type: module
+description: 'Provides reusable GPU provisioning and lifecycle orchestration for remote compute workloads via external providers like Vast.ai.'
+package: Bevans Bench
+core_version_requirement: ^10 || ^11

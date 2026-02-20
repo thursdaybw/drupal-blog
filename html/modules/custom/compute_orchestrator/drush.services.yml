@@ -1,0 +1,14 @@
+services:
+  compute_orchestrator.vast_test_command:
+    class: Drupal\compute_orchestrator\Command\VastTestCommand
+    arguments:
+      - '@compute_orchestrator.vast_rest_client'
+    tags:
+      - { name: drush.command }
+
+  compute_orchestrator.bad_hosts_command:
+    class: Drupal\compute_orchestrator\Command\BadHostsCommand
+    arguments:
+      - '@compute_orchestrator.bad_host_registry'
+    tags:
+      - { name: drush.command }

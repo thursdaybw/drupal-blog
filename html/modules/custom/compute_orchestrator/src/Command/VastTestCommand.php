@@ -62,6 +62,7 @@ final class VastTestCommand extends Command {
         20,
         1.0,
         [
+          'workload' => 'vllm',
           'prefer_success_hosts' => $policy['prefer_success_hosts'],
           'preserve_on_failure' => $preserve,
           'image' => 'vllm/vllm-openai:v0.12.0',

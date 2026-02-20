@@ -67,7 +67,6 @@ interface VastRestClientInterface {
     int $limit = 20
   ): ?array;
 
-  public function waitForRunningAndSsh(string $instanceId, int $timeoutSeconds = 180): array;
+  public function waitForRunningAndSsh(string $instanceId, string $workload = 'vllm', int $timeoutSeconds = 180): array;
 
 }
-

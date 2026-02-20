@@ -1,9 +1,21 @@
 services:
+  plugin.manager.compute_orchestrator.workload_readiness_adapter:
+    class: Drupal\compute_orchestrator\Plugin\WorkloadReadinessAdapterManager
+    arguments:
+      - '@container.namespaces'
+      - '@cache.discovery'
+      - '@module_handler'
+
+  compute_orchestrator.ssh_probe_executor:
+    class: Drupal\compute_orchestrator\Service\SshProbeExecutor
+
   compute_orchestrator.vast_rest_client:
     class: Drupal\compute_orchestrator\Service\VastRestClient
     arguments:
       - '@http_client'
       - '@compute_orchestrator.bad_host_registry'
+      - '@plugin.manager.compute_orchestrator.workload_readiness_adapter'
+      - '@compute_orchestrator.ssh_probe_executor'
 
   compute_orchestrator.bad_host_registry:
     class: Drupal\compute_orchestrator\Service\BadHostRegistry

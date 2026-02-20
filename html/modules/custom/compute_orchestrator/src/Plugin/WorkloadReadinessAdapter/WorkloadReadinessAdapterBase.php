@@ -12,4 +12,23 @@ abstract class WorkloadReadinessAdapterBase extends PluginBase implements Worklo
     return (int) ($this->pluginDefinition['startup_timeout'] ?? 900);
   }
 
+  public function detectForwardProgress(array $previousProbeResults, array $currentProbeResults): bool {
+    if (empty($previousProbeResults)) {
+      return true;
+    }
+
+    $prevLogs = (string) ($previousProbeResults['logs']['stdout'] ?? '');
+    $currLogs = (string) ($currentProbeResults['logs']['stdout'] ?? '');
+
+    if (strlen($currLogs) > strlen($prevLogs)) {
+      return true;
+    }
+
+    if ($currLogs !== $prevLogs) {
+      return true;
+    }
+
+    return false;
+  }
+
 }

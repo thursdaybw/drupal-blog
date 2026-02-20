@@ -19,7 +19,7 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
     return [
       'executor_echo' => [
         'command' => "printf '__PROBE_OK__\\n'",
-        'timeout' => 5,
+        'timeout' => 15,
       ],
       'models_8000' => [
         'command' => 'curl -fsS http://127.0.0.1:8000/v1/models',
@@ -38,7 +38,7 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
         'timeout' => 10,
       ],
       'logs' => [
-        'command' => 'tail -n 80 /tmp/vllm.log 2>/dev/null || echo "(missing /tmp/vllm.log)"',
+        'command' => 'cat /tmp/vllm.log 2>/dev/null',
         'timeout' => 10,
       ],
     ];
@@ -59,6 +59,16 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
     $logs = strtolower((string) ($probeResults['logs']['stdout'] ?? ''));
     $processes = strtolower((string) ($probeResults['processes']['stdout'] ?? ''));
 
+    $models8000 = (bool) ($probeResults['models_8000']['ok'] ?? false);
+    $models8080 = (bool) ($probeResults['models_8080']['ok'] ?? false);
+
+    $anyApiUp = $models8000 || $models8080;
+    $hasProcess = trim($processes) !== '';
+
+    if (!$anyApiUp && !$hasProcess) {
+      return FailureClass::WORKLOAD_FATAL;
+    }
+
     foreach ([
       'unsupported display driver / cuda driver combination',
       'cudagetdevicecount',
@@ -67,19 +77,23 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
       'failed to create task for container',
       'error response from daemon',
     ] as $marker) {
-      if (str_contains($logs, $marker)) {
-        return FailureClass::INFRA_FATAL;
-      }
+    if (str_contains($logs, $marker)) {
+      return FailureClass::INFRA_FATAL;
+    }
     }
 
     foreach ([
       'engine core initialization failed',
+      'failed core proc',
+      'inductorerror',
+      'returned non-zero exit status',
+      'runtimeerror: engine core initialization failed',
       'traceback',
       'runtimeerror',
     ] as $marker) {
-      if (str_contains($logs, $marker)) {
-        return FailureClass::WORKLOAD_FATAL;
-      }
+    if (str_contains($logs, $marker)) {
+      return FailureClass::WORKLOAD_FATAL;
+    }
     }
 
     if (trim($processes) !== '') {
@@ -102,19 +116,8 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
 
     $prevLogs = (string) ($previousProbeResults['logs']['stdout'] ?? '');
     $currLogs = (string) ($currentProbeResults['logs']['stdout'] ?? '');
-    if ($currLogs !== $prevLogs || strlen($currLogs) > strlen($prevLogs)) {
-      return true;
-    }
 
-    $prevProc = (string) ($previousProbeResults['processes']['stdout'] ?? '');
-    $currProc = (string) ($currentProbeResults['processes']['stdout'] ?? '');
-    if ($currProc !== $prevProc) {
-      return true;
-    }
-
-    $prevGpu = (string) ($previousProbeResults['gpu']['stdout'] ?? '');
-    $currGpu = (string) ($currentProbeResults['gpu']['stdout'] ?? '');
-    if ($currGpu !== $prevGpu) {
+    if (strlen($currLogs) > strlen($prevLogs)) {
       return true;
     }
 

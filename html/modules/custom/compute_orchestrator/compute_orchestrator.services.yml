@@ -1,0 +1,11 @@
+services:
+  compute_orchestrator.vast_rest_client:
+    class: Drupal\compute_orchestrator\Service\VastRestClient
+    arguments:
+      - '@http_client'
+      - '@compute_orchestrator.bad_host_registry'
+
+  compute_orchestrator.bad_host_registry:
+    class: Drupal\compute_orchestrator\Service\BadHostRegistry
+    arguments:
+      - '@state'

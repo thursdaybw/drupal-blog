@@ -1,5 +1,9 @@
 # Compute Orchestrator Architecture
 
+Future model target: Qwen/Qwen2-VL-7B-Instruct
+i
+Coding models: DeepSeek-Coder or Qwen2.5-Coder
+
 The module orchestrates Vast.ai infrastructure through a REST workflow that mirrors the legacy CLI provisioning path while maintaining Drupal-internal state.
 
 1. **Entry point** – `compute:test-vast` Drush command (`src/Command/VastTestCommand.php`). Each run:
@@ -37,17 +41,108 @@ The module orchestrates Vast.ai infrastructure through a REST workflow that mirr
 7. **Todo / Gotchas**
    - The existing progress detection hooks are still very eager — log/process/gpu diffs currently count as “forward progress,” so warm-up loops may continue even though nothing semantically changes. Once the executor is consistently reporting transport vs command results, revisit the adapter to require more concrete signals (e.g., HTTP port bind or `/v1/models` success) before calling that “progress.”
 
+## 8. Future Hardening (Post-MVP Stabilisation)
 
-One more thing: your current vLLM adapter progress detection is too “easy to satisfy”
+The first successful provisioning + readiness cycle confirms the core orchestration pipeline is operational. Further resilience work is intentionally deferred to avoid destabilising a working baseline.
 
-Right now it treats “gpu stdout changed” or “processes stdout changed” as progress. On some hosts these can fluctuate without real progress.
+The following hardening tracks are documented for later architectural expansion:
 
-Once executor is fixed, tighten progress detection to:
+### 8.1 Socket-level readiness probes
 
-log tail changed OR
+Current readiness relies on HTTP probes (`/v1/models`) executed via SSH.
 
-transition closer to ready (port open, api routes logged, etc.)
+Future improvement:
 
-But don’t do that yet, first make the executor truthful.
+* Add port bind detection (e.g. `ss -lntp` or `netstat`) to confirm the API server has bound before HTTP success.
+* Prevents false negatives where HTTP fails while the server is still initialising.
 
-If you want, paste SshProbeExecutor.php as it exists now, and I’ll point to the exact quoting and logging edits to make, anchored to your file.
+Rationale: distinguishes network bind from application readiness.
+
+---
+
+### 8.2 Partial API boot detection
+
+vLLM may expose its port before the model finishes loading.
+
+Future adapter enhancement:
+
+* Validate `/v1/models` response content, not just HTTP success.
+* Confirm expected model presence.
+
+Rationale: avoids early “ready” classification during incomplete engine warm-up.
+
+---
+
+### 8.3 Forward-progress signal tightening
+
+Current logic treats these as progress:
+
+* Log growth
+* Process diffs
+* GPU output changes
+
+Future refinement:
+
+* Require semantic progress markers, e.g.
+
+  * model loading stages
+  * CUDA graph capture milestones
+  * KV cache allocation
+
+Rationale: prevents infinite warm-up loops on hosts that are technically alive but stalled.
+
+---
+
+### 8.4 Stall classification escalation
+
+Introduce multi-signal stall detection:
+
+Example criteria:
+
+* No log growth
+* No GPU memory delta
+* No process state change
+
+Over sustained interval → classify as fatal.
+
+Rationale: differentiate slow warm-up from dead engine initialisation.
+
+---
+
+### 8.5 Host capability learning
+
+Extend host reputation model beyond infra fatal errors.
+
+Future signals:
+
+* Repeated workload fatal failures on same GPU class
+* CUDA incompatibility patterns
+* Driver/runtime mismatches
+
+Action:
+
+* Down-rank or blacklist incompatible GPU families automatically.
+
+Rationale: reduces repeated failed provisioning attempts on unsuitable hardware.
+
+---
+
+### 8.6 Warm-up budget isolation
+
+Current readiness loop uses shared timeout constructs.
+
+Future split:
+
+* Infra readiness window (SSH + container boot)
+* Workload warm-up window (engine initialisation)
+
+Rationale: GPU model compilation and CUDA graph capture can exceed traditional service startup budgets.
+
+---
+
+### Status
+
+All above items are architectural backlog.
+
+They are documented but intentionally not implemented following the first successful provisioning run to preserve system stability.
+

@@ -67,11 +67,15 @@ final class VastRestClient implements VastRestClientInterface {
       $options
     );
 
-    return $this->request('PUT', 'asks/' . (int) $offerId . '/', [
-      'json' => $payload,
-    ]);
-  }
+  //error_log('CREATE PAYLOAD DEBUG: ' . json_encode($payload, JSON_PRETTY_PRINT));
 
+  // TEMPORARY: abort before provisioning to inspect payload.
+  //throw new \RuntimeException('DEBUG EXIT AFTER CREATE PAYLOAD');
+  return $this->request('PUT', 'asks/' . (int) $offerId . '/', [
+    'json' => $payload,
+  ]);
+
+  }
   public function startInstance(string $instanceId): array {
     throw new \LogicException('Not implemented yet.');
   }
@@ -722,6 +726,7 @@ final class VastRestClient implements VastRestClientInterface {
       'cuda',
       'gpu error, unable to start instance',
       'unsupported display driver / cuda driver combination',
+      'cannot find -lcuda',
     ] as $marker) {
       if (str_contains($lower, $marker)) {
         return true;

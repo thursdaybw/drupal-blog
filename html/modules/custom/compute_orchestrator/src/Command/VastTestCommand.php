@@ -59,14 +59,16 @@ final class VastTestCommand extends Command {
       'tinyllama' => [
         'model' => 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
         'gpu_ram_gte' => 8,
+        'max_model_len' => 2048,
       ],
       'qwen-vl' => [
         'model' => 'Qwen/Qwen2-VL-7B-Instruct',
-        'gpu_ram_gte' => 16,
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
       ],
     ];
 
-    if ($workloadMap[$workload]) {
+    if (isset($workloadMap[$workload])) {
       $selected = $workloadMap[$workload];
     }
     else {
@@ -75,6 +77,7 @@ final class VastTestCommand extends Command {
 
     $model = $selected['model'];
     $gpuRamGte = $selected['gpu_ram_gte'];
+    $maxModelLen = $selected['max_model_len'];
 
     $policy = $this->resolveStrictnessPolicy($strictness);
 
@@ -106,9 +109,9 @@ final class VastTestCommand extends Command {
             'disk' => 40,
             'runtype' => 'ssh_direct',
             'target_state' => 'running',
-            'onstart_cmd' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
-            'onstart' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
-            'args_str' => "--model {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code",
+            'onstart_cmd' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
+            'onstart' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
+            'args_str' => "--model {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code",
           ],
         ],
         3,
@@ -128,8 +131,13 @@ final class VastTestCommand extends Command {
       $output->writeln('SSH Host: ' . ($info['ssh_host'] ?? ''));
       $output->writeln('SSH Port: ' . (string) ($info['ssh_port'] ?? ''));
 
-      $this->vastClient->destroyInstance($contractId);
-      $output->writeln('Destroyed.');
+      if (!$preserve) {
+        $this->vastClient->destroyInstance($contractId);
+        $output->writeln('Destroyed.');
+      }
+      else {
+        $output->writeln('Instance preserved for testing.');
+      }
 
       return self::SUCCESS;
 

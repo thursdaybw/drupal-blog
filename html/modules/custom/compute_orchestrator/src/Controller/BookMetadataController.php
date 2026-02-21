@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Drupal\compute_orchestrator\Service\VlmClient;
 
-final class BookExtractController extends ControllerBase {
+final class BookMetadataController extends ControllerBase {
 
   public function __construct(
     private readonly VlmClient $vlmClient,
@@ -32,7 +32,7 @@ final class BookExtractController extends ControllerBase {
       ], 400);
     }
 
-    $promptText = "Extract the book title and author. Return only JSON with keys title and author.";
+    $promptText = "Extract structured metadata from the provided book images. Only use information visible in the images. Do not guess. Return only JSON with keys: title, author, isbn, publisher, publication_year, format, language. Use empty string for any field that is not visible.";
 
     $imagePaths = [];
     foreach ($images as $image) {
@@ -42,12 +42,32 @@ final class BookExtractController extends ControllerBase {
     $result = $this->vlmClient->infer($promptText, $imagePaths);
 
     $content = (string) $result['raw'];
+
     $parsed = $result['parsed'];
 
-    if (is_array($parsed) && isset($parsed['title']) && isset($parsed['author'])) {
+    // --- Normalize parsed metadata ---
+    if (is_array($parsed)) {
+      foreach ($parsed as $k => $v) {
+        if (is_string($v)) {
+          $parsed[$k] = trim($v);
+        }
+      }
+
+      // Normalize ISBN: remove spaces and hyphens.
+      if (!empty($parsed['isbn'])) {
+        $parsed['isbn'] = preg_replace('/[^0-9Xx]/', '', $parsed['isbn']);
+      }
+    }
+
+    if (is_array($parsed)) {
       return new JsonResponse([
-        'title' => (string) $parsed['title'],
-        'author' => (string) $parsed['author'],
+        'title' => (string) ($parsed['title'] ?? ''),
+        'author' => (string) ($parsed['author'] ?? ''),
+        'isbn' => (string) ($parsed['isbn'] ?? ''),
+        'publisher' => (string) ($parsed['publisher'] ?? ''),
+        'publication_year' => (string) ($parsed['publication_year'] ?? ''),
+        'format' => (string) ($parsed['format'] ?? ''),
+        'language' => (string) ($parsed['language'] ?? ''),
         'raw' => $content,
       ]);
     }

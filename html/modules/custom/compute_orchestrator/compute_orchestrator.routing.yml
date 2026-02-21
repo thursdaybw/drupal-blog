@@ -1,7 +1,7 @@
-compute_orchestrator.book_extract:
-  path: '/compute/book-extract'
+compute_orchestrator.book_metadata:
+  path: '/compute/book-metadata'
   defaults:
-    _controller: '\Drupal\compute_orchestrator\Controller\BookExtractController::extract'
+    _controller: '\Drupal\compute_orchestrator\Controller\BookMetadataController::extract'
   requirements:
     _access: 'TRUE'
   methods: [POST]

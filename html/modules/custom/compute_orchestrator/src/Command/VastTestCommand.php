@@ -72,7 +72,7 @@ final class VastTestCommand extends Command {
       $selected = $workloadMap[$workload];
     }
     else {
-        $workloadMap['tinyllama'];
+      $selected = $workloadMap['tinyllama'];
     }
 
     $model = $selected['model'];
@@ -107,19 +107,39 @@ final class VastTestCommand extends Command {
           'image' => $image,
           'options' => [
             'disk' => 40,
-            'runtype' => 'ssh_direct',
+            'runtype' => 'ssh',
             'target_state' => 'running',
-            'onstart_cmd' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
+
+            // DEV MODE: expose vLLM HTTP port publicly.
+            // This is intentionally insecure for early-stage development.
+            // Do NOT use this configuration in production.
+            'env' => [
+              '-p 8000:8000' => '1',
+            ],
+
             'onstart' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
             'args_str' => "--model {$model} --dtype float16 --max-model-len {$maxModelLen} --tensor-parallel-size 1 --trust-remote-code",
           ],
         ],
-        3,
+        5,
         600
       );
 
       $contractId = (string) ($result['contract_id'] ?? '');
       $info = (array) ($result['instance_info'] ?? []);
+
+      // DEV MODE: capture public HTTP endpoint for vLLM.
+      $publicHost = (string) ($info['public_ipaddr'] ?? '');
+      $publicPort = '';
+
+      if (!empty($info['ports']) && is_array($info['ports'])) {
+        foreach ($info['ports'] as $key => $value) {
+          if (str_contains((string) $key, '8000') && is_array($value) && isset($value[0]['HostPort'])) {
+            $publicPort = (string) $value[0]['HostPort'];
+            break;
+          }
+        }
+      }
 
       if ($contractId === '' || empty($info)) {
         $output->writeln('Provisioning returned no contract or instance info.');
@@ -130,6 +150,22 @@ final class VastTestCommand extends Command {
       $output->writeln('State: ' . ($info['cur_state'] ?? 'unknown'));
       $output->writeln('SSH Host: ' . ($info['ssh_host'] ?? ''));
       $output->writeln('SSH Port: ' . (string) ($info['ssh_port'] ?? ''));
+
+      // Store public VLM endpoint in state for controller usage.
+      if ($publicHost !== '' && $publicPort !== '') {
+        \Drupal::state()->set('compute.vllm_host', $publicHost);
+        \Drupal::state()->set('compute.vllm_port', $publicPort);
+        \Drupal::state()->set('compute.vllm_contract_id', $contractId);
+
+        \Drupal::state()->set('compute.vllm_url', 'http://' . $publicHost . ':' . $publicPort);
+        \Drupal::state()->set('compute.vllm_set_at', time());
+
+        $output->writeln('Public VLM Host: ' . $publicHost);
+        $output->writeln('Public VLM Port: ' . $publicPort);
+      }
+      else {
+        $output->writeln('WARNING: Public VLM port mapping not detected.');
+      }
 
       if (!$preserve) {
         $this->vastClient->destroyInstance($contractId);

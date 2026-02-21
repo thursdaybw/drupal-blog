@@ -146,3 +146,401 @@ All above items are architectural backlog.
 
 They are documented but intentionally not implemented following the first successful provisioning run to preserve system stability.
 
+## Vast.ai Provisioning Contract
+
+### Design Principle
+
+The orchestrator does not depend on Vast templates or GUI behaviors.
+
+Provisioning is performed using an explicit, deterministic REST payload.
+
+No template merging.
+No hidden defaults.
+No GUI-derived portal wiring.
+
+---
+
+### REST Contract Shape
+
+Vast REST expects:
+
+* `image` as string
+* `env` as a JSON object (dictionary)
+* Docker flags expressed as keys inside `env`
+* Port mappings represented as:
+
+  ```json
+  "-p 8000:8000": "1"
+  ```
+
+The value `"1"` is a flag marker and has no semantic meaning beyond presence.
+
+---
+
+### Port Exposure Model
+
+To expose a service:
+
+1. Add port mapping inside `env`:
+
+   ```json
+   "-p 8000:8000": "1"
+   ```
+
+2. Bind service inside container to:
+
+   ```
+   --host 0.0.0.0
+   ```
+
+3. Detect external mapping via `instance_info.ports` in API response.
+
+The orchestrator does not rely on:
+
+* `PORTAL_CONFIG`
+* `OPEN_BUTTON_PORT`
+* `template_hash_id`
+* Jupyter proxy modes
+
+---
+
+### Profiles
+
+#### vLLM Node
+
+* Image: `vllm/vllm-openai`
+* Exposes port 8000
+* Uses onstart to launch OpenAI-compatible server
+* Host binding: 0.0.0.0
+
+#### Whisper Node
+
+* Custom Docker image
+* Explicit port mapping
+* No template usage
+* No vLLM assumptions
+
+---
+
+### Non-Goals
+
+The orchestrator does not:
+
+* Use Vast portal reverse proxy
+* Use GUI templates
+* Use Jupyter runtype
+* Depend on implicit env merging
+
+---
+
+### Security Note
+
+Direct port exposure is used for development only.
+
+Production must use:
+
+* SSH tunnel
+  or
+* Reverse proxy
+  or
+* Authenticated gateway
+
+## SSH Key Injection Failure Handling
+
+### Context
+
+When provisioning Vast instances with `runtype=ssh`, SSH access depends on Vast automatically installing the account’s registered public key into the container at boot.
+
+This key installation is performed by Vast’s control plane during instance initialization.
+
+Our orchestration layer does **not** manually inject keys.
+
+### Observed Failure Mode
+
+Occasionally, a provisioned instance will:
+
+* Reach `cur_state=running`
+* Report `actual_status=running`
+* Expose an SSH endpoint
+* Reject authentication with:
+
+```
+Permission denied (publickey)
+```
+
+In this state:
+
+* The SSH daemon is running
+* Network connectivity exists
+* The container is alive
+* The authorized key was not installed correctly
+
+This condition does not self-heal.
+
+Retrying SSH on the same instance will continue to fail indefinitely.
+
+Destroying and reprovisioning typically resolves the issue.
+
+### Classification
+
+This is an **infrastructure provisioning defect**, not a workload warmup state.
+
+It must be classified as `INFRA_FATAL`.
+
+It is distinct from:
+
+* `Connection refused` (SSH daemon not yet listening)
+* `Timeout` (network not ready)
+* Workload warmup (vLLM not yet serving)
+
+### Required Orchestrator Behavior
+
+When SSH probe returns:
+
+```
+Permission denied (publickey)
+```
+
+The system must:
+
+1. Immediately classify as infrastructure fatal.
+2. Abort waiting loop.
+3. Destroy the instance (unless `preserve_on_failure=true`).
+4. Blacklist the host for this run.
+5. Retry provisioning with next best offer.
+
+The orchestrator must **not** continue polling in this state.
+
+### Detection Rule
+
+Within `waitForRunningAndSsh()`:
+
+If SSH probe failure contains case-insensitive substring:
+
+```
+permission denied
+```
+
+Then throw a fatal exception.
+
+This prevents indefinite polling loops.
+
+### Rationale
+
+Instances are ephemeral and provisioned on heterogeneous hosts.
+
+SSH key injection is an external side effect performed by Vast.
+
+The orchestration layer must assume:
+
+* Remote initialization steps can fail independently.
+* A running container does not imply a usable instance.
+* SSH authentication failure after daemon availability is terminal.
+
+### Future Hardening
+
+Possible improvements:
+
+* Add host-level reliability scoring for SSH key injection failures.
+* Record metric: `ssh_auth_failures`.
+* Escalate host to global blacklist after N auth failures.
+* Distinguish between:
+
+  * Transport failure
+  * Auth failure
+  * Daemon unavailable
+* Reduce polling delay after fatal SSH detection.
+
+---
+
+# 9. Vision-Language Inference Layer (Book Processing)
+
+## 9.1 Design Principle
+
+Vision-language inference is treated as a stateless adapter layer.
+
+The orchestrator provisions compute.
+Controllers define use-case contracts.
+The model is an implementation detail.
+
+The system does not:
+
+* Allow the model to define business rules
+* Allow grading logic to live inside prompts
+* Depend on model-specific formatting quirks
+
+Controllers enforce strict response schemas.
+
+---
+
+## 9.2 Endpoint Separation
+
+The system now exposes distinct domain endpoints:
+
+### `/compute/book-extract`
+
+Purpose: extract identity metadata.
+
+Input:
+
+* `images[]` (cover and/or title page)
+
+Output contract:
+
+```
+{
+  "title": string,
+  "author": string,
+  "raw": string
+}
+```
+
+Failure:
+
+* `parse_failed`
+* `invalid_upstream_json`
+* `upstream_http_error`
+
+Characteristics:
+
+* Low image count (typically 1–2)
+* Faster inference time
+* Strict schema validation
+* Deterministic contract
+
+---
+
+### `/compute/book-condition`
+
+Purpose: extract observable physical condition signals.
+
+Input:
+
+* `images[]` (arbitrary count)
+
+Output contract:
+
+```
+{
+  "condition_grade": string,
+  "visible_issues": string[],
+  "raw": string
+}
+```
+
+Characteristics:
+
+* Higher image count
+* Larger prompt token usage
+* Slower inference
+* Soft classification domain
+
+Important:
+The model reports observable signals only.
+Final grading logic may later move to PHP to preserve deterministic business rules.
+
+---
+
+## 9.3 JSON Extraction Strategy
+
+Instruction-tuned models frequently wrap JSON in Markdown fences:
+
+````
+```json
+{ ... }
+````
+
+```
+
+The controller uses `extractFirstJsonObject()` to:
+
+1. Locate first `{`
+2. Locate last `}`
+3. Decode substring
+4. Validate expected schema
+
+This strategy is:
+
+- Model-agnostic
+- Fence-tolerant
+- Resistant to prefixed/suffixed commentary
+
+Controllers must never trust raw string equality.
+Always extract JSON object boundaries.
+
+---
+
+## 9.4 Token Budget Implications
+
+Multi-image requests significantly increase prompt token usage.
+
+Example:
+
+- 7 images → ~9600 prompt tokens
+- Latency ~60–75 seconds on 7B VLM
+
+Design implications:
+
+- Condition endpoint should tolerate longer SLAs
+- Metadata endpoint should remain image-minimal
+- Future optimization may include image downscaling or image count caps
+
+---
+
+## 9.5 Dev-Mode Public Inference
+
+For early-stage development:
+
+- vLLM is exposed publicly via `-p 8000:8000`
+- Host and port are stored in Drupal state:
+  - `compute.vllm_host`
+  - `compute.vllm_port`
+  - `compute.vllm_url`
+
+Controllers read from `compute.vllm_url` as single source of truth.
+
+Security Warning:
+This configuration is not production-safe.
+
+Future production mode must use:
+- SSH tunnel
+- Reverse proxy
+- Authenticated gateway
+- Or private network-only binding
+
+---
+
+## 9.6 Domain Boundary Rule
+
+Controllers define domain contracts.
+
+The model provides:
+- Extraction
+- Classification
+- Signal detection
+
+The model does not:
+- Define grading systems
+- Set pricing logic
+- Enforce marketplace constraints
+- Decide business rules
+
+Business logic remains deterministic and testable in PHP.
+
+---
+
+## 9.7 Future Expansion
+
+Planned endpoints:
+
+- `/compute/book-bundle-extract`
+- `/compute/book-metadata-extended`
+- `/compute/book-condition-structured`
+
+Each endpoint must:
+
+- Define explicit schema
+- Validate required keys
+- Reject mismatched responses
+- Remain independent of prompt experimentation
+

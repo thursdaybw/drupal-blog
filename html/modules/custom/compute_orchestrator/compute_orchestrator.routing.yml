@@ -1,0 +1,14 @@
+compute_orchestrator.book_extract:
+  path: '/compute/book-extract'
+  defaults:
+    _controller: '\Drupal\compute_orchestrator\Controller\BookExtractController::extract'
+  requirements:
+    _access: 'TRUE'
+  methods: [POST]
+compute.book_condition:
+  path: '/compute/book-condition'
+  defaults:
+    _controller: '\Drupal\compute_orchestrator\Controller\BookConditionController::extract'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'

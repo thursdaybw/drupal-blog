@@ -32,6 +32,14 @@ final class VastTestCommand extends Command {
       InputOption::VALUE_NONE,
       'Preserve failed instances for investigation.'
     );
+
+    $this->addOption(
+      'workload',
+      null,
+      InputOption::VALUE_REQUIRED,
+      'Workload to run (tinyllama | qwen-vl).',
+      'tinyllama'
+    );
   }
 
   protected function execute(InputInterface $input, OutputInterface $output): int {
@@ -40,11 +48,39 @@ final class VastTestCommand extends Command {
 
     $strictness = (string) \Drupal::state()->get('compute_orchestrator.strictness', 'strict');
     $preserve = (bool) $input->getOption('preserve');
+
+    $workload = (string) $input->getOption('workload');
+
+    $image = 'vllm/vllm-openai:v0.12.0';
+    $model = '';
+    $gpuRamGte = 8;
+
+    $workloadMap = [
+      'tinyllama' => [
+        'model' => 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
+        'gpu_ram_gte' => 8,
+      ],
+      'qwen-vl' => [
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 16,
+      ],
+    ];
+
+    if ($workloadMap[$workload]) {
+      $selected = $workloadMap[$workload];
+    }
+    else {
+        $workloadMap['tinyllama'];
+    }
+
+    $model = $selected['model'];
+    $gpuRamGte = $selected['gpu_ram_gte'];
+
     $policy = $this->resolveStrictnessPolicy($strictness);
 
     $filters = [
       'reliability' => ['gte' => $policy['reliability_gte']],
-      'gpu_ram' => ['gte' => 8],
+      'gpu_ram' => ['gte' => $gpuRamGte],
       'num_gpus' => ['eq' => 1],
       'rentable' => ['eq' => true],
       'verification' => ['eq' => 'verified'],
@@ -65,14 +101,14 @@ final class VastTestCommand extends Command {
           'workload' => 'vllm',
           'prefer_success_hosts' => $policy['prefer_success_hosts'],
           'preserve_on_failure' => $preserve,
-          'image' => 'vllm/vllm-openai:v0.12.0',
+          'image' => $image,
           'options' => [
             'disk' => 40,
             'runtype' => 'ssh_direct',
             'target_state' => 'running',
-            'onstart_cmd' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve TinyLlama/TinyLlama-1.1B-Chat-v1.0 --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
-            'onstart' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve TinyLlama/TinyLlama-1.1B-Chat-v1.0 --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
-            'args_str' => '--model TinyLlama/TinyLlama-1.1B-Chat-v1.0 --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code',
+            'onstart_cmd' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
+            'onstart' => "bash -lc 'if command -v vllm >/dev/null 2>&1; then vllm serve {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; else python3 -m vllm.entrypoints.openai.api_server --model {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code --host 0.0.0.0 --port 8000 > /tmp/vllm.log 2>&1; fi'",
+            'args_str' => "--model {$model} --dtype float16 --max-model-len 2048 --tensor-parallel-size 1 --trust-remote-code",
           ],
         ],
         3,

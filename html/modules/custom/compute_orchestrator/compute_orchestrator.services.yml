@@ -24,3 +24,9 @@ services:
     class: Drupal\compute_orchestrator\Service\BadHostRegistry
     arguments:
       - '@state'
+
+  compute_orchestrator.vlm_client:
+    class: Drupal\compute_orchestrator\Service\VlmClient
+    arguments:
+      - '@http_client'
+      - '@file_system'

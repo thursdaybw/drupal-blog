@@ -32,7 +32,7 @@ final class BookMetadataController extends ControllerBase {
       ], 400);
     }
 
-    $promptText = "Extract structured metadata from the provided book images. Only use information visible in the images. Do not guess. Return only JSON with keys: title, author, isbn, publisher, publication_year, format, language, genre, narrative_type, country_printed, edition, series, features. Features must be an array of short strings such as 'dust jacket', 'ex-library', 'illustrated', 'large print'. Use empty string for any scalar field not visible. Use empty array for features if none visible.";
+        $promptText = "Extract structured metadata from the provided book images. Only use information visible in the images. Do not guess. Return only JSON with keys: title, subtitle, author, isbn, publisher, publication_year, format, language, genre, narrative_type, country_printed, edition, series, features. Rules: title is the main title only, subtitle is the subtitle only (empty string if not visible). isbn is digits only if visible, else empty string. format is one of: paperback, hardcover, else empty string. language is a language name if visible else empty string. features is an array of strings, allowed values: ex-library, dust-jacket, large-print, signed, boxed-set. Use empty string for any field not visible, and [] for features if none are visible.";
 
     $imagePaths = [];
     foreach ($images as $image) {
@@ -71,21 +71,31 @@ final class BookMetadataController extends ControllerBase {
     }
 
     if (is_array($parsed)) {
+      $title = (string) ($parsed['title'] ?? '');
+      $subtitle = (string) ($parsed['subtitle'] ?? '');
+      $author = (string) ($parsed['author'] ?? '');
+      $format = (string) ($parsed['format'] ?? '');
+
+      $fullTitle = $this->buildFullTitle($title, $subtitle);
+      $ebayTitle = $this->buildEbayTitle($title, $subtitle, $author, $format);
+
       return new JsonResponse([
-        'title' => (string) ($parsed['title'] ?? ''),
-        'author' => (string) ($parsed['author'] ?? ''),
+        'title' => $title,
+        'subtitle' => $subtitle,
+        'full_title' => $fullTitle,
+        'author' => $author,
         'isbn' => (string) ($parsed['isbn'] ?? ''),
         'publisher' => (string) ($parsed['publisher'] ?? ''),
         'publication_year' => (string) ($parsed['publication_year'] ?? ''),
-        'format' => (string) ($parsed['format'] ?? ''),
+        'format' => $format,
         'language' => (string) ($parsed['language'] ?? ''),
         'genre' => (string) ($parsed['genre'] ?? ''),
         'narrative_type' => (string) ($parsed['narrative_type'] ?? ''),
         'country_printed' => (string) ($parsed['country_printed'] ?? ''),
         'edition' => (string) ($parsed['edition'] ?? ''),
         'series' => (string) ($parsed['series'] ?? ''),
-        'features' => $parsed['features'] ?? [],
-        'ebay_title' => $this->buildEbayTitle($parsed),
+        'features' => is_array($parsed['features'] ?? null) ? array_values(array_map('strval', $parsed['features'])) : [],
+        'ebay_title' => $ebayTitle,
         'raw' => $content,
       ]);
     }
@@ -97,37 +107,85 @@ final class BookMetadataController extends ControllerBase {
 
   }
 
-  private function buildEbayTitle(array $meta): string {
+  private function buildFullTitle(string $title, string $subtitle): string {
+    $title = trim($title);
+    $subtitle = trim($subtitle);
 
-    $title = trim((string) ($meta['title'] ?? ''));
-    $author = trim((string) ($meta['author'] ?? ''));
-    $format = trim((string) ($meta['format'] ?? ''));
-
-    // Normalize format casing
-    if ($format !== '') {
-      $format = ucfirst(strtolower($format));
+    if ($title === '') {
+      return '';
     }
 
-    // Remove subtitle first if too long
-    $baseTitle = $title;
-
-    $candidate = trim("$baseTitle by $author $format Book");
-
-    if (strlen($candidate) > 80 && str_contains($title, ':')) {
-      $parts = explode(':', $title, 2);
-      $baseTitle = trim($parts[0]);
-      $candidate = trim("$baseTitle by $author $format Book");
+    if ($subtitle === '') {
+      return $title;
     }
 
-    // Final hard truncate if still too long
-    if (strlen($candidate) > 80) {
-      $candidate = substr($candidate, 0, 80);
+    return $title . ': ' . $subtitle;
+  }
+
+  private function buildEbayTitle(string $title, string $subtitle, string $author, string $format): string {
+    $title = trim($title);
+    $subtitle = trim($subtitle);
+    $author = trim($author);
+    $format = strtolower(trim($format));
+
+    $formatLabel = '';
+    if ($format === 'paperback') {
+      $formatLabel = 'Paperback';
+    }
+    elseif ($format === 'hardcover') {
+      $formatLabel = 'Hardcover';
     }
 
-    // Clean double spaces
-    $candidate = preg_replace('/\s+/', ' ', $candidate);
+    $suffixParts = [];
+    if ($author !== '') {
+      $suffixParts[] = 'by ' . $author;
+    }
+    if ($formatLabel !== '') {
+      $suffixParts[] = $formatLabel;
+    }
+    $suffixParts[] = 'Book';
 
-    return trim($candidate);
+    $suffix = implode(' ', $suffixParts);
+    $maxLen = 80;
+
+    $candidateWithSubtitle = $this->buildFullTitle($title, $subtitle);
+    $candidate = trim($candidateWithSubtitle . ' ' . $suffix);
+    $candidate = preg_replace('/\s+/', ' ', $candidate) ?? $candidate;
+
+    if (strlen($candidate) <= $maxLen) {
+      return $candidate;
+    }
+
+    // Drop subtitle first.
+    $candidateNoSubtitle = trim($title . ' ' . $suffix);
+    $candidateNoSubtitle = preg_replace('/\s+/', ' ', $candidateNoSubtitle) ?? $candidateNoSubtitle;
+
+    if (strlen($candidateNoSubtitle) <= $maxLen) {
+      return $candidateNoSubtitle;
+    }
+
+    // Truncate title to fit, keep suffix intact.
+    $suffixWithLeadingSpace = ' ' . $suffix;
+    $budget = $maxLen - strlen($suffixWithLeadingSpace);
+    if ($budget <= 0) {
+      // Extreme case, truncate suffix too.
+      return substr($candidateNoSubtitle, 0, $maxLen);
+    }
+
+    $truncatedTitle = $title;
+    if (strlen($truncatedTitle) > $budget) {
+      if ($budget >= 3) {
+        $truncatedTitle = substr($truncatedTitle, 0, $budget - 3) . '...';
+      }
+      else {
+        $truncatedTitle = substr($truncatedTitle, 0, $budget);
+      }
+    }
+
+    $final = trim($truncatedTitle . $suffixWithLeadingSpace);
+    $final = preg_replace('/\s+/', ' ', $final) ?? $final;
+
+    return substr($final, 0, $maxLen);
   }
 
 }

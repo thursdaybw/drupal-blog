@@ -32,7 +32,7 @@ final class BookMetadataController extends ControllerBase {
       ], 400);
     }
 
-        $promptText = "Extract structured metadata from the provided book images. Only use information visible in the images. Do not guess. Return only JSON with keys: title, subtitle, author, isbn, publisher, publication_year, format, language, genre, narrative_type, country_printed, edition, series, features. Rules: title is the main title only, subtitle is the subtitle only (empty string if not visible). isbn is digits only if visible, else empty string. format is one of: paperback, hardcover, else empty string. language is a language name if visible else empty string. features is an array of strings, allowed values: ex-library, dust-jacket, large-print, signed, boxed-set. Use empty string for any field not visible, and [] for features if none are visible.";
+    $promptText = "Extract structured metadata from the provided book images. Use visible information from the images. If the book is clearly identifiable by title and author, you may use widely known public knowledge about the book to generate a brief factual summary. Do not invent details. Return only JSON with keys: title, subtitle, author, isbn, publisher, publication_year, format, language, genre, narrative_type, country_printed, edition, series, features, short_description. Rules: title is the main title only, subtitle is the subtitle only (empty string if not visible). isbn is digits only if visible, else empty string. format is one of: paperback, hardcover, else empty string. language is a language name if visible else empty string. features is an array of strings, allowed values: ex-library, dust-jacket, large-print, signed, boxed-set. short_description must be 1-2 concise factual sentences about the book itself. Do not describe the cover image, layout, or visual elements. No promotional tone. Use empty string for any field not visible, and [] for features if none are visible.";
 
     $imagePaths = [];
     foreach ($images as $image) {
@@ -79,6 +79,27 @@ final class BookMetadataController extends ControllerBase {
       $fullTitle = $this->buildFullTitle($title, $subtitle);
       $ebayTitle = $this->buildEbayTitle($title, $subtitle, $author, $format);
 
+      $shortDescription = trim((string) ($parsed['short_description'] ?? ''));
+
+      $footer = trim("
+---
+
+Australian seller starting a new chapter from the Northern Rivers of NSW
+
+Sent via Australia Post within 2 business days of payment clearing
+
+All items are pre-loved and sold as-is.
+
+Explore my other listings, more books and treasures added regularly!
+");
+
+      if ($shortDescription === '') {
+        $description = $footer;
+      }
+      else {
+        $description = $shortDescription . "\n\n" . $footer;
+      }
+
       return new JsonResponse([
         'title' => $title,
         'subtitle' => $subtitle,
@@ -96,6 +117,7 @@ final class BookMetadataController extends ControllerBase {
         'series' => (string) ($parsed['series'] ?? ''),
         'features' => is_array($parsed['features'] ?? null) ? array_values(array_map('strval', $parsed['features'])) : [],
         'ebay_title' => $ebayTitle,
+        'description' => $description,
         'raw' => $content,
       ]);
     }

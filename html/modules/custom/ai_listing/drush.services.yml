@@ -1,0 +1,7 @@
+services:
+  ai_listing.process_command:
+    class: Drupal\ai_listing\Command\AiListingProcessCommand
+    arguments:
+      - '@ai_listing.batch_data_extraction_processor'
+    tags:
+      - { name: drush.command }

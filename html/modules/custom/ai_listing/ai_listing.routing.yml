@@ -1,0 +1,7 @@
+ai_listing.add:
+  path: '/admin/ai-listing/add'
+  defaults:
+    _form: '\Drupal\ai_listing\Form\AiBookListingUploadForm'
+    _title: 'Add AI Book Listing'
+  requirements:
+    _permission: 'administer site configuration'

@@ -32,7 +32,34 @@ final class BookConditionController extends ControllerBase {
       ], 400);
     }
 
-    $promptText = "Assess the physical condition of the book based only on visible damage in the provided images. Do not speculate about pages not shown. Return only JSON with keys condition_grade and visible_issues (array of short strings).";
+    $promptText = " Act as a very cautious resller and assess the physical condition of the book.
+
+List visible physical defects of any pages, cover board or dust jacket if present.
+As a cautious reseller look out for anything noticible such as faint staining and include it.
+
+Use any of the following issue categories:
+
+- ex_library
+- gift inscription/pen marks
+- foxing
+- tearing
+- tanning/toning
+- edge wear
+- dust jacket damage
+- surface wear
+- paper ageing
+- staining
+
+Rules:
+- If no issues are visible, return: { \"issues\": [] }
+
+Return only a single JSON object in this format:
+
+{ \"issues\": [\"issue_name\"] }
+
+Do not add commentary.
+Do not wrap in markdown fences.
+      ";
 
     $imagePaths = [];
     foreach ($images as $image) {
@@ -44,10 +71,15 @@ final class BookConditionController extends ControllerBase {
     $content = (string) $result['raw'];
     $parsed = $result['parsed'];
 
-    if (is_array($parsed) && isset($parsed['condition_grade']) && isset($parsed['visible_issues'])) {
+    if (is_array($parsed) && isset($parsed['issues'])) {
+
+      $issues = array_values(array_map(
+        fn($v) => strtolower(trim((string) $v)),
+        is_array($parsed['issues']) ? $parsed['issues'] : []
+      ));
+
       return new JsonResponse([
-        'condition_grade' => (string) $parsed['condition_grade'],
-        'visible_issues' => array_values(array_map('strval', $parsed['visible_issues'])),
+        'issues' => $issues,
         'raw' => $content,
       ]);
     }

@@ -1,0 +1,6 @@
+<?php
+
+function ai_listing_update_1001() {
+  \Drupal::entityDefinitionUpdateManager()
+    ->installEntityType('ai_book_listing');
+}

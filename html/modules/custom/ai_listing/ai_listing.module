@@ -1,0 +1,40 @@
+<?php
+
+declare(strict_types=1);
+
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\Core\File\FileSystemInterface;
+
+/**
+ * Implements hook_entity_predelete().
+ */
+function ai_listing_entity_predelete(EntityInterface $entity): void {
+
+  if (!$entity instanceof AiBookListing) {
+    return;
+  }
+
+  $fileStorage = \Drupal::entityTypeManager()->getStorage('file');
+
+  $fileSystem = \Drupal::service('file_system');
+
+  $uuId = $entity->uuid();
+  $directory = "public://ai-listings/{$uuId}";
+
+  foreach ($entity->get('images') as $item) {
+
+    $file = $fileStorage->load($item->target_id);
+
+    if ($file) {
+      $file->delete();
+    }
+  }
+
+  if ($fileSystem->prepareDirectory($directory, FileSystemInterface::MODIFY_PERMISSIONS)) {
+    $realPath = $fileSystem->realpath($directory);
+    if ($realPath && is_dir($realPath)) {
+      $fileSystem->deleteRecursive($directory);
+    }
+  }
+}

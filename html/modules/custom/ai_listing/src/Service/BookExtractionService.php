@@ -2,49 +2,91 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Controller;
+namespace Drupal\ai_listing\Service;
 
-use Drupal\Core\Controller\ControllerBase;
-use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpFoundation\Request;
 use Drupal\compute_orchestrator\Service\VlmClient;
 
-final class BookMetadataController extends ControllerBase {
+final class BookExtractionService {
 
   public function __construct(
     private readonly VlmClient $vlmClient,
   ) {}
 
-  public static function create(ContainerInterface $container): self {
-    return new self(
-      $container->get('compute_orchestrator.vlm_client'),
-    );
+  /**
+   * @param string[] $imagePaths Real filesystem paths.
+   * @return array{
+   *   metadata: array<string,mixed>|null,
+   *   metadata_raw: string,
+   *   condition: array{issues: string[]}|null,
+   *   condition_raw: string
+   * }
+   */
+  public function extract(array $imagePaths): array {
+
+    if (empty($imagePaths)) {
+      throw new \RuntimeException('No images provided.');
+    }
+
+    $metadataPrompt = $this->buildMetadataPrompt();
+    $conditionPrompt = $this->buildConditionPrompt();
+
+    $metadataResult = $this->vlmClient->infer($metadataPrompt, $imagePaths);
+    $conditionResult = $this->vlmClient->infer($conditionPrompt, $imagePaths);
+
+    $metadataParsed = is_array($metadataResult['parsed'] ?? null) ? $metadataResult['parsed'] : null;
+    $conditionParsed = is_array($conditionResult['parsed'] ?? null) ? $conditionResult['parsed'] : null;
+
+    $metadataStructured = $metadataParsed ? $this->normalizeMetadata($metadataParsed) : null;
+    $conditionStructured = $conditionParsed ? $this->normalizeCondition($conditionParsed) : null;
+
+    return [
+      'metadata' => $metadataStructured,
+      'metadata_raw' => (string) ($metadataResult['raw'] ?? ''),
+      'condition' => $conditionStructured,
+      'condition_raw' => (string) ($conditionResult['raw'] ?? ''),
+    ];
   }
 
-  public function extract(Request $request): JsonResponse {
-    $images = $request->files->all('images');
+  private function buildMetadataPrompt(): string {
+    return "Extract structured metadata from the provided book images. Use visible information from the images. If the book is clearly identifiable by title and author, you may use widely known public knowledge about the book to generate a brief factual summary. Do not invent details. Return only JSON with keys: title, subtitle, author, isbn, publisher, publication_year, format, language, genre, narrative_type, country_printed, edition, series, features, short_description. Rules: title is the main title only, subtitle is the subtitle only (empty string if not visible). isbn is digits only if visible, else empty string. format is one of: paperback, hardcover, else empty string. language is a language name if visible else empty string. features is an array of strings, allowed values: ex-library, dust-jacket, large-print, signed, boxed-set. short_description must be 1-2 concise factual sentences about the book itself. Do not describe the cover image, layout, or visual elements. No promotional tone. Use empty string for any field not visible, and [] for features if none are visible.";
+  }
 
-    if (empty($images) || !is_array($images)) {
-      return new JsonResponse([
-        'error' => 'missing_files',
-        'msg' => 'POST multipart form-data with files: images[]',
-      ], 400);
-    }
+  private function buildConditionPrompt(): string {
+    return " Act as a very cautious resller and assess the physical condition of the book.
 
-    $promptText = "Extract structured metadata from the provided book images. Use visible information from the images. If the book is clearly identifiable by title and author, you may use widely known public knowledge about the book to generate a brief factual summary. Do not invent details. Return only JSON with keys: title, subtitle, author, isbn, publisher, publication_year, format, language, genre, narrative_type, country_printed, edition, series, features, short_description. Rules: title is the main title only, subtitle is the subtitle only (empty string if not visible). isbn is digits only if visible, else empty string. format is one of: paperback, hardcover, else empty string. language is a language name if visible else empty string. features is an array of strings, allowed values: ex-library, dust-jacket, large-print, signed, boxed-set. short_description must be 1-2 concise factual sentences about the book itself. Do not describe the cover image, layout, or visual elements. No promotional tone. Use empty string for any field not visible, and [] for features if none are visible.";
+List visible physical defects of any pages, cover board or dust jacket if present.
+As a cautious reseller look out for anything noticible such as faint staining and include it.
 
-    $imagePaths = [];
-    foreach ($images as $image) {
-      $imagePaths[] = $image->getPathname();
-    }
+Use any of the following issue categories:
 
-    $result = $this->vlmClient->infer($promptText, $imagePaths);
+- ex_library
+- gift inscription/pen marks
+- foxing
+- tearing
+- tanning/toning
+- edge wear
+- dust jacket damage
+- surface wear
+- paper ageing
+- staining
 
-    $content = (string) $result['raw'];
+Rules:
+- If no issues are visible, return: { \"issues\": [] }
 
-    $parsed = $result['parsed'];
+Return only a single JSON object in this format:
 
+{ \"issues\": [\"issue_name\"] }
+
+Do not add commentary.
+Do not wrap in markdown fences.
+      ";
+  }
+
+  /**
+   * @param array<string,mixed> $parsed
+   * @return array<string,mixed>
+   */
+  private function normalizeMetadata(array $parsed): array {
     // --- Normalize parsed metadata ---
     if (is_array($parsed)) {
       foreach ($parsed as $k => $v) {
@@ -100,7 +142,7 @@ Explore my other listings, more books and treasures added regularly!
         $description = $shortDescription . "\n\n" . $footer;
       }
 
-      return new JsonResponse([
+      return [
         'title' => $title,
         'subtitle' => $subtitle,
         'full_title' => $fullTitle,
@@ -118,15 +160,29 @@ Explore my other listings, more books and treasures added regularly!
         'features' => is_array($parsed['features'] ?? null) ? array_values(array_map('strval', $parsed['features'])) : [],
         'ebay_title' => $ebayTitle,
         'description' => $description,
-        'raw' => $content,
-      ]);
+      ];
     }
 
-    return new JsonResponse([
-      'error' => 'parse_failed',
-      'raw' => $content,
-    ], 200);
+    return [];
+  }
 
+  /**
+   * @param array<string,mixed> $parsed
+   * @return array{issues: string[]}
+   */
+  private function normalizeCondition(array $parsed): array {
+
+    if (isset($parsed['issues']) && is_array($parsed['issues'])) {
+
+      $issues = array_values(array_map(
+        fn($v) => strtolower(trim((string) $v)),
+        $parsed['issues']
+      ));
+
+      return ['issues' => $issues];
+    }
+
+    return ['issues' => []];
   }
 
   private function buildFullTitle(string $title, string $subtitle): string {

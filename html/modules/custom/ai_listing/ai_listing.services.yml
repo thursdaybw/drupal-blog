@@ -1,0 +1,16 @@
+services:
+  ai_listing.data_extraction_processor:
+    class: Drupal\ai_listing\Service\AiBookListingDataExtractionProcessor
+    arguments:
+      - '@ai_listing.book_extraction'
+      - '@entity_type.manager'
+      - '@file_system'
+  ai_listing.batch_data_extraction_processor:
+    class: Drupal\ai_listing\Service\AiBookListingBatchDataExtractionProcessor
+    arguments:
+      - '@entity_type.manager'
+      - '@ai_listing.data_extraction_processor'
+  ai_listing.book_extraction:
+    class: Drupal\ai_listing\Service\BookExtractionService
+    arguments:
+      - '@compute_orchestrator.vlm_client'

@@ -308,8 +308,17 @@ final class VastRestClient implements VastRestClientInterface {
         $classification = $adapter->classifyFailure($probeResults);
         $why = $this->formatProbeFailure($classification, $probeResults);
 
-        if (in_array($classification, [FailureClass::INFRA_FATAL, FailureClass::WORKLOAD_FATAL], true)) {
-          throw new WorkloadReadinessException($classification, 'Fatal workload startup failure: ' . $why);
+        $classifications = [
+          FailureClass::INFRA_FATAL,
+          FailureClass::WORKLOAD_FATAL,
+          FailureClass::WORKLOAD_INCOMPATIBLE,
+        ];
+        if (in_array($classification, $classifications, true)) {
+
+          throw new WorkloadReadinessException(
+            $classification,
+            'Terminal workload startup failure: ' . $why
+          );
         }
 
         $forwardProgress = $adapter->detectForwardProgress($previousProbeResults, $probeResults);
@@ -757,9 +766,9 @@ final class VastRestClient implements VastRestClientInterface {
       'unsupported display driver / cuda driver combination',
       'cannot find -lcuda',
     ] as $marker) {
-      if (str_contains($lower, $marker)) {
-        return true;
-      }
+    if (str_contains($lower, $marker)) {
+      return true;
+    }
     }
 
     return false;

@@ -33,25 +33,59 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
     $form_state->set('listing', $ai_book_listing);
 
-    // ===== SUMMARY =====
+    // ===== BASIC DETAILS =====
 
-    $form['title'] = [
+    $form['basic'] = [
+      '#type' => 'details',
+      '#title' => 'Basic details',
+      '#open' => TRUE,
+    ];
+
+
+    // ===== EBAY LISTING =====
+
+    $form['ebay'] = [
+      '#type' => 'details',
+      '#title' => 'eBay listing',
+      '#open' => TRUE,
+    ];
+
+    $form['ebay']['ebay_title'] = [
+      '#type' => 'textfield',
+      '#title' => 'eBay Title',
+      '#default_value' => $ai_book_listing->get('ebay_title')->value,
+    ];
+
+    $form['ebay']['description'] = [
+      '#type' => 'textarea',
+      '#title' => 'Description',
+      '#default_value' => $ai_book_listing->get('description')->value,
+      '#rows' => 12,
+    ];
+
+    $form['basic']['title'] = [
       '#type' => 'textfield',
       '#title' => 'Title',
       '#default_value' => $ai_book_listing->get('title')->value,
       '#required' => TRUE,
     ];
 
-    $form['author'] = [
+    $form['basic']['subtitle'] = [
+      '#type' => 'textfield',
+      '#title' => 'Subtitle',
+      '#default_value' => $ai_book_listing->get('subtitle')->value,
+    ];
+
+    $form['basic']['full_title'] = [
+      '#type' => 'textfield',
+      '#title' => 'Full title',
+      '#default_value' => $ai_book_listing->get('full_title')->value,
+    ];
+
+    $form['basic']['author'] = [
       '#type' => 'textfield',
       '#title' => 'Author',
       '#default_value' => $ai_book_listing->get('author')->value,
-    ];
-
-    $form['ebay_title'] = [
-      '#type' => 'textfield',
-      '#title' => 'eBay Title',
-      '#default_value' => $ai_book_listing->get('ebay_title')->value,
     ];
 
     // ===== CONDITION =====
@@ -113,13 +147,86 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#rows' => 3,
     ];
 
-    // ===== DESCRIPTION =====
 
-    $form['description'] = [
+
+    $form['basic']['isbn'] = [
+      '#type' => 'textfield',
+      '#title' => 'ISBN',
+      '#default_value' => $ai_book_listing->get('isbn')->value,
+    ];
+
+    $form['basic']['publisher'] = [
+      '#type' => 'textfield',
+      '#title' => 'Publisher',
+      '#default_value' => $ai_book_listing->get('publisher')->value,
+    ];
+
+    $form['basic']['publication_year'] = [
+      '#type' => 'textfield',
+      '#title' => 'Publication year',
+      '#default_value' => $ai_book_listing->get('publication_year')->value,
+    ];
+
+    $form['basic']['edition'] = [
+      '#type' => 'textfield',
+      '#title' => 'Edition',
+      '#default_value' => $ai_book_listing->get('edition')->value,
+    ];
+
+    $form['basic']['series'] = [
+      '#type' => 'textfield',
+      '#title' => 'Series',
+      '#default_value' => $ai_book_listing->get('series')->value,
+    ];
+
+    // ===== CLASSIFICATION =====
+
+    $form['classification'] = [
+      '#type' => 'details',
+      '#title' => 'Classification',
+      '#open' => FALSE,
+    ];
+
+    $form['classification']['format'] = [
+      '#type' => 'textfield',
+      '#title' => 'Format',
+      '#default_value' => $ai_book_listing->get('format')->value,
+    ];
+
+    $form['classification']['language'] = [
+      '#type' => 'textfield',
+      '#title' => 'Language',
+      '#default_value' => $ai_book_listing->get('language')->value,
+    ];
+
+    $form['classification']['genre'] = [
+      '#type' => 'textfield',
+      '#title' => 'Genre',
+      '#default_value' => $ai_book_listing->get('genre')->value,
+    ];
+
+    $form['classification']['narrative_type'] = [
+      '#type' => 'textfield',
+      '#title' => 'Narrative type',
+      '#default_value' => $ai_book_listing->get('narrative_type')->value,
+    ];
+
+    $form['classification']['country_printed'] = [
+      '#type' => 'textfield',
+      '#title' => 'Country printed',
+      '#default_value' => $ai_book_listing->get('country_printed')->value,
+    ];
+
+    // ===== FEATURES =====
+
+    $form['features'] = [
       '#type' => 'textarea',
-      '#title' => 'Description',
-      '#default_value' => $ai_book_listing->get('description')->value,
-      '#rows' => 12,
+      '#title' => 'Features (one per line)',
+      '#default_value' => implode("\n", array_filter(array_map(
+        fn($item) => $item->value,
+        iterator_to_array($ai_book_listing->get('features'))
+      ))),
+      '#rows' => 5,
     ];
 
     // ===== PHOTOS =====
@@ -215,10 +322,28 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     /** @var AiBookListing $listing */
     $listing = $form_state->get('listing');
 
-    $listing->set('title', $form_state->getValue('title'));
-    $listing->set('author', $form_state->getValue('author'));
-    $listing->set('ebay_title', $form_state->getValue('ebay_title'));
-    $listing->set('description', $form_state->getValue('description'));
+    $listing->set('title', $form_state->getValue(['basic', 'title']));
+    $listing->set('subtitle', $form_state->getValue(['basic', 'subtitle']));
+    $listing->set('full_title', $form_state->getValue(['basic', 'full_title']));
+    $listing->set('author', $form_state->getValue(['basic', 'author']));
+    $listing->set('isbn', $form_state->getValue(['basic', 'isbn']));
+    $listing->set('publisher', $form_state->getValue(['basic', 'publisher']));
+    $listing->set('publication_year', $form_state->getValue(['basic', 'publication_year']));
+    $listing->set('edition', $form_state->getValue(['basic', 'edition']));
+    $listing->set('series', $form_state->getValue(['basic', 'series']));
+
+    $listing->set('format', $form_state->getValue(['classification', 'format']));
+    $listing->set('language', $form_state->getValue(['classification', 'language']));
+    $listing->set('genre', $form_state->getValue(['classification', 'genre']));
+    $listing->set('narrative_type', $form_state->getValue(['classification', 'narrative_type']));
+    $listing->set('country_printed', $form_state->getValue(['classification', 'country_printed']));
+
+    $featuresText = $form_state->getValue('features');
+    $features = array_filter(array_map('trim', explode("\n", $featuresText)));
+    $listing->set('features', $features);
+
+    $listing->set('ebay_title', $form_state->getValue(['ebay', 'ebay_title']));
+    $listing->set('description', $form_state->getValue(['ebay', 'description']));
 
     $condition = (array) $form_state->getValue('condition');
 

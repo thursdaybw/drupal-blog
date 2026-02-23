@@ -65,10 +65,6 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
     $anyApiUp = $models8000 || $models8080;
     $hasProcess = trim($processes) !== '';
 
-    if (!$anyApiUp && !$hasProcess) {
-      return FailureClass::WORKLOAD_FATAL;
-    }
-
     foreach ([
       'unsupported display driver / cuda driver combination',
       'cudagetdevicecount',
@@ -82,18 +78,35 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
     }
     }
 
-    foreach ([
+    $driver_runtime_imcompatibility_indicators = [
+      // Driver/runtime incompatibility indicators
+      'cannot find -lcuda',
       'engine core initialization failed',
-      'failed core proc',
-      'inductorerror',
-      'returned non-zero exit status',
       'runtimeerror: engine core initialization failed',
+      'inductorerror',
+    ];
+
+    foreach ($driver_runtime_imcompatibility_indicators as $marker) {
+      if (str_contains($logs, $marker)) {
+        return FailureClass::WORKLOAD_INCOMPATIBLE;
+      }
+    }
+
+    // Logical workload failures (config, bad args, etc)
+    $logical_workload_failures = [
+      'failed core proc',
+      'returned non-zero exit status',
       'traceback',
       'runtimeerror',
-    ] as $marker) {
-    if (str_contains($logs, $marker)) {
-      return FailureClass::WORKLOAD_FATAL;
+    ];
+    foreach ($logical_workload_failures as $marker) {
+      if (str_contains($logs, $marker)) {
+        return FailureClass::WORKLOAD_FATAL;
+      }
     }
+
+    if (!$anyApiUp && !$hasProcess) {
+      return FailureClass::WORKLOAD_FATAL;
     }
 
     if (trim($processes) !== '') {

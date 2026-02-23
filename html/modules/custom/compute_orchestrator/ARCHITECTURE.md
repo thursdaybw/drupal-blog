@@ -544,3 +544,20 @@ Each endpoint must:
 - Reject mismatched responses
 - Remain independent of prompt experimentation
 
+**TODO: Add Early GPU Sanity Check After SSH**
+
+**Problem:** Some cheap GPU hosts look valid when selected, but they are not set up properly to run GPU containers. The container runtime fails when trying to attach the GPU, which causes long startup delays and wasted credits before the workload crashes.
+
+
+**What is happening:** The host may have a GPU installed, but the driver is not correctly exposed to containers, or the CUDA library (`libcuda.so`) is missing. When vLLM starts, Triton tries to use the GPU and fails with errors like “cannot find -lcuda” or device injection errors.
+
+**Why this matters:** Right now, we only discover this after waiting for the model to download and start. That wastes time and money. We want to fail fast.
+
+**Error seen:** `Container start failed: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: could not apply required modification to OCI specification: error modifying OCI spec: failed to inject CDI devices: unresolvable CDI device`
+
+**Simple fix:** After SSH becomes available, run two quick checks before starting vLLM:
+
+* `nvidia-smi`
+* `ldconfig -p | grep libcuda` (or check that `libcuda.so` exists)
+
+If either check fails, immediately destroy the instance and mark the host as infrastructure fatal. This avoids full model startup attempts on broken GPU hosts.

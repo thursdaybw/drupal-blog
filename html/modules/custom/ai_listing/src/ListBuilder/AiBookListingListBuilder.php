@@ -10,12 +10,14 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityListBuilder;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Entity\Query\QueryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 final class AiBookListingListBuilder extends EntityListBuilder {
 
   private DateFormatterInterface $dateFormatter;
+  private ?string $statusFilter = NULL;
 
   public function __construct(
     EntityTypeInterface $entity_type,
@@ -51,7 +53,7 @@ final class AiBookListingListBuilder extends EntityListBuilder {
     $operations = $parent_row['operations'] ?? null;
 
     $row = [];
-    $row['title'] = $entity->toLink( $entity->label() ?: $this->t('(Untitled)'));
+    $row['title'] = $entity->label() ?: $this->t('(Untitled)');
     $row['author'] = $entity->get('author')->value;
     $row['status'] = $entity->get('status')->value;
 
@@ -78,6 +80,21 @@ final class AiBookListingListBuilder extends EntityListBuilder {
     }
 
     return $operations;
+  }
+
+  public function setStatusFilter(?string $status): self {
+    $this->statusFilter = $status;
+    return $this;
+  }
+
+  protected function getEntityListQuery(): QueryInterface {
+    $query = parent::getEntityListQuery();
+
+    if ($this->statusFilter !== NULL) {
+      $query->condition('status', $this->statusFilter);
+    }
+
+    return $query;
   }
 
 }

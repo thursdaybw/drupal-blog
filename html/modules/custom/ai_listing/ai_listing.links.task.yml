@@ -1,5 +1,5 @@
 ai_listing.content_tab:
-  route_name: entity.ai_book_listing.collection
+  route_name: entity.ai_book_listing.list_new
   title: 'AI Book Listings'
   base_route: system.admin_content
   weight: 100

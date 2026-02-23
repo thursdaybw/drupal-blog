@@ -5,11 +5,29 @@ ai_listing.add:
     _title: 'Add AI Book Listing'
   requirements:
     _permission: 'administer ai listings'
-
-entity.ai_book_listing.collection:
-  path: '/admin/ai-listings'
+entity.ai_book_listing.list_new:
+  path: '/admin/ai-listings/new'
   defaults:
-    _entity_list: 'ai_book_listing'
-    _title: 'AI Book Listings'
+    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
+    _title: 'AI Book Listings – New'
+    status: 'new'
+  requirements:
+    _permission: 'administer ai listings'
+
+entity.ai_book_listing.list_ready:
+  path: '/admin/ai-listings/ready'
+  defaults:
+    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
+    _title: 'AI Book Listings – Ready'
+    status: 'ready'
+  requirements:
+    _permission: 'administer ai listings'
+
+entity.ai_book_listing.list_published:
+  path: '/admin/ai-listings/published'
+  defaults:
+    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
+    _title: 'AI Book Listings – Published'
+    status: 'published'
   requirements:
     _permission: 'administer ai listings'

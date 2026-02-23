@@ -69,7 +69,7 @@ final class AiBookListingDataExtractionProcessor {
 
     $listing->set('condition_issues', is_array($condition['issues'] ?? null) ? array_values(array_map('strval', $condition['issues'])) : []);
 
-    $listing->set('status', 'processed');
+    $listing->set('status', 'ready');
 
     $listing->save();
   }

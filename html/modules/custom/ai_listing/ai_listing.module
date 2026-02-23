@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\ai_listing\Entity\AiBookListing;
 use Drupal\Core\File\FileSystemInterface;
+use Drupal\file\FileInterface;
 
 /**
  * Implements hook_entity_predelete().
@@ -37,4 +38,22 @@ function ai_listing_entity_predelete(EntityInterface $entity): void {
       $fileSystem->deleteRecursive($directory);
     }
   }
+}
+
+
+/**
+ * Implements hook_entity_insert().
+ */
+function ai_listing_entity_insert(\Drupal\Core\Entity\EntityInterface $entity): void {
+
+  if (!$entity instanceof FileInterface) {
+    return;
+  }
+
+  if (strpos($entity->getMimeType(), 'image/') !== 0) {
+    return;
+  }
+
+  \Drupal::service('ai_listing.image_normalization')
+    ->normalize($entity->getFileUri());
 }

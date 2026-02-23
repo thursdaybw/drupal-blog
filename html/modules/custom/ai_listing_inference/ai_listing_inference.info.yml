@@ -1,0 +1,7 @@
+name: AI Listing Inference
+type: module
+description: Inference adapter services consumed by the AI listings UI module.
+core_version_requirement: ^10
+package: Custom
+dependencies:
+  - compute_orchestrator

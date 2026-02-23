@@ -4,4 +4,12 @@ ai_listing.add:
     _form: '\Drupal\ai_listing\Form\AiBookListingUploadForm'
     _title: 'Add AI Book Listing'
   requirements:
-    _permission: 'administer site configuration'
+    _permission: 'administer ai listings'
+
+entity.ai_book_listing.collection:
+  path: '/admin/ai-listings'
+  defaults:
+    _entity_list: 'ai_book_listing'
+    _title: 'AI Book Listings'
+  requirements:
+    _permission: 'administer ai listings'

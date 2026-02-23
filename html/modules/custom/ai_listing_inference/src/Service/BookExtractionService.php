@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\ai_listing\Service;
+namespace Drupal\ai_listing_inference\Service;
 
 use Drupal\compute_orchestrator\Service\VlmClient;
 

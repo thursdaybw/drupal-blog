@@ -1,0 +1,5 @@
+services:
+  ai_listing_inference.book_extraction:
+    class: Drupal\ai_listing_inference\Service\BookExtractionService
+    arguments:
+      - '@compute_orchestrator.vlm_client'

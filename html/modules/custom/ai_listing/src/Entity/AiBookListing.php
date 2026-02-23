@@ -172,6 +172,21 @@ final class AiBookListing extends ContentEntityBase {
       ->setCardinality(BaseFieldDefinition::CARDINALITY_UNLIMITED)
       ->setDefaultValue([]);
 
+    $fields['condition_grade'] = BaseFieldDefinition::create('list_string')
+      ->setLabel('Condition grade')
+      ->setDescription('Overall condition grade.')
+      ->setRequired(TRUE)
+      ->setDefaultValue('like_new')
+      ->setSetting('allowed_values', [
+        'acceptable' => 'Acceptable',
+        'good' => 'Good',
+        'very_good' => 'Very good',
+        'like_new' => 'Like new',
+      ]);
+
+    $fields['condition_note'] = BaseFieldDefinition::create('string_long')
+      ->setLabel('Condition note')
+      ->setDescription('Full condition sentence used in listing.');
 
     $fields['images'] = BaseFieldDefinition::create('entity_reference')
       ->setLabel('Images')
@@ -193,29 +208,79 @@ final class AiBookListing extends ContentEntityBase {
     $fields['changed'] = BaseFieldDefinition::create('changed')
       ->setLabel('Changed');
 
-    $fields['status'] = self::configureListField($fields['status'], 0, self::statusAllowedValues());
-    $fields['title'] = self::configureStringField($fields['title'], 1);
-    $fields['subtitle'] = self::configureStringField($fields['subtitle'], 2);
-    $fields['full_title'] = self::configureStringField($fields['full_title'], 3);
-    $fields['author'] = self::configureStringField($fields['author'], 4);
-    $fields['isbn'] = self::configureStringField($fields['isbn'], 5, 32);
-    $fields['publisher'] = self::configureStringField($fields['publisher'], 6);
-    $fields['publication_year'] = self::configureStringField($fields['publication_year'], 7, 12);
-    $fields['format'] = self::configureStringField($fields['format'], 8);
-    $fields['language'] = self::configureStringField($fields['language'], 9);
-    $fields['genre'] = self::configureStringField($fields['genre'], 10);
-    $fields['narrative_type'] = self::configureStringField($fields['narrative_type'], 11);
-    $fields['country_printed'] = self::configureStringField($fields['country_printed'], 12);
-    $fields['edition'] = self::configureStringField($fields['edition'], 13);
-    $fields['series'] = self::configureStringField($fields['series'], 14);
-    $fields['features'] = self::configureStringField($fields['features'], 15);
-    $fields['ebay_title'] = self::configureStringField($fields['ebay_title'], 16);
-    $fields['description'] = self::configureTextAreaField($fields['description'], 17, 5);
-    $fields['condition_issues'] = self::configureStringField($fields['condition_issues'], 18);
-    $fields['images'] = self::configureEntityReferenceField($fields['images'], 19);
-    $fields['metadata_json'] = self::configureTextAreaField($fields['metadata_json'], 20, 5, 'hidden');
-    $fields['condition_json'] = self::configureTextAreaField($fields['condition_json'], 21, 5, 'hidden');
 
+    $fieldConfig = [
+      'status' => ['type' => 'list', 'allowed' => self::statusAllowedValues()],
+      'title' => ['type' => 'string'],
+      'subtitle' => ['type' => 'string'],
+      'full_title' => ['type' => 'string'],
+      'author' => ['type' => 'string'],
+      'isbn' => ['type' => 'string', 'size' => 32],
+      'publisher' => ['type' => 'string'],
+      'publication_year' => ['type' => 'string', 'size' => 12],
+      'format' => ['type' => 'string'],
+      'language' => ['type' => 'string'],
+      'genre' => ['type' => 'string'],
+      'narrative_type' => ['type' => 'string'],
+      'country_printed' => ['type' => 'string'],
+      'edition' => ['type' => 'string'],
+      'series' => ['type' => 'string'],
+      'features' => ['type' => 'string'],
+      'ebay_title' => ['type' => 'string'],
+      'description' => ['type' => 'textarea', 'rows' => 5],
+      'condition_grade' => ['type' => 'list'],
+      'condition_issues' => ['type' => 'string'],
+      'condition_note' => ['type' => 'textarea', 'rows' => 3],
+      'images' => ['type' => 'entity_reference'],
+      'metadata_json' => ['type' => 'textarea', 'rows' => 5, 'region' => 'hidden'],
+      'condition_json' => ['type' => 'textarea', 'rows' => 5, 'region' => 'hidden'],
+    ];
+
+    $weight = 0;
+
+    foreach ($fieldConfig as $fieldKey => $config) {
+
+      switch ($config['type']) {
+
+      case 'string':
+        $size = $config['size'] ?? 60;
+        $fields[$fieldKey] = self::configureStringField(
+          $fields[$fieldKey],
+          $weight,
+          $size
+        );
+        break;
+
+      case 'textarea':
+        $rows = $config['rows'] ?? 5;
+        $region = $config['region'] ?? 'content';
+        $fields[$fieldKey] = self::configureTextAreaField(
+          $fields[$fieldKey],
+          $weight,
+          $rows,
+          $region
+        );
+        break;
+
+      case 'entity_reference':
+        $fields[$fieldKey] = self::configureEntityReferenceField(
+          $fields[$fieldKey],
+          $weight
+        );
+        break;
+
+      case 'list':
+        $allowed = $config['allowed'] ?? $fields[$fieldKey]->getSetting('allowed_values');
+        $fields[$fieldKey] = self::configureListField(
+          $fields[$fieldKey],
+          $weight,
+          $allowed
+        );
+        break;
+      }
+
+      $weight++;
+    }
     return $fields;
   }
 

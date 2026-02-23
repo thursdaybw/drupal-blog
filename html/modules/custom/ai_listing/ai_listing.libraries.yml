@@ -1,0 +1,13 @@
+photo_viewer:
+  css:
+    theme:
+      vendor/glightbox/glightbox.min.css: {}
+  js:
+    vendor/glightbox/glightbox.min.js: {}
+    js/photo-viewer-init.js: {}
+  dependencies:
+    - core/drupal
+review_ui:
+  css:
+    theme:
+      css/review-ui.css: {}

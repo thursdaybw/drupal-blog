@@ -5,8 +5,13 @@ services:
       - '@ai_listing_inference.book_extraction'
       - '@entity_type.manager'
       - '@file_system'
+
   ai_listing.batch_data_extraction_processor:
     class: Drupal\ai_listing\Service\AiBookListingBatchDataExtractionProcessor
     arguments:
       - '@entity_type.manager'
       - '@ai_listing.data_extraction_processor'
+
+  ai_listing.image_normalization:
+    class: Drupal\ai_listing\Service\ImageNormalizationService
+    arguments: ['@file_system']

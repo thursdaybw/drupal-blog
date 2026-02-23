@@ -1,0 +1,84 @@
+/* Make the issues list into big tap targets (checkbox -> button tiles). */
+.ai-issue-checkboxes .form-checkboxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ai-issue-checkboxes .form-item {
+  margin: 0;
+  position: relative;
+}
+
+/* Hide the checkbox itself, keep the label as the tap target. */
+.ai-issue-checkboxes input[type="checkbox"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+
+.ai-issue-checkboxes label {
+  display: block;
+  padding: 12px 14px;
+  border: 1px solid #c9c9c9;
+  border-radius: 10px;
+  background: #fff;
+  text-align: center;
+  line-height: 1.2;
+  user-select: none;
+}
+
+/* Checked state */
+.ai-issue-checkboxes input[type="checkbox"]:checked + label {
+  border-color: #0d6efd;
+  background: #0d6efd;
+  color: #fff;
+}
+
+/* Desktop gets more columns */
+@media (min-width: 768px) {
+  .ai-issue-checkboxes .form-checkboxes {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+/* ===== OVERRIDE: fix mobile wrapping + clear state ===== */
+
+
+.ai-issue-checkboxes .form-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-issue-checkboxes label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  border: 2px solid #d0d0d0;
+  border-radius: 12px;
+  background: #f3f3f3;
+  color: #111;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.ai-issue-checkboxes input[type="checkbox"]:checked + label {
+  background: #ffffff;
+  border-color: #0d6efd;
+  color: #0d6efd;
+}
+
+.ai-issue-checkboxes input[type="checkbox"]:checked + label::before {
+  content: "✓ ";
+  font-weight: bold;
+}

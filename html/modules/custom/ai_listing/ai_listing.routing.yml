@@ -31,3 +31,11 @@ entity.ai_book_listing.list_published:
     status: 'published'
   requirements:
     _permission: 'administer ai listings'
+
+entity.ai_book_listing.canonical:
+  path: '/admin/ai-listings/{ai_book_listing}'
+  defaults:
+    _controller: '\Drupal\ai_listing\Controller\AiBookListingReviewController::view'
+    _title_callback: '\Drupal\ai_listing\Controller\AiBookListingReviewController::title'
+  requirements:
+    _permission: 'administer ai listings'

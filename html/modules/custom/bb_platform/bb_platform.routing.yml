@@ -1,7 +1,8 @@
 bb_platform.applications_dashboard:
   path: '/admin/applications'
   defaults:
-    _controller: '\Drupal\bb_platform\Controller\ApplicationsDashboardController::page'
+    _controller: '\Drupal\system\Controller\SystemController::overview'
+    link_id: 'bb_platform.applications'
     _title: 'Applications'
   requirements:
     _permission: 'access administration pages'

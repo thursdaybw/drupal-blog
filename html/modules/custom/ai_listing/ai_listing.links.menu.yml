@@ -1,0 +1,24 @@
+ai_listing.group:
+  title: 'AI Listings'
+  description: 'Review and publish AI generated listings'
+  route_name: entity.ai_book_listing.list_new
+  parent: bb_platform.applications
+  weight: 0
+
+ai_listing.new:
+  title: 'New'
+  route_name: entity.ai_book_listing.list_new
+  parent: ai_listing.group
+  weight: 0
+
+ai_listing.ready:
+  title: 'Ready'
+  route_name: entity.ai_book_listing.list_ready
+  parent: ai_listing.group
+  weight: 10
+
+ai_listing.published:
+  title: 'Published'
+  route_name: entity.ai_book_listing.list_published
+  parent: ai_listing.group
+  weight: 20

@@ -1,5 +1,17 @@
-ai_listing.content_tab:
+entity.ai_book_listing.list_new_tab:
   route_name: entity.ai_book_listing.list_new
-  title: 'AI Book Listings'
-  base_route: system.admin_content
-  weight: 100
+  title: 'New'
+  base_route: entity.ai_book_listing.list_new
+  weight: 0
+
+entity.ai_book_listing.list_ready_tab:
+  route_name: entity.ai_book_listing.list_ready
+  title: 'Ready'
+  base_route: entity.ai_book_listing.list_new
+  weight: 10
+
+entity.ai_book_listing.list_published_tab:
+  route_name: entity.ai_book_listing.list_published
+  title: 'Published'
+  base_route: entity.ai_book_listing.list_new
+  weight: 20

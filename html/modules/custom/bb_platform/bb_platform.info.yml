@@ -1,0 +1,5 @@
+name: 'Bevan&#039;s Bench - Platform'
+type: module
+description: 'Provides admin IA structure for applications and operations.'
+package: Bevans Bench
+core_version_requirement: ^10 || ^11

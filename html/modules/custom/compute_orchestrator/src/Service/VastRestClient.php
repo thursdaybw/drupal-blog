@@ -367,7 +367,6 @@ final class VastRestClient implements VastRestClientInterface {
 
   public function provisionInstanceFromOffers(
     array $filters,
-    array $excludeHosts = [],
     array $excludeRegions = [],
     int $limit = 5,
     ?float $maxPrice = null,
@@ -380,16 +379,24 @@ final class VastRestClient implements VastRestClientInterface {
     $preserveOnFailure = (bool) ($createOptions['preserve_on_failure'] ?? false);
     $workload = (string) ($createOptions['workload'] ?? 'vllm');
 
-    $persistedBadHosts = $this->badHosts->all();
     $globalBlacklist = $this->getGlobalBlacklist();
     $globallyBlockedHosts = array_keys($globalBlacklist);
-    $excludeHosts = array_values(array_unique(array_merge($excludeHosts, $persistedBadHosts, $globallyBlockedHosts)));
-    if (!empty($persistedBadHosts)) {
-      $this->logWithTime('Loaded persisted bad hosts: ' . implode(',', $persistedBadHosts));
-    }
+
+
     if (!empty($globallyBlockedHosts)) {
-      $this->logWithTime('Loaded global blacklist hosts: ' . implode(',', $globallyBlockedHosts));
+      $this->logWithTime(
+        'Loaded GLOBAL infra blacklist hosts (all workloads): ' .
+        implode(',', $globallyBlockedHosts)
+      );
     }
+
+    $workloadBlacklist = \Drupal::state()->get('compute_orchestrator.workload_bad_hosts', []);
+    $workloadBlockedHosts = $workloadBlacklist[$workload] ?? [];
+
+    $excludedHostIds = array_values(array_unique(array_merge(
+      $globallyBlockedHosts,
+      $workloadBlockedHosts
+    )));
 
     $offers = $this->searchOffersStructured($filters, $limit);
 
@@ -403,7 +410,7 @@ final class VastRestClient implements VastRestClientInterface {
     foreach ($offers as $offer) {
 
       $hostId = (string) ($offer['host_id'] ?? '');
-      if (in_array($hostId, $excludeHosts, true)) {
+      if (in_array($hostId, $excludedHostIds, true)) {
         continue;
       }
 
@@ -443,7 +450,6 @@ final class VastRestClient implements VastRestClientInterface {
     });
 
     $attempts = 0;
-    $excludedHostIds = array_values(array_unique(array_merge($persistedBadHosts, $globallyBlockedHosts)));
     $lastFailureMessage = null;
 
     foreach ($valid as $offer) {
@@ -499,8 +505,31 @@ final class VastRestClient implements VastRestClientInterface {
         if ($e instanceof WorkloadReadinessException) {
           $isInfraFatal = $e->getFailureClass() === FailureClass::INFRA_FATAL;
         }
+
+        if ($e instanceof WorkloadReadinessException) {
+
+          $failureClass = $e->getFailureClass();
+
+          if ($failureClass === FailureClass::WORKLOAD_INCOMPATIBLE && $hostId !== '') {
+
+            $key = 'compute_orchestrator.workload_bad_hosts';
+            $all = \Drupal::state()->get($key, []);
+
+            if (!isset($all[$workload]) || !is_array($all[$workload])) {
+              $all[$workload] = [];
+            }
+
+            if (!in_array($hostId, $all[$workload], true)) {
+              $all[$workload][] = $hostId;
+              \Drupal::state()->set($key, $all);
+              $this->logWithTime("Added host {$hostId} to WORKLOAD blacklist [{$workload}]");
+            }
+          }
+        }
+
+
         if ($isInfraFatal && $hostId !== '') {
-          $this->recordHostInfraFailure($hostId);
+          $this->incrementInfraFailureStats($hostId);
           $this->addToGlobalBlacklist($hostId);
         }
 
@@ -685,7 +714,7 @@ final class VastRestClient implements VastRestClientInterface {
     $this->saveHostStats($stats);
   }
 
-  private function recordHostInfraFailure(string $hostId): void {
+  private function incrementInfraFailureStats(string $hostId): void {
     if ($hostId === '') {
       return;
     }

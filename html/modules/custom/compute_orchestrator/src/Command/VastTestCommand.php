@@ -76,7 +76,8 @@ final class VastTestCommand extends Command {
     }
 
     $model = $selected['model'];
-    $gpuRamGte = $selected['gpu_ram_gte'];
+    $gpuRamGteGb = $selected['gpu_ram_gte'];
+    $gpuRamGte = $gpuRamGteGb * 1024;
     $maxModelLen = $selected['max_model_len'];
 
     $policy = $this->resolveStrictnessPolicy($strictness);
@@ -96,7 +97,6 @@ final class VastTestCommand extends Command {
 
       $result = $this->vastClient->provisionInstanceFromOffers(
         $filters,
-        [],
         ['RU', 'CN', 'IR', 'KP', 'SY'],
         20,
         1.0,

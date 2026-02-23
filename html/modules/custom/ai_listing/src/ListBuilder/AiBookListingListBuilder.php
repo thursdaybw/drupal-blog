@@ -53,7 +53,7 @@ final class AiBookListingListBuilder extends EntityListBuilder {
     $operations = $parent_row['operations'] ?? null;
 
     $row = [];
-    $row['title'] = $entity->label() ?: $this->t('(Untitled)');
+    $row['title'] = $entity->toLink($entity->label() ?: $this->t('(Untitled)'));
     $row['author'] = $entity->get('author')->value;
     $row['status'] = $entity->get('status')->value;
 

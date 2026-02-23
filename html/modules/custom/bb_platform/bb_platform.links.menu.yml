@@ -1,0 +1,13 @@
+bb_platform.applications:
+  title: 'Applications'
+  description: 'Business applications'
+  route_name: bb_platform.applications_dashboard
+  parent: system.admin
+  weight: 50
+
+bb_platform.operations:
+  title: 'Operations'
+  description: 'System operations and workflows'
+  route_name: bb_platform.applications_dashboard
+  parent: bb_platform.applications
+  weight: 0

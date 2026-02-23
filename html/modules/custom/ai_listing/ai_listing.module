@@ -57,3 +57,19 @@ function ai_listing_entity_insert(\Drupal\Core\Entity\EntityInterface $entity): 
   \Drupal::service('ai_listing.image_normalization')
     ->normalize($entity->getFileUri());
 }
+
+/**
+ * Implements hook_theme().
+ */
+function ai_listing_theme($existing, $type, $theme, $path) {
+  return [
+    'ai_tile_radios' => [
+      'render element' => 'element',
+      'template' => 'ai-tile-radios',
+    ],
+    'ai_tile_checkboxes' => [
+      'render element' => 'element',
+      'template' => 'ai-tile-checkboxes',
+    ],
+  ];
+}

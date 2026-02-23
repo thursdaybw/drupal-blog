@@ -63,24 +63,26 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#tree' => TRUE,
     ];
 
-    // Determine current values properly.
-    $conditionState = $form_state->getValue('condition');
+    // Grade (normal radios, no container hack)
+    $form['condition']['condition_grade'] = [
+      '#type' => 'container',
+      '#title' => $this->t('Grade'),
+      '#theme' => 'ai_tile_radios',
+      '#options' => [
+        'acceptable' => $this->t('Acceptable'),
+        'good' => $this->t('Good'),
+        'very_good' => $this->t('Very good'),
+        'like_new' => $this->t('Like new'),
+      ],
+      '#name' => 'condition[condition_grade]',
+      '#value' => $ai_book_listing->get('condition_grade')->value ?? 'good',
+    ];
 
-    if (is_array($conditionState) && isset($conditionState['condition_issues'])) {
-      // Rebuild or AJAX case
-      $existingIssues = array_values(array_filter($conditionState['condition_issues']));
-    }
-    else {
-      // Initial load from entity
-      $existingIssues = [];
-      foreach ($ai_book_listing->get('condition_issues') as $item) {
-        if (!empty($item->value)) {
-          $existingIssues[] = (string) $item->value;
-        }
-      }
-
-      if (!in_array('edge wear', $existingIssues, TRUE)) {
-        $existingIssues[] = 'edge wear';
+    // Issues (flat, no panel, no wrapper)
+    $existingIssues = [];
+    foreach ($ai_book_listing->get('condition_issues') as $item) {
+      if (!empty($item->value)) {
+        $existingIssues[] = (string) $item->value;
       }
     }
 
@@ -99,39 +101,17 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
         'paper ageing' => $this->t('Paper ageing'),
         'staining' => $this->t('Staining'),
       ],
-      '#default_value' => array_combine($existingIssues, $existingIssues),
-      '#attributes' => ['class' => ['ai-issue-checkboxes']],
-      '#ajax' => [
-        'callback' => '::ajaxConditionNote',
-        'wrapper' => 'condition-note-wrapper',
-        'event' => 'change',
-        'disable-refocus' => TRUE,
-        'progress' => [
-          'type' => 'none',
-        ],
-      ],
+      '#default_value' => $existingIssues,
+      '#theme' => 'ai_tile_checkboxes',
     ];
 
-    // Build note
-    if (is_array($conditionState) && isset($conditionState['condition_note'])) {
-      $defaultNote = $conditionState['condition_note'];
-    }
-    else {
-      $defaultNote = $this->buildConditionNote($existingIssues);
-    }
-
-    $form['condition']['condition_note_wrapper'] = [
-      '#type' => 'container',
-      '#attributes' => ['id' => 'condition-note-wrapper'],
-    ];
-
-    $form['condition']['condition_note_wrapper']['condition_note'] = [
+    // Note (flat, no wrapper)
+    $form['condition']['condition_note'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Condition note'),
-      '#default_value' => $defaultNote,
+      '#default_value' => $this->buildConditionNote($existingIssues),
       '#rows' => 3,
     ];
-
 
     // ===== DESCRIPTION =====
 
@@ -183,10 +163,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       ];
     }
 
-    $form['photos']['gallery'] = [
-      '#type' => 'container',
-      'items' => $photo_items,
-    ];
+    $form['photos']['items'] = $photo_items;
 
     // ===== METADATA =====
 
@@ -243,19 +220,29 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listing->set('ebay_title', $form_state->getValue('ebay_title'));
     $listing->set('description', $form_state->getValue('description'));
 
-    $conditionValues = (array) $form_state->getValue('condition');
-    $values = (array) ($conditionValues['condition_issues'] ?? []);
-    $issues = array_values(array_filter($values));
-    $note = (string) ($conditionValues['condition_note_wrapper']['condition_note'] ?? '');
+    $condition = (array) $form_state->getValue('condition');
+
+    $issues = array_values(array_filter(
+      (array) ($condition['condition_issues'] ?? [])
+    ));
+
+    $note = (string) ($condition['condition_note'] ?? '');
+
+    $grade = (string) ($condition['condition_grade'] ?? 'good');
+
+    $listing->set('condition_grade', $grade);
 
     $listing->set('condition_issues', $issues);
 
     $conditionPayload = [
       'issues' => $issues,
       'note' => $note,
+      'grade' => $grade,
     ];
 
     $listing->set('condition_json', json_encode($conditionPayload, JSON_PRETTY_PRINT));
+
+
 
     $listing->save();
 
@@ -318,25 +305,6 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     return $base . " Please see photos for full details.";
   }
 
-  public function ajaxConditionNote(array &$form, FormStateInterface $form_state): array {
 
-    $conditionValues = (array) $form_state->getValue('condition');
-    $issueValues = (array) ($conditionValues['condition_issues'] ?? []);
-
-    $selected = array_values(array_filter($issueValues));
-
-    $newNote = $this->buildConditionNote($selected);
-
-    // Set value at correct tree path.
-    $form_state->setValue(
-      ['condition', 'condition_note_wrapper', 'condition_note'],
-      $newNote
-    );
-
-    // Update element default for rebuild.
-    $form['condition']['condition_note_wrapper']['condition_note']['#value'] = $newNote;
-
-    return $form['condition']['condition_note_wrapper'];
-  }
 
 }

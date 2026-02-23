@@ -1,0 +1,14 @@
+<div class="ai-tile-grid">
+  {% for key, label in element['#options'] %}
+    <label class="ai-tile">
+      <input
+        type="checkbox"
+        name="{{ element['#name'] }}[]"
+        value="{{ key }}"
+        data-issue="{{ key }}"
+        {% if key in element['#value'] %}checked{% endif %}
+      >
+      <span>{{ label }}</span>
+    </label>
+  {% endfor %}
+</div>

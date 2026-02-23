@@ -1,84 +1,82 @@
-/* Make the issues list into big tap targets (checkbox -> button tiles). */
-.ai-issue-checkboxes .form-checkboxes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+/* ===== GRADE PILLS ===== */
+
+.ai-pill-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
-.ai-issue-checkboxes .form-item {
-  margin: 0;
+.ai-pill {
   position: relative;
+  cursor: pointer;
 }
 
-/* Hide the checkbox itself, keep the label as the tap target. */
-.ai-issue-checkboxes input[type="checkbox"] {
+.ai-pill input {
   position: absolute;
-  top: 0;
-  left: 0;
   opacity: 0;
   pointer-events: none;
-  width: 1px;
-  height: 1px;
 }
 
-.ai-issue-checkboxes label {
-  display: block;
-  padding: 12px 14px;
-  border: 1px solid #c9c9c9;
-  border-radius: 10px;
-  background: #fff;
-  text-align: center;
-  line-height: 1.2;
-  user-select: none;
+.ai-pill span {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 2px solid #d8d8d8;
+  background: #f5f5f5;
+  transition: all 0.15s ease;
 }
 
-/* Checked state */
-.ai-issue-checkboxes input[type="checkbox"]:checked + label {
-  border-color: #0d6efd;
+.ai-pill input:checked + span {
   background: #0d6efd;
-  color: #fff;
+  border-color: #0d6efd;
+  color: white;
+}
+.ai-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
 }
 
-/* Desktop gets more columns */
-@media (min-width: 768px) {
-  .ai-issue-checkboxes .form-checkboxes {
-    grid-template-columns: 1fr 1fr 1fr;
+@media (min-width: 900px) {
+  .ai-tile-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
   }
 }
 
-/* ===== OVERRIDE: fix mobile wrapping + clear state ===== */
-
-
-.ai-issue-checkboxes .form-checkboxes {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.ai-tile {
+  position: relative;
+  cursor: pointer;
 }
 
-.ai-issue-checkboxes label {
+.ai-tile input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ai-tile span {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 56px;
-  padding: 12px;
-  width: 100%;
-  box-sizing: border-box;
-  border: 2px solid #d0d0d0;
-  border-radius: 12px;
-  background: #f3f3f3;
-  color: #111;
   text-align: center;
-  white-space: normal;
-  word-break: break-word;
+
+  min-height: 36px;
+  padding: 6px 8px;
+
+  border-radius: 12px;
+  border: 2px solid #d8d8d8;
+  background: #f5f5f5;
+  transition: all 0.15s ease;
+
+  font-size: 14px;
+  line-height: 1.2;
 }
 
-.ai-issue-checkboxes input[type="checkbox"]:checked + label {
-  background: #ffffff;
+.ai-tile input:checked + span {
+  background: #0d6efd;
   border-color: #0d6efd;
-  color: #0d6efd;
-}
-
-.ai-issue-checkboxes input[type="checkbox"]:checked + label::before {
-  content: "✓ ";
-  font-weight: bold;
+  color: white;
 }

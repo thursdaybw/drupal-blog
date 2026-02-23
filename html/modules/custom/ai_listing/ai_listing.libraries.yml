@@ -11,3 +11,7 @@ review_ui:
   css:
     theme:
       css/review-ui.css: {}
+  js:
+    js/review-ui.js: {}
+  dependencies:
+    - core/drupal

@@ -1,0 +1,5 @@
+ai_listing.add_action:
+  route_name: ai_listing.add
+  title: 'Add AI Book Listing'
+  appears_on:
+    - entity.ai_book_listing.collection

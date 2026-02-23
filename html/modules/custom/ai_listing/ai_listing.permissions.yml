@@ -1,0 +1,4 @@
+administer ai listings:
+  title: 'Administer AI Book Listings'
+  description: 'Create, review, and manage AI-generated book metadata entries.'
+  restrict access: TRUE

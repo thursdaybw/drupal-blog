@@ -4,5 +4,6 @@ services:
     arguments:
       - '@entity_type.manager'
       - '@drupal.listing_publishing.book_assembler'
+      - '@listing_publishing.marketplace_publisher'
     tags:
       - { name: drush.command }

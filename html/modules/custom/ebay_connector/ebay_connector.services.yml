@@ -1,21 +1,8 @@
 services:
-  drupal.ebay_connector.oauth_token:
-    class: Drupal\ebay_connector\Service\OAuthTokenService
-    arguments:
-      - '@http_client'
-      - '@config.factory'
-
-  drupal.ebay_connector.sell_api:
-    class: Drupal\ebay_connector\Service\SellApiClient
-    arguments:
-      - '@http_client'
-      - '@entity_type.manager'
-      - '@drupal.ebay_connector.oauth_token'
-
   drupal.ebay_connector.book_publisher:
     class: Drupal\ebay_connector\Service\BookListingPublisher
     arguments:
-      - '@drupal.ebay_connector.sell_api'
+      - '@drupal.ebay_infrastructure.sell_api'
       - '@drupal.ebay_connector.condition_mapper'
 
   drupal.ebay_connector.condition_mapper:

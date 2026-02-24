@@ -6,7 +6,7 @@ namespace Drupal\ebay_connector\Controller;
 
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\ebay_connector\Service\OAuthTokenService;
+use Drupal\ebay_infrastructure\Service\OAuthTokenService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,7 +20,7 @@ final class EbayCallbackController implements ContainerInjectionInterface {
 
   public static function create(ContainerInterface $container): self {
     return new self(
-      $container->get('drupal.ebay_connector.oauth_token'),
+      $container->get('drupal.ebay_infrastructure.oauth_token'),
       $container->get('entity_type.manager'),
     );
   }

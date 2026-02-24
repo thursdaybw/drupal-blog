@@ -6,6 +6,7 @@ namespace Drupal\ebay_connector\Service;
 
 use Drupal\ebay_connector\Model\BookListingData;
 use Drupal\ebay_connector\Service\ConditionMapper;
+use Drupal\ebay_infrastructure\Service\SellApiClient;
 
 final class BookListingPublisher {
 

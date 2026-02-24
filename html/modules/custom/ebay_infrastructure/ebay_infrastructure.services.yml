@@ -1,0 +1,13 @@
+services:
+  drupal.ebay_infrastructure.oauth_token:
+    class: Drupal\ebay_infrastructure\Service\OAuthTokenService
+    arguments:
+      - '@http_client'
+      - '@config.factory'
+
+  drupal.ebay_infrastructure.sell_api:
+    class: Drupal\ebay_infrastructure\Service\SellApiClient
+    arguments:
+      - '@http_client'
+      - '@entity_type.manager'
+      - '@drupal.ebay_infrastructure.oauth_token'

@@ -1,0 +1,5 @@
+name: 'eBay Infrastructure'
+type: module
+description: 'Low-level infrastructure layer for eBay API access.'
+core_version_requirement: ^10
+package: Custom

@@ -15,6 +15,7 @@ final class ListingPublishRequest {
     private readonly array $imageUrls,
     private readonly int $quantity,
     private readonly string $condition,
+    private readonly array $attributes,
   ) {}
 
   public function getSku(): string {
@@ -49,6 +50,10 @@ final class ListingPublishRequest {
     return $this->condition;
   }
 
+  public function getAttributes(): array {
+    return $this->attributes;
+  }
+
   public function toArray(): array {
     return [
       'sku' => $this->sku,
@@ -59,6 +64,7 @@ final class ListingPublishRequest {
       'imageUrls' => $this->imageUrls,
       'quantity' => $this->quantity,
       'condition' => $this->condition,
+      'attributes' => $this->attributes,
     ];
   }
 

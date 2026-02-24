@@ -24,17 +24,15 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
   ) {}
 
   public function publish(ListingPublishRequest $request): MarketplacePublishResult {
+    $aspects = $this->buildAspects($request);
+
     $this->sellApiClient->replaceInventoryItem(
       $request->getSku(),
       [
         'product' => [
           'title' => $request->getTitle(),
           'description' => $request->getDescription(),
-          'aspects' => [
-            'Book Title' => [$request->getTitle()],
-            'Author' => [$request->getAuthor()],
-            'Language' => ['English'],
-          ],
+          'aspects' => $aspects,
           'imageUrls' => $request->getImageUrls(),
         ],
         'condition' => $this->conditionMapper->toEbayCondition($request->getCondition()),
@@ -79,6 +77,23 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
   public function getMarketplaceKey(): string {
     return 'ebay';
+  }
+
+  private function buildAspects(ListingPublishRequest $request): array {
+    $attributes = $request->getAttributes();
+    $aspects = [];
+
+    if (($attributes['product_type'] ?? null) === 'book') {
+      $aspects['Book Title'] = [$request->getTitle()];
+      $aspects['Author'] = [$attributes['author'] ?? $request->getAuthor()];
+      $aspects['Language'] = [$attributes['language'] ?? 'English'];
+    }
+
+    // This comment is a smell indicator: if more product types arrive, this
+    // conditional will grow. When that happens we must introduce a dedicated
+    // boundary rather than extending this if chain.
+
+    return $aspects;
   }
 
 }

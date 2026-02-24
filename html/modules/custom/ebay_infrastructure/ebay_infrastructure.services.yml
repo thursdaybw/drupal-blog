@@ -5,9 +5,26 @@ services:
       - '@http_client'
       - '@config.factory'
 
+  drupal.ebay_infrastructure.account_manager:
+    class: Drupal\ebay_infrastructure\Service\EbayAccountManager
+    arguments:
+      - '@entity_type.manager'
+      - '@drupal.ebay_infrastructure.oauth_token'
+
+  drupal.ebay_infrastructure.media_api:
+    class: Drupal\ebay_infrastructure\Service\EbayMediaApiClient
+    arguments:
+      - '@http_client'
+      - '@drupal.ebay_infrastructure.account_manager'
+
+  drupal.ebay_infrastructure.media_image_uploader:
+    class: Drupal\ebay_infrastructure\Service\EbayMediaImageUploader
+    arguments:
+      - '@drupal.ebay_infrastructure.media_api'
+      - '@file_system'
+
   drupal.ebay_infrastructure.sell_api:
     class: Drupal\ebay_infrastructure\Service\SellApiClient
     arguments:
       - '@http_client'
-      - '@entity_type.manager'
-      - '@drupal.ebay_infrastructure.oauth_token'
+      - '@drupal.ebay_infrastructure.account_manager'

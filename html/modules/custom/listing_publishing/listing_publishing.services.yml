@@ -13,3 +13,6 @@ services:
 
   listing_publishing.marketplace_publisher:
     alias: drupal.ebay_connector.marketplace_publisher
+
+  'Drupal\listing_publishing\Contract\ListingImageUploaderInterface':
+    alias: drupal.ebay_infrastructure.media_image_uploader

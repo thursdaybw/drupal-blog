@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\ebay_infrastructure\Service;
 
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\ebay_connector\Entity\EbayAccount;
-use Drupal\ebay_infrastructure\Service\OAuthTokenService;
+use Drupal\ebay_infrastructure\Service\EbayAccountManager;
 use GuzzleHttp\ClientInterface;
 
 final class SellApiClient {
@@ -15,8 +13,7 @@ final class SellApiClient {
 
   public function __construct(
     private readonly ClientInterface $httpClient,
-    private readonly EntityTypeManagerInterface $entityTypeManager,
-    private readonly OAuthTokenService $oauthTokenService,
+    private readonly EbayAccountManager $accountManager,
   ) {}
 
   public function getInventoryItem(string $sku): array {
@@ -212,9 +209,7 @@ final class SellApiClient {
 
   private function request(string $method, string $path, array $json = []): array {
 
-    $account = $this->loadPrimaryAccount();
-
-    $accessToken = $this->getValidAccessToken($account);
+    $accessToken = $this->accountManager->getValidAccessToken();
 
     $options = [
       'headers' => [
@@ -252,8 +247,7 @@ final class SellApiClient {
     array $query
   ): array {
 
-    $account = $this->loadPrimaryAccount();
-    $accessToken = $this->getValidAccessToken($account);
+    $accessToken = $this->accountManager->getValidAccessToken();
 
     $options = [
       'headers' => [
@@ -280,35 +274,6 @@ final class SellApiClient {
     }
 
     return is_array($data) ? $data : [];
-  }
-
-  private function loadPrimaryAccount(): EbayAccount {
-
-    $storage = $this->entityTypeManager->getStorage('ebay_account');
-    $accounts = $storage->loadByProperties(['environment' => 'production']);
-
-    if (!$accounts) {
-      throw new \RuntimeException('No connected eBay account found.');
-    }
-
-    return reset($accounts);
-  }
-
-  private function getValidAccessToken(EbayAccount $account): string {
-
-    if ($account->get('expires_at')->value > time()) {
-      return (string) $account->get('access_token')->value;
-    }
-
-    $tokenData = $this->oauthTokenService->refreshUserToken(
-      (string) $account->get('refresh_token')->value
-    );
-
-    $account->set('access_token', $tokenData['access_token']);
-    $account->set('expires_at', time() + (int) $tokenData['expires_in']);
-    $account->save();
-
-    return $tokenData['access_token'];
   }
 
   public function getPaymentPolicies(): array {

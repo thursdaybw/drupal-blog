@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\ebay_connector\Service;
 
+use Drupal\listing_publishing\Contract\ListingImageUploaderInterface;
 use Drupal\listing_publishing\Contract\MarketplacePublisherInterface;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
 use Drupal\listing_publishing\Model\MarketplacePublishResult;
@@ -21,9 +22,17 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
   public function __construct(
     private readonly SellApiClient $sellApiClient,
     private readonly ConditionMapper $conditionMapper,
+    private readonly ListingImageUploaderInterface $imageUploader,
   ) {}
 
   public function publish(ListingPublishRequest $request): MarketplacePublishResult {
+    $imageUrls = $this->imageUploader->upload($request->getImageSources())->getRemoteUrls();
+    if ([] === $imageUrls) {
+      $imageUrls = $request->getImageUrls();
+    }
+
+    $request = $request->withImageUrls($imageUrls);
+
     $aspects = $this->buildAspects($request);
 
     $this->sellApiClient->replaceInventoryItem(

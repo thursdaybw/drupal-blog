@@ -6,6 +6,7 @@ namespace Drupal\listing_publishing\Service;
 
 use Drupal\ai_listing\Entity\AiBookListing;
 use Drupal\file\Entity\File;
+use Drupal\listing_publishing\Model\ListingImageSource;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 
@@ -24,7 +25,9 @@ final class BookListingAssembler {
     $description = $this->resolveDescription($listing, $title);
     $author = (string) ($listing->get('author')->value ?: self::DEFAULT_AUTHOR);
     $sku = 'ai-book-' . $listing->id();
-    $imageUrls = $this->resolveImageUrls($listing);
+    $files = $listing->get('images')->referencedEntities();
+    $imageSources = $this->collectImageSources($files);
+    $imageUrls = $this->collectImageUrls($files);
     $condition = (string) ($listing->get('condition_grade')->value ?? self::DEFAULT_CONDITION);
     $attributes = [
       'product_type' => 'book',
@@ -38,6 +41,7 @@ final class BookListingAssembler {
       $description,
       $author,
       self::DEFAULT_PRICE,
+      $imageSources,
       $imageUrls,
       self::DEFAULT_QUANTITY,
       $condition,
@@ -68,9 +72,28 @@ final class BookListingAssembler {
     return "AI-assisted metadata for {$title}.";
   }
 
-  private function resolveImageUrls(AiBookListing $listing): array {
+  /**
+   * @param iterable<\Drupal\file\Entity\File|mixed> $files
+   *
+   * @return ListingImageSource[]
+   */
+  private function collectImageSources(iterable $files): array {
+    $sources = [];
+
+    foreach ($files as $file) {
+      if ($file instanceof File) {
+        $sources[] = ListingImageSource::fromFile($file);
+      }
+    }
+
+    return $sources;
+  }
+
+  /**
+   * @param iterable<\Drupal\file\Entity\File|mixed> $files
+   */
+  private function collectImageUrls(iterable $files): array {
     $urls = [];
-    $files = $listing->get('images')->referencedEntities();
 
     foreach ($files as $file) {
       if ($file instanceof File) {

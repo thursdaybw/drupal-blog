@@ -21,7 +21,6 @@ services:
     class: Drupal\ebay_infrastructure\Service\EbayMediaImageUploader
     arguments:
       - '@drupal.ebay_infrastructure.media_api'
-      - '@file_system'
 
   drupal.ebay_infrastructure.sell_api:
     class: Drupal\ebay_infrastructure\Service\SellApiClient

@@ -26,6 +26,11 @@ final class BookListingAssembler {
     $sku = 'ai-book-' . $listing->id();
     $imageUrls = $this->resolveImageUrls($listing);
     $condition = (string) ($listing->get('condition_grade')->value ?? self::DEFAULT_CONDITION);
+    $attributes = [
+      'product_type' => 'book',
+      'author' => $author,
+      'language' => 'English',
+    ];
 
     return new ListingPublishRequest(
       $sku,
@@ -35,7 +40,8 @@ final class BookListingAssembler {
       self::DEFAULT_PRICE,
       $imageUrls,
       self::DEFAULT_QUANTITY,
-      $condition
+      $condition,
+      $attributes
     );
   }
 

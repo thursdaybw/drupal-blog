@@ -9,10 +9,17 @@ use Drupal\ebay_connector\Service\ConditionMapper;
 
 final class BookListingPublisher {
 
-  public function __construct(
-    private readonly SellApiClient $sellApiClient,
-    private readonly ConditionMapper $conditionMapper,
-  ) {}
+  private const BOOKS_CATEGORY_ID = '261186'; // books
+  private const DEFAULT_CATEGORY_ID = self::BOOKS_CATEGORY_ID;
+  private const DEFAULT_MERCHANT_LOCATION_KEY = 'PRIMARY-AU';
+
+  private const DEFAULT_PAYMENT_POLICY_ID = '240514406026';
+  private const DEFAULT_FULFILLMENT_POLICY_ID = '244519897026';
+  private const DEFAULT_RETURN_POLICY_ID = '240513136026';
+
+
+  public function __construct( private readonly SellApiClient $sellApiClient, private readonly ConditionMapper $conditionMapper,) {
+  }
 
   public function publish(BookListingData $data): string {
 
@@ -25,11 +32,14 @@ final class BookListingPublisher {
           'title' => $data->title,
           'description' => $data->description,
           'aspects' => [
-            'Brand' => ['Unbranded'],
+            'Book Title' => [$data->title],
+            'Author' => [$data->author],
+            'Language' => ['English'],
           ],
           'imageUrls' => [$data->imageUrl],
         ],
         'condition' => $this->conditionMapper->toEbayCondition($data->conditionId),
+        'conditionDescription' => $this->buildConditionDescription($data),
         'availability' => [
           'shipToLocationAvailability' => [
             'quantity' => $data->quantity,
@@ -52,8 +62,8 @@ final class BookListingPublisher {
             'currency' => 'AUD',
           ],
         ],
-        'categoryId' => '88433',
-        'merchantLocationKey' => 'PRIMARY-AU',
+        'categoryId' => self::DEFAULT_CATEGORY_ID,
+        'merchantLocationKey' => self::DEFAULT_MERCHANT_LOCATION_KEY,
       ]
     );
 
@@ -65,9 +75,9 @@ final class BookListingPublisher {
       $offerId,
       [
         'listingPolicies' => [
-          'paymentPolicyId' => '240514406026',
-          'fulfillmentPolicyId' => '244519897026',
-          'returnPolicyId' => '240513136026',
+          'paymentPolicyId' => self::DEFAULT_PAYMENT_POLICY_ID,
+          'fulfillmentPolicyId' => self::DEFAULT_FULFILLMENT_POLICY_ID,
+          'returnPolicyId' => self::DEFAULT_RETURN_POLICY_ID,
         ],
       ]
     );
@@ -78,4 +88,12 @@ final class BookListingPublisher {
 
     return $publish['listingId'];
   }
+
+  private function buildConditionDescription(BookListingData $data): string {
+
+    // Prototype implementation.
+    // In future this will use structured condition data.
+    return 'Used book in good condition. Light shelf wear. See photos.';
+  }
+
 }

@@ -16,6 +16,7 @@ services:
     class: Drupal\ebay_connector\Service\BookListingPublisher
     arguments:
       - '@drupal.ebay_connector.sell_api'
+      - '@drupal.ebay_connector.condition_mapper'
 
   drupal.ebay_connector.condition_mapper:
     class: Drupal\ebay_connector\Service\ConditionMapper

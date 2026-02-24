@@ -4,3 +4,18 @@ services:
     arguments:
       - '@http_client'
       - '@config.factory'
+
+  drupal.ebay_connector.sell_api:
+    class: Drupal\ebay_connector\Service\SellApiClient
+    arguments:
+      - '@http_client'
+      - '@entity_type.manager'
+      - '@drupal.ebay_connector.oauth_token'
+
+  drupal.ebay_connector.book_publisher:
+    class: Drupal\ebay_connector\Service\BookListingPublisher
+    arguments:
+      - '@drupal.ebay_connector.sell_api'
+
+  drupal.ebay_connector.condition_mapper:
+    class: Drupal\ebay_connector\Service\ConditionMapper

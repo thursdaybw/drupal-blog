@@ -5,3 +5,11 @@ services:
       - '@drupal.ebay_connector.oauth_token'
     tags:
       - { name: drush.command }
+
+  ebay_connector.offer_command:
+    class: Drupal\ebay_connector\Command\EbayOfferCommand
+    arguments:
+      - '@drupal.ebay_connector.sell_api'
+      - '@drupal.ebay_connector.oauth_token'
+    tags:
+      - { name: drush.command }

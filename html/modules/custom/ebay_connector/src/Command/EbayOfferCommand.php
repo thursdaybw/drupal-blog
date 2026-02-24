@@ -278,4 +278,75 @@ final class EbayOfferCommand extends DrushCommands {
 
     $this->output()->writeln('Published listing: ' . $listingId);
   }
+
+  /**
+   * Get default category tree id for marketplace.
+   *
+   * @command ebay-connector:get-category-tree
+   */
+  public function getCategoryTree(string $marketplaceId = 'EBAY_AU'): void {
+
+    try {
+      $data = $this->sellApiClient
+                   ->getDefaultCategoryTreeId($marketplaceId);
+
+      $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
+    }
+    catch (\Throwable $e) {
+      $this->output()->writeln('<error>' . $e->getMessage() . '</error>');
+    }
+  }
+
+  /**
+   * Suggest category by keyword.
+   *
+   * @command ebay-connector:suggest-category
+   */
+  public function suggestCategory(string $query): void {
+
+    try {
+      $data = $this->sellApiClient->suggestCategory($query);
+      $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
+    }
+    catch (\Throwable $e) {
+      $this->output()->writeln('<error>' . $e->getMessage() . '</error>');
+    }
+  }
+
+  /**
+   * Inspect item aspects for category.
+   *
+   * @command ebay-connector:get-aspects
+   */
+  public function getAspects(string $categoryId): void {
+
+    try {
+      $data = $this->sellApiClient->getItemAspects($categoryId);
+      $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
+    }
+    catch (\Throwable $e) {
+      $this->output()->writeln('<error>' . $e->getMessage() . '</error>');
+    }
+  }
+
+  /**
+   * Get category subtree.
+   *
+   * @command ebay-connector:get-category-subtree
+   */
+  public function getCategorySubtree(string $categoryId): void {
+
+    try {
+      $data = $this->sellApiClient
+                   ->getCategorySubtree($categoryId);
+
+      $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
+    }
+    catch (\Throwable $e) {
+      $this->output()->writeln('<error>' . $e->getMessage() . '</error>');
+    }
+  }
+
+
+
 }

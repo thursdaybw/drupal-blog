@@ -317,4 +317,44 @@ final class SellApiClient {
     );
   }
 
+  public function suggestCategory(string $query): array {
+
+    return $this->requestWithQuery(
+      'GET',
+      '/commerce/taxonomy/v1/category_tree/15/get_category_suggestions',
+      [
+        'q' => $query,
+      ]
+    );
+  }
+
+  public function getDefaultCategoryTreeId(string $marketplaceId): array {
+
+    return $this->requestWithQuery(
+      'GET',
+      '/commerce/taxonomy/v1/get_default_category_tree_id',
+      [
+        'marketplace_id' => $marketplaceId,
+      ]
+    );
+  }
+
+  public function getItemAspects(string $categoryId): array {
+
+    return $this->request(
+      'GET',
+      '/commerce/taxonomy/v1/category_tree/15/get_item_aspects_for_category?category_id=' . $categoryId
+    );
+  }
+
+  public function getCategorySubtree(string $categoryId): array {
+
+    return $this->requestWithQuery(
+      'GET',
+      '/commerce/taxonomy/v1/category_tree/15/get_category_subtree',
+      [
+        'category_id' => $categoryId,
+      ]
+    );
+  }
 }

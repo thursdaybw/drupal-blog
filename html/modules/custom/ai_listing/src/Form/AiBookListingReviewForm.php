@@ -39,6 +39,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#type' => 'details',
       '#title' => 'Basic details',
       '#open' => TRUE,
+      '#tree' => TRUE,
     ];
 
 
@@ -48,6 +49,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#type' => 'details',
       '#title' => 'eBay listing',
       '#open' => TRUE,
+      '#tree' => TRUE,
     ];
 
     $form['ebay']['ebay_title'] = [
@@ -186,6 +188,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#type' => 'details',
       '#title' => 'Classification',
       '#open' => FALSE,
+      '#tree' => TRUE,
     ];
 
     $form['classification']['format'] = [

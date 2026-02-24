@@ -1,6 +1,6 @@
 (function () {
 
-      const BARGAIN_HEADER = `
+      const BARGAIN_HEADER_HTML = `
   <div style="text-align:left; margin:10px 0;">
     <img src="https://www.bevansbench.com/sites/default/files/2025-09/4e866541-d8d7-4bf0-8851-141e68cbdc08.png" alt="Quick Tip: Request total from seller at checkout" style="width:100%; max-width:600px; height:auto;">
   </div>
@@ -15,30 +15,49 @@
   <p>🛒 <a href="https://www.ebay.com.au/str/bevansbench/Bargain-Bin/_i.html?store_cat=85529649013">Browse the full Bargain Bin</a></p>
   `;
 
-  function applyPreset() {
+  function getEditor() {
 
-    const textarea = document.getElementById("edit-description");
+    const textarea = document.querySelector('textarea[name="ebay[description][value]"]');
 
     if (!textarea) {
-      console.log("Bargain preset: textarea not found.");
-      return;
+      console.log('Textarea not found.');
+      return null;
     }
 
-    const existing = textarea.value.trim();
+    const editorId = textarea.getAttribute('data-ckeditor5-id');
 
-    // Prevent double insert
-    if (existing.includes("BARGAIN BIN SPECIAL")) {
-      return;
+    if (!editorId) {
+      console.log('No CKEditor ID found.');
+      return null;
     }
 
-    textarea.value = BARGAIN_HEADER + "\n" + existing;
+    if (!Drupal.CKEditor5Instances) {
+      console.log('CKEditor5Instances not ready.');
+      return null;
+    }
 
-    textarea.dispatchEvent(new Event("input", { bubbles: true }));
-    textarea.dispatchEvent(new Event("change", { bubbles: true }));
+    return Drupal.CKEditor5Instances.get(editorId) || null;
   }
 
-  document.addEventListener("click", function (e) {
-    const button = e.target.closest("#apply-bargain-bin");
+  function applyPreset() {
+
+    const editor = getEditor();
+    if (!editor) {
+      console.log('Editor instance not found.');
+      return;
+    }
+
+    const currentData = editor.getData();
+
+    if (currentData.includes('BARGAIN BIN SPECIAL')) {
+      return;
+    }
+
+    editor.setData(BARGAIN_HEADER_HTML + currentData);
+  }
+
+  document.addEventListener('click', function (e) {
+    const button = e.target.closest('#apply-bargain-bin');
     if (!button) return;
 
     e.preventDefault();

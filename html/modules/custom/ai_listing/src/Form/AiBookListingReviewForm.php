@@ -91,6 +91,16 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#default_value' => $ai_book_listing->get('author')->value,
     ];
 
+    $form['basic']['price'] = [
+      '#type' => 'number',
+      '#title' => 'Suggested price',
+      '#description' => $this->t('Suggested listing price for eBay (AUD).'),
+      '#default_value' => $ai_book_listing->get('price')->value ?: '29.95',
+      '#step' => '0.01',
+      '#min' => '0',
+      '#required' => TRUE,
+    ];
+
     // ===== CONDITION =====
 
     $form['condition'] = [
@@ -340,6 +350,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listing->set('subtitle', $form_state->getValue(['basic', 'subtitle']));
     $listing->set('full_title', $form_state->getValue(['basic', 'full_title']));
     $listing->set('author', $form_state->getValue(['basic', 'author']));
+    $listing->set('price', $form_state->getValue(['basic', 'price']));
     $listing->set('isbn', $form_state->getValue(['basic', 'isbn']));
     $listing->set('publisher', $form_state->getValue(['basic', 'publisher']));
     $listing->set('publication_year', $form_state->getValue(['basic', 'publication_year']));

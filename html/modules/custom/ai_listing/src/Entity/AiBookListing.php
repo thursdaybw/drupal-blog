@@ -162,9 +162,21 @@ final class AiBookListing extends ContentEntityBase {
       ->setDefaultValue('')
       ->setSettings(['max_length' => 255]);
 
-    $fields['description'] = BaseFieldDefinition::create('string_long')
+    $fields['description'] = BaseFieldDefinition::create('text_long')
       ->setLabel('Description')
-      ->setDescription('Item description for eBay listings.');
+      ->setDescription('Item description for eBay listings.')
+      ->setSettings([
+        'default_value' => [],
+      ])
+      ->setDisplayOptions('form', [
+        'type' => 'text_textarea_with_summary',
+        'weight' => 0,
+        'settings' => [
+          'rows' => 12,
+        ],
+      ])
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
 
     $fields['condition_issues'] = BaseFieldDefinition::create('string')
       ->setLabel('Condition issues')

@@ -57,8 +57,9 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     ];
 
     $form['ebay']['description'] = [
-      '#type' => 'textarea',
+      '#type' => 'text_format',
       '#title' => 'Description',
+      '#format' => $ai_book_listing->get('description')->format ?: 'basic_html',
       '#default_value' => $ai_book_listing->get('description')->value,
       '#rows' => 12,
     ];
@@ -301,6 +302,15 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#type' => 'actions',
     ];
 
+    $form['actions']['bargain_bin'] = [
+      '#type' => 'button',
+      '#value' => 'Apply Bargain Bin Preset',
+      '#attributes' => [
+        'id' => 'apply-bargain-bin',
+        'class' => ['button', 'button--secondary'],
+      ],
+    ];
+
     $form['actions']['save'] = [
       '#type' => 'submit',
       '#value' => 'Save Changes',
@@ -309,6 +319,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
     $form['#attached']['library'][] = 'ai_listing/photo_viewer';
     $form['#attached']['library'][] = 'ai_listing/review_ui';
+    $form['#attached']['library'][] = 'ai_listing/bargain_preset';
 
     return $form;
   }
@@ -343,7 +354,12 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listing->set('features', $features);
 
     $listing->set('ebay_title', $form_state->getValue(['ebay', 'ebay_title']));
-    $listing->set('description', $form_state->getValue(['ebay', 'description']));
+    $desc = $form_state->getValue(['ebay', 'description']);
+
+    $listing->set('description', [
+      'value' => $desc['value'],
+      'format' => $desc['format'],
+    ]);
 
     $condition = (array) $form_state->getValue('condition');
 

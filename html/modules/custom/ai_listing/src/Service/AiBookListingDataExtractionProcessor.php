@@ -65,7 +65,10 @@ final class AiBookListingDataExtractionProcessor {
     $listing->set('series', (string) ($metadata['series'] ?? ''));
     $listing->set('features', is_array($metadata['features'] ?? null) ? array_values(array_map('strval', $metadata['features'])) : []);
     $listing->set('ebay_title', (string) ($metadata['ebay_title'] ?? ''));
-    $listing->set('description', (string) ($metadata['description'] ?? ''));
+    $listing->set('description', [
+      'value' => (string) ($metadata['description'] ?? ''),
+      'format' => 'basic_html',
+    ]);
 
     $listing->set('condition_issues', is_array($condition['issues'] ?? null) ? array_values(array_map('strval', $condition['issues'])) : []);
     $listing->set('condition_grade', (string) ($condition['grade'] ?? 'good'));

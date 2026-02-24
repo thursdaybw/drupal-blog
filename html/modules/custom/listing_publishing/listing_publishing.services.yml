@@ -16,3 +16,9 @@ services:
 
   'Drupal\listing_publishing\Contract\ListingImageUploaderInterface':
     alias: drupal.ebay_infrastructure.media_image_uploader
+
+  drupal.listing_publishing.publisher:
+    class: Drupal\listing_publishing\Service\ListingPublisher
+    arguments:
+      - '@drupal.listing_publishing.book_assembler'
+      - '@listing_publishing.marketplace_publisher'

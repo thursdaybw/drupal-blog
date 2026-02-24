@@ -10,18 +10,21 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\ai_listing\Entity\AiBookListing;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\listing_publishing\Service\ListingPublisher;
 
 final class AiBookListingReviewForm extends FormBase implements ContainerInjectionInterface {
 
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
     protected FileUrlGeneratorInterface $fileUrlGenerator,
+    protected ListingPublisher $listingPublisher,
   ) {}
 
   public static function create(\Symfony\Component\DependencyInjection\ContainerInterface $container): self {
     return new self(
       $container->get('entity_type.manager'),
       $container->get('file_url_generator'),
+      $container->get('drupal.listing_publishing.publisher'),
     );
   }
 
@@ -342,6 +345,12 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       ],
     ];
 
+    $form['actions']['publish'] = [
+      '#type' => 'submit',
+      '#value' => 'Publish to eBay',
+      '#submit' => ['::submitAndPublish'],
+    ];
+
     $form['actions']['save'] = [
       '#type' => 'submit',
       '#value' => 'Save Changes',
@@ -421,6 +430,40 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listing->save();
 
     $this->messenger()->addStatus('Listing updated.');
+  }
+
+  public function submitAndPublish(array &$form, FormStateInterface $form_state): void {
+    $this->submitForm($form, $form_state);
+    /** @var AiBookListing $listing */
+    $listing = $form_state->get('listing');
+
+    try {
+      $result = $this->listingPublisher->publish($listing);
+    }
+    catch (\Throwable $e) {
+      $this->handlePublishFailure($listing, 'Publish failed: ' . $e->getMessage());
+      return;
+    }
+
+    if (!$result->isSuccess()) {
+      $this->handlePublishFailure($listing, 'Publish failed: ' . $result->getMessage());
+      return;
+    }
+
+    $this->handlePublishSuccess($listing, $result->getMarketplaceId());
+  }
+
+  private function handlePublishFailure(AiBookListing $listing, string $message): void {
+    $this->messenger()->addError($message);
+    $listing->set('status', 'failed');
+    $listing->save();
+  }
+
+  private function handlePublishSuccess(AiBookListing $listing, string $marketplaceId): void {
+    $listing->set('ebay_item_id', $marketplaceId);
+    $listing->set('status', 'published');
+    $listing->save();
+    $this->messenger()->addStatus(sprintf('Published listing %s for entity %d.', $marketplaceId, $listing->id()));
   }
 
   private function humanizeIssue(string $issue): string {

@@ -3,7 +3,6 @@ services:
     class: Drupal\listing_publishing\Command\PublishAiListingCommand
     arguments:
       - '@entity_type.manager'
-      - '@drupal.listing_publishing.book_assembler'
-      - '@listing_publishing.marketplace_publisher'
+      - '@drupal.listing_publishing.publisher'
     tags:
       - { name: drush.command }

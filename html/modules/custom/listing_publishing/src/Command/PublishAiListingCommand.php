@@ -5,18 +5,15 @@ declare(strict_types=1);
 namespace Drupal\listing_publishing\Command;
 
 use Drupal\ai_listing\Entity\AiBookListing;
-use Drupal\listing_publishing\Model\ListingPublishRequest;
-use Drupal\listing_publishing\Service\BookListingAssembler;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\listing_publishing\Contract\MarketplacePublisherInterface;
+use Drupal\listing_publishing\Service\ListingPublisher;
 use Drush\Commands\DrushCommands;
 
 final class PublishAiListingCommand extends DrushCommands {
 
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
-    private readonly BookListingAssembler $assembler,
-    private readonly MarketplacePublisherInterface $publisher,
+    private readonly ListingPublisher $publisher,
   ) {
     parent::__construct();
   }
@@ -49,10 +46,8 @@ final class PublishAiListingCommand extends DrushCommands {
       return;
     }
 
-    $request = $this->assembler->assemble($listing);
-
     try {
-      $result = $this->publisher->publish($request);
+      $result = $this->publisher->publish($listing);
     }
     catch (\Throwable $e) {
       $this->markFailure($listing, 'Publish failed: ' . $e->getMessage());
@@ -64,7 +59,6 @@ final class PublishAiListingCommand extends DrushCommands {
       return;
     }
 
-    $listing->set('ebay_item_id', $result->getMarketplaceId());
     $this->markPublished($listing, $result->getMarketplaceId());
 
     $this->output()->writeln(sprintf(

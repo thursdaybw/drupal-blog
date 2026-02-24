@@ -10,6 +10,8 @@ use GuzzleHttp\ClientInterface;
 
 final class SellApiClient {
 
+  private ?string $categoryTreeId = null;
+
   public function __construct(
     private readonly ClientInterface $httpClient,
     private readonly EntityTypeManagerInterface $entityTypeManager,
@@ -319,9 +321,11 @@ final class SellApiClient {
 
   public function suggestCategory(string $query): array {
 
+    $treeId = $this->resolveCategoryTreeId();
+
     return $this->requestWithQuery(
       'GET',
-      '/commerce/taxonomy/v1/category_tree/15/get_category_suggestions',
+      '/commerce/taxonomy/v1/category_tree/' . $treeId . '/get_category_suggestions',
       [
         'q' => $query,
       ]
@@ -341,20 +345,41 @@ final class SellApiClient {
 
   public function getItemAspects(string $categoryId): array {
 
-    return $this->request(
-      'GET',
-      '/commerce/taxonomy/v1/category_tree/15/get_item_aspects_for_category?category_id=' . $categoryId
-    );
-  }
-
-  public function getCategorySubtree(string $categoryId): array {
+    $treeId = $this->resolveCategoryTreeId();
 
     return $this->requestWithQuery(
       'GET',
-      '/commerce/taxonomy/v1/category_tree/15/get_category_subtree',
+      '/commerce/taxonomy/v1/category_tree/' . $treeId . '/get_item_aspects_for_category',
       [
         'category_id' => $categoryId,
       ]
     );
   }
+
+  public function getCategorySubtree(string $categoryId): array {
+
+    $treeId = $this->resolveCategoryTreeId();
+
+    return $this->requestWithQuery(
+      'GET',
+      '/commerce/taxonomy/v1/category_tree/' . $treeId . '/get_category_subtree',
+      [
+        'category_id' => $categoryId,
+      ]
+    );
+  }
+
+  private function resolveCategoryTreeId(string $marketplaceId = 'EBAY_AU'): string {
+
+    if ($this->categoryTreeId !== null) {
+      return $this->categoryTreeId;
+    }
+
+    $data = $this->getDefaultCategoryTreeId($marketplaceId);
+
+    $this->categoryTreeId = $data['categoryTreeId'];
+
+    return $this->categoryTreeId;
+  }
+
 }

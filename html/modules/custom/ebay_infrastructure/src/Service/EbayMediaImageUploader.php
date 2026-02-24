@@ -33,7 +33,9 @@ final class EbayMediaImageUploader implements ListingImageUploaderInterface {
       try {
         $remoteUrls[] = $this->mediaApiClient->createImageFromStream($handle, $source->getFilename());
       } finally {
-        fclose($handle);
+        if (is_resource($handle)) {
+          fclose($handle);
+        }
       }
     }
 

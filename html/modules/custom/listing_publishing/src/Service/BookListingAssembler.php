@@ -32,7 +32,15 @@ final class BookListingAssembler {
     $attributes = [
       'product_type' => 'book',
       'author' => $author,
-      'language' => 'English',
+      'language' => $this->resolveStringField($listing, 'language') ?: 'English',
+      'isbn' => $this->resolveStringField($listing, 'isbn'),
+      'publisher' => $this->resolveStringField($listing, 'publisher'),
+      'publication_year' => $this->resolveStringField($listing, 'publication_year'),
+      'format' => $this->resolveStringField($listing, 'format'),
+      'genre' => $this->resolveStringField($listing, 'genre'),
+      'topic' => $this->resolveStringField($listing, 'narrative_type'),
+      'country_of_origin' => $this->resolveStringField($listing, 'country_printed'),
+      'series' => $this->resolveStringField($listing, 'series'),
     ];
 
     return new ListingPublishRequest(
@@ -106,6 +114,11 @@ final class BookListingAssembler {
     }
 
     return $urls;
+  }
+
+  private function resolveStringField(AiBookListing $listing, string $field): string {
+    $value = $listing->get($field)->value ?? '';
+    return is_string($value) ? $value : '';
   }
 
 }

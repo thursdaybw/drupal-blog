@@ -1,0 +1,5 @@
+name: 'Ebay Connector'
+type: module
+description: 'eBay OAuth infrastructure connector'
+package: Custom
+core_version_requirement: ^10 || ^11

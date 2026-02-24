@@ -1,0 +1,6 @@
+services:
+  drupal.ebay_connector.oauth_token:
+    class: Drupal\ebay_connector\Service\OAuthTokenService
+    arguments:
+      - '@http_client'
+      - '@config.factory'

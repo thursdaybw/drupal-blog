@@ -1,0 +1,7 @@
+services:
+  ebay_connector.test_command:
+    class: Drupal\ebay_connector\Command\EbayConnectorTestCommand
+    arguments:
+      - '@drupal.ebay_connector.oauth_token'
+    tags:
+      - { name: drush.command }

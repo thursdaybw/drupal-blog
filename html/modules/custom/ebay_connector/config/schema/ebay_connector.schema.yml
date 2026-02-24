@@ -2,12 +2,35 @@ ebay_connector.settings:
   type: config_object
   label: 'eBay Connector settings'
   mapping:
-    client_id:
-      type: string
-      label: 'OAuth client ID'
-    client_secret:
-      type: string
-      label: 'OAuth client secret'
+
     environment:
       type: string
-      label: 'OAuth environment'
+      label: 'Active eBay environment'
+
+    production:
+      type: mapping
+      label: 'Production credentials'
+      mapping:
+        client_id:
+          type: string
+          label: 'Production Client ID'
+        client_secret:
+          type: string
+          label: 'Production Client Secret'
+        ru_name:
+          type: string
+          label: 'Production RuName'
+
+    sandbox:
+      type: mapping
+      label: 'Sandbox credentials'
+      mapping:
+        client_id:
+          type: string
+          label: 'Sandbox Client ID'
+        client_secret:
+          type: string
+          label: 'Sandbox Client Secret'
+        ru_name:
+          type: string
+          label: 'Sandbox RuName'

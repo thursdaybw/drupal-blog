@@ -50,14 +50,17 @@ final class OAuthTokenService {
 
   private function requestToken(array $formParams, ?string $environment): array {
     $config = $this->configFactory->get('ebay_connector.settings');
-    $clientId = (string) $config->get('client_id');
-    $clientSecret = (string) $config->get('client_secret');
+
+    $activeEnv = (string) $config->get('environment');
+
+    $clientId = (string) $config->get($activeEnv . '.client_id');
+    $clientSecret = (string) $config->get($activeEnv . '.client_secret');
 
     if ($clientId === '' || $clientSecret === '') {
       throw new \RuntimeException('eBay OAuth credentials have not been configured.');
     }
 
-    $env = $this->resolveEnvironment($environment, $config->get('environment'));
+    $env = $this->resolveEnvironment($environment, $activeEnv);
     $endpoint = $this->getTokenEndpoint($env);
 
     $headers = [
@@ -115,6 +118,34 @@ final class OAuthTokenService {
   private function flattenScopes(array $scopes): string {
     $filtered = array_filter($scopes, static fn($scope) => is_string($scope) && trim($scope) !== '');
     return implode(' ', array_map('trim', $filtered));
+  }
+
+  public function revokeToken(string $token, ?string $environment = null): void {
+
+    $config = $this->configFactory->get('ebay_connector.settings');
+    $activeEnv = (string) $config->get('environment');
+
+    $clientId = (string) $config->get($activeEnv . '.client_id');
+    $clientSecret = (string) $config->get($activeEnv . '.client_secret');
+
+    $env = $environment ?? $activeEnv;
+
+    $endpoint = $env === self::ENV_SANDBOX
+      ? 'https://api.sandbox.ebay.com/identity/v1/oauth2/revoke_token'
+      : 'https://api.ebay.com/identity/v1/oauth2/revoke_token';
+
+    $headers = [
+      'Content-Type' => 'application/x-www-form-urlencoded',
+      'Authorization' => 'Basic ' . base64_encode($clientId . ':' . $clientSecret),
+    ];
+
+    $this->httpClient->request('POST', $endpoint, [
+      'headers' => $headers,
+      'form_params' => [
+        'token' => $token,
+        'token_type_hint' => 'refresh_token',
+      ],
+    ]);
   }
 
 }

@@ -1,0 +1,15 @@
+ebay_connector.authorize:
+  path: '/admin/ebay/authorize'
+  defaults:
+    _controller: '\Drupal\ebay_connector\Controller\EbayAuthorizeController::redirectToEbay'
+    _title: 'Authorize eBay Account'
+  requirements:
+    _permission: 'administer ebay connector'
+
+ebay_connector.callback:
+  path: '/admin/ebay/callback'
+  defaults:
+    _controller: '\Drupal\ebay_connector\Controller\EbayCallbackController::handle'
+    _title: 'eBay OAuth Callback'
+  requirements:
+    _permission: 'administer ebay connector'

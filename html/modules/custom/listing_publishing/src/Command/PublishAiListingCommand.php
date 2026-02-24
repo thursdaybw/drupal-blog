@@ -8,6 +8,7 @@ use Drupal\ai_listing\Entity\AiBookListing;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
 use Drupal\listing_publishing\Service\BookListingAssembler;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\listing_publishing\Contract\MarketplacePublisherInterface;
 use Drush\Commands\DrushCommands;
 
 final class PublishAiListingCommand extends DrushCommands {
@@ -49,11 +50,50 @@ final class PublishAiListingCommand extends DrushCommands {
 
     $request = $this->assembler->assemble($listing);
 
+    if (!\Drupal::hasService('listing_publishing.marketplace_publisher')) {
+      $this->markFailure($listing, 'No marketplace publisher is registered.');
+      return;
+    }
+
+    $publisher = \Drupal::service('listing_publishing.marketplace_publisher');
+    if (!$publisher instanceof MarketplacePublisherInterface) {
+      $this->markFailure($listing, 'Marketplace publisher does not implement the required interface.');
+      return;
+    }
+
+    try {
+      $result = $publisher->publish($request);
+    }
+    catch (\Throwable $e) {
+      $this->markFailure($listing, 'Publish failed: ' . $e->getMessage());
+      return;
+    }
+
+    if (!$result->isSuccess()) {
+      $this->markFailure($listing, 'Publish failed: ' . $result->getMessage());
+      return;
+    }
+
+    $listing->set('ebay_item_id', $result->getMarketplaceId());
+    $this->markPublished($listing, $result->getMarketplaceId());
+
     $this->output()->writeln(sprintf(
-      'Listing publish request built for entity %d.',
+      'Published listing %s for entity %d.',
+      $result->getMarketplaceId(),
       $listing->id()
     ));
-    $this->output()->writeln(json_encode($request->toArray(), JSON_PRETTY_PRINT));
+  }
+
+  private function markFailure(AiBookListing $listing, string $message): void {
+    $this->output()->writeln('<error>' . $message . '</error>');
+    $listing->set('status', 'failed');
+    $listing->save();
+  }
+
+  private function markPublished(AiBookListing $listing, string $marketplaceId): void {
+    $listing->set('ebay_item_id', $marketplaceId);
+    $listing->set('status', 'published');
+    $listing->save();
   }
 
 }

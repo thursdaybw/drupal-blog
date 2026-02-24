@@ -1,0 +1,15 @@
+services:
+  ebay_infrastructure.test_command:
+    class: Drupal\ebay_infrastructure\Command\EbayConnectorTestCommand
+    arguments:
+      - '@drupal.ebay_infrastructure.oauth_token'
+    tags:
+      - { name: drush.command }
+
+  ebay_infrastructure.offer_command:
+    class: Drupal\ebay_infrastructure\Command\EbayOfferCommand
+    arguments:
+      - '@drupal.ebay_infrastructure.sell_api'
+      - '@drupal.ebay_infrastructure.oauth_token'
+    tags:
+      - { name: drush.command }

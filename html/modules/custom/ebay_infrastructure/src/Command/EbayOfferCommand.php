@@ -7,6 +7,7 @@ namespace Drupal\ebay_infrastructure\Command;
 use Drupal\ebay_infrastructure\Service\SellApiClient;
 use Drupal\ebay_infrastructure\Service\OAuthTokenService;
 use Drupal\ebay_infrastructure\Utility\OfferExceptionHelper;
+use Drupal\listing_publishing\Model\ListingPublishRequest;
 use InvalidArgumentException;
 use Drush\Commands\DrushCommands;
 
@@ -378,20 +379,29 @@ final class EbayOfferCommand extends DrushCommands {
    */
   public function publishTestBook(): void {
 
-    $data = new \Drupal\ebay_connector\Model\BookListingData(
-      sku: 'BOOK-TEST-' . time(),
-      title: 'Drupal API Test Item',
-      description: 'This is a test inventory item created via API.',
-      author: 'Unbranded',
-      price: '9.99',
-      imageUrl: 'https://dev.bevansbench.com/sites/default/files/ai-listings/e84531a1-083e-4941-b1bd-7dad8e1d38ae/20260222_172824.jpg',
-      quantity: 1,
-      conditionId: 'NEW',
+    $attributes = [
+      'product_type' => 'book',
+      'author' => 'Unbranded',
+      'language' => 'English',
+    ];
+
+    $request = new ListingPublishRequest(
+      'BOOK-TEST-' . time(),
+      'Drupal API Test Item',
+      'This is a test inventory item created via API.',
+      'Unbranded',
+      '9.99',
+      [
+        'https://dev.bevansbench.com/sites/default/files/ai-listings/e84531a1-083e-4941-b1bd-7dad8e1d38ae/20260222_172824.jpg',
+      ],
+      1,
+      'NEW',
+      $attributes
     );
 
-    $publisher = \Drupal::service('drupal.ebay_connector.book_publisher');
+    $publisher = \Drupal::service('drupal.ebay_connector.marketplace_publisher');
 
-    $listingId = $publisher->publish($data);
+    $listingId = $publisher->publish($request)->getMarketplaceId();
 
     $this->output()->writeln('Published listing: ' . $listingId);
   }

@@ -1,0 +1,8 @@
+services:
+  listing_publishing.publish_command:
+    class: Drupal\listing_publishing\Command\PublishAiListingCommand
+    arguments:
+      - '@entity_type.manager'
+      - '@drupal.listing_publishing.book_assembler'
+    tags:
+      - { name: drush.command }

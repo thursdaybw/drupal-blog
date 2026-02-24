@@ -29,6 +29,7 @@ final class BookListingAssembler {
     $imageSources = $this->collectImageSources($files);
     $imageUrls = $this->collectImageUrls($files);
     $condition = (string) ($listing->get('condition_grade')->value ?? self::DEFAULT_CONDITION);
+    $price = $this->resolvePrice($listing);
     $attributes = [
       'product_type' => 'book',
       'author' => $author,
@@ -44,15 +45,15 @@ final class BookListingAssembler {
     ];
 
     return new ListingPublishRequest(
-      $sku,
-      $title,
-      $description,
-      $author,
-      self::DEFAULT_PRICE,
-      $imageSources,
-      $imageUrls,
-      self::DEFAULT_QUANTITY,
-      $condition,
+        $sku,
+        $title,
+        $description,
+        $author,
+        $price,
+        $imageSources,
+        $imageUrls,
+        self::DEFAULT_QUANTITY,
+        $condition,
       $attributes
     );
   }
@@ -78,6 +79,12 @@ final class BookListingAssembler {
     }
 
     return "AI-assisted metadata for {$title}.";
+  }
+
+  private function resolvePrice(AiBookListing $listing): string {
+    $value = $listing->get('price')->value ?? '';
+    $resolved = is_numeric($value) ? (string) $value : '';
+    return $resolved !== '' ? $resolved : self::DEFAULT_PRICE;
   }
 
   /**

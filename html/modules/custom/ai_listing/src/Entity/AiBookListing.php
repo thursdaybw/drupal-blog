@@ -178,6 +178,19 @@ final class AiBookListing extends ContentEntityBase {
       ->setDisplayConfigurable('form', TRUE)
       ->setDisplayConfigurable('view', TRUE);
 
+    $fields['price'] = BaseFieldDefinition::create('decimal')
+      ->setLabel('Suggested eBay price')
+      ->setDescription('Suggested listing price for the marketplace.')
+      ->setRequired(true)
+      ->setDefaultValue('29.95')
+      ->setSetting('precision', 10)
+      ->setSetting('scale', 2)
+      ->setDisplayOptions('form', [
+        'type' => 'number',
+        'weight' => 1,
+      ])
+      ->setDisplayConfigurable('form', TRUE);
+
     $fields['condition_issues'] = BaseFieldDefinition::create('string')
       ->setLabel('Condition issues')
       ->setDescription('Normalized list of condition issues.')

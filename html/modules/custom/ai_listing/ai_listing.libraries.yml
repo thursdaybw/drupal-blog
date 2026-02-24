@@ -7,11 +7,18 @@ photo_viewer:
     js/photo-viewer-init.js: {}
   dependencies:
     - core/drupal
+
 review_ui:
   css:
     theme:
       css/review-ui.css: {}
   js:
     js/review-ui.js: {}
+  dependencies:
+    - core/drupal
+
+bargain_preset:
+  js:
+    js/bargain-preset.js: {}
   dependencies:
     - core/drupal

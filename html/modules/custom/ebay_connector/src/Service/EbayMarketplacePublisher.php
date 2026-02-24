@@ -96,6 +96,14 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
       $aspects['Book Title'] = [$request->getTitle()];
       $aspects['Author'] = [$attributes['author'] ?? $request->getAuthor()];
       $aspects['Language'] = [$attributes['language'] ?? 'English'];
+      $this->addAspectIfValue($aspects, 'ISBN', $attributes['isbn'] ?? '');
+      $this->addAspectIfValue($aspects, 'Book Series', $attributes['series'] ?? '');
+      $this->addAspectIfValue($aspects, 'Publisher', $attributes['publisher'] ?? '');
+      $this->addAspectIfValue($aspects, 'Format', $attributes['format'] ?? '');
+      $this->addAspectIfValue($aspects, 'Genre', $attributes['genre'] ?? '');
+      $this->addAspectIfValue($aspects, 'Topic', $attributes['topic'] ?? '');
+      $this->addAspectIfValue($aspects, 'Publication Year', $attributes['publication_year'] ?? '');
+      $this->addAspectIfValue($aspects, 'Country of Origin', $attributes['country_of_origin'] ?? '');
     }
 
     // This comment is a smell indicator: if more product types arrive, this
@@ -103,6 +111,19 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     // boundary rather than extending this if chain.
 
     return $aspects;
+  }
+
+  private function addAspectIfValue(array &$aspects, string $name, ?string $value): void {
+    if ($value === null) {
+      return;
+    }
+
+    $normalized = trim($value);
+    if ($normalized === '') {
+      return;
+    }
+
+    $aspects[$name] = [$normalized];
   }
 
 }

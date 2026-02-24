@@ -1,6 +1,6 @@
 services:
-  drupal.ebay_connector.book_publisher:
-    class: Drupal\ebay_connector\Service\BookListingPublisher
+  drupal.ebay_connector.marketplace_publisher:
+    class: Drupal\ebay_connector\Service\EbayMarketplacePublisher
     arguments:
       - '@drupal.ebay_infrastructure.sell_api'
       - '@drupal.ebay_connector.condition_mapper'

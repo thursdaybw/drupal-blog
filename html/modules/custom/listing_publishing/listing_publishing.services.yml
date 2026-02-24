@@ -1,0 +1,11 @@
+services:
+  drupal.listing_publishing.book_assembler:
+    class: Drupal\listing_publishing\Service\BookListingAssembler
+    arguments:
+      - '@file_url_generator'
+
+  drupal.listing_publishing.publish_command:
+    class: Drupal\listing_publishing\Command\PublishAiListingCommand
+    arguments:
+      - '@entity_type.manager'
+      - '@drupal.listing_publishing.book_assembler'

@@ -9,3 +9,7 @@ services:
     arguments:
       - '@entity_type.manager'
       - '@drupal.listing_publishing.book_assembler'
+      - '@listing_publishing.marketplace_publisher'
+
+  listing_publishing.marketplace_publisher:
+    alias: drupal.ebay_connector.marketplace_publisher

@@ -101,6 +101,13 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#required' => TRUE,
     ];
 
+    $form['basic']['bargain_bin'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Mark as Bargain Bin'),
+      '#description' => $this->t('Use the Bargain Bin shipping policy with the preset description.'),
+      '#default_value' => $ai_book_listing->get('bargain_bin')->value ? 1 : 0,
+    ];
+
     // ===== CONDITION =====
 
     $form['condition'] = [
@@ -317,10 +324,21 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
     $form['actions']['bargain_bin'] = [
       '#type' => 'button',
-      '#value' => 'Apply Bargain Bin Preset',
+      '#value' => 'Apply Bargain Bin $1.99',
       '#attributes' => [
-        'id' => 'apply-bargain-bin',
+        'id' => 'apply-bargain-bin-199',
         'class' => ['button', 'button--secondary'],
+        'data-bargain-price' => '1.99',
+      ],
+    ];
+
+    $form['actions']['bargain_bin_299'] = [
+      '#type' => 'button',
+      '#value' => 'Apply Bargain Bin $2.99',
+      '#attributes' => [
+        'id' => 'apply-bargain-bin-299',
+        'class' => ['button', 'button--secondary'],
+        'data-bargain-price' => '2.99',
       ],
     ];
 
@@ -351,6 +369,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listing->set('full_title', $form_state->getValue(['basic', 'full_title']));
     $listing->set('author', $form_state->getValue(['basic', 'author']));
     $listing->set('price', $form_state->getValue(['basic', 'price']));
+    $listing->set('bargain_bin', (bool) $form_state->getValue(['basic', 'bargain_bin']));
     $listing->set('isbn', $form_state->getValue(['basic', 'isbn']));
     $listing->set('publisher', $form_state->getValue(['basic', 'publisher']));
     $listing->set('publication_year', $form_state->getValue(['basic', 'publication_year']));

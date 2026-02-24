@@ -39,7 +39,29 @@
     return Drupal.CKEditor5Instances.get(editorId) || null;
   }
 
-  function applyPreset() {
+  function setBargainBinFlag() {
+    const flagInput = document.querySelector('input[name="basic[bargain_bin]"][type="checkbox"]');
+
+    if (!flagInput) {
+      return;
+    }
+
+    flagInput.checked = true;
+    flagInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function setBargainPrice(price) {
+    const priceInput = document.querySelector('input[name="basic[price]"]');
+
+    if (!priceInput || typeof price !== 'string') {
+      return;
+    }
+
+    priceInput.value = price;
+    priceInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function applyPreset(price) {
 
     const editor = getEditor();
     if (!editor) {
@@ -54,14 +76,16 @@
     }
 
     editor.setData(BARGAIN_HEADER_HTML + currentData);
+    setBargainBinFlag();
+    setBargainPrice(price);
   }
 
   document.addEventListener('click', function (e) {
-    const button = e.target.closest('#apply-bargain-bin');
+    const button = e.target.closest('[data-bargain-price]');
     if (!button) return;
 
     e.preventDefault();
-    applyPreset();
+    applyPreset(button.getAttribute('data-bargain-price'));
   });
 
 })();

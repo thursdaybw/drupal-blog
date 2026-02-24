@@ -191,6 +191,16 @@ final class AiBookListing extends ContentEntityBase {
       ])
       ->setDisplayConfigurable('form', TRUE);
 
+    $fields['bargain_bin'] = BaseFieldDefinition::create('boolean')
+      ->setLabel('Bargain bin preset')
+      ->setDescription('Flag that indicates this listing should use the bargain bin shipping policy.')
+      ->setDefaultValue(FALSE)
+      ->setDisplayOptions('form', [
+        'type' => 'boolean_checkbox',
+        'weight' => 2,
+      ])
+      ->setDisplayConfigurable('form', TRUE);
+
     $fields['condition_issues'] = BaseFieldDefinition::create('string')
       ->setLabel('Condition issues')
       ->setDescription('Normalized list of condition issues.')

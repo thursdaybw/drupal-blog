@@ -9,3 +9,8 @@ function ai_listing_update_1002() {
   \Drupal::entityDefinitionUpdateManager()
     ->installEntityType('ai_book_listing');
 }
+
+function ai_listing_update_1003() {
+  \Drupal::entityDefinitionUpdateManager()
+    ->installEntityType('ai_book_listing');
+}

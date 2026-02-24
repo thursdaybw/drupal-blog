@@ -207,6 +207,32 @@ final class SellApiClient {
     );
   }
 
+  public function listLocations(): array {
+    return $this->request('GET', '/sell/inventory/v1/location');
+  }
+
+  public function getLocation(string $locationKey): array {
+    return $this->request('GET', '/sell/inventory/v1/location/' . $locationKey);
+  }
+
+  public function locationExists(string $locationKey): bool {
+    try {
+      $this->getLocation($locationKey);
+      return true;
+    }
+    catch (\RuntimeException $e) {
+      return false;
+    }
+  }
+
+  public function createLocation(string $merchantLocationKey, array $payload): array {
+    return $this->request(
+      'POST',
+      '/sell/inventory/v1/location/' . $merchantLocationKey,
+      $payload
+    );
+  }
+
   private function request(string $method, string $path, array $json = []): array {
 
     $accessToken = $this->accountManager->getValidAccessToken();

@@ -14,10 +14,11 @@ use Drupal\ebay_connector\Service\ConditionMapper;
 final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
   private const DEFAULT_CATEGORY_ID = '261186';
-  private const DEFAULT_MERCHANT_LOCATION_KEY = 'PRIMARY-AU';
+  private const DEFAULT_MERCHANT_LOCATION_KEY = '2478';
   private const DEFAULT_PAYMENT_POLICY_ID = '240514406026';
-  private const DEFAULT_FULFILLMENT_POLICY_ID = '244519897026';
+  private const DEFAULT_FULFILLMENT_POLICY_ID = '244080662026';
   private const DEFAULT_RETURN_POLICY_ID = '240513136026';
+  private const BARGAIN_BIN_FULFILLMENT_POLICY_ID = '244519897026';
 
   public function __construct(
     private readonly SellApiClient $sellApiClient,
@@ -54,6 +55,8 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
       ]
     );
 
+    $this->ensureMerchantLocation();
+
     $offer = $this->sellApiClient->createOffer([
       'sku' => $request->getSku(),
       'marketplaceId' => 'EBAY_AU',
@@ -70,11 +73,12 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     ]);
 
     $offerId = $offer['offerId'];
+    $fulfillmentPolicyId = $this->resolveFulfillmentPolicyId($request);
 
     $this->sellApiClient->updateOffer($offerId, [
       'listingPolicies' => [
         'paymentPolicyId' => self::DEFAULT_PAYMENT_POLICY_ID,
-        'fulfillmentPolicyId' => self::DEFAULT_FULFILLMENT_POLICY_ID,
+        'fulfillmentPolicyId' => $fulfillmentPolicyId,
         'returnPolicyId' => self::DEFAULT_RETURN_POLICY_ID,
       ],
     ]);
@@ -124,6 +128,44 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     }
 
     $aspects[$name] = [$normalized];
+  }
+
+  private function ensureMerchantLocation(): void {
+    if ($this->sellApiClient->locationExists(self::DEFAULT_MERCHANT_LOCATION_KEY)) {
+      return;
+    }
+
+    $payload = $this->buildMerchantLocationPayload();
+    unset($payload['merchantLocationKey']);
+    $this->sellApiClient->createLocation(self::DEFAULT_MERCHANT_LOCATION_KEY, $payload);
+  }
+
+  private function buildMerchantLocationPayload(): array {
+    return [
+      'locationKey' => self::DEFAULT_MERCHANT_LOCATION_KEY,
+      'name' => 'Bevan\'s Bench Ballina Fulfilment',
+      'locationInstructions' => 'Ballina NSW 2478 fulfilment center for Bevan\'s Bench.',
+      'locationTypes' => ['WAREHOUSE'],
+      'merchantLocationStatus' => 'ENABLED',
+      'location' => [
+        'address' => [
+          'addressLine1' => 'Ballina NSW 2478',
+          'city' => 'Ballina',
+          'stateOrProvince' => 'NSW',
+          'postalCode' => '2478',
+          'country' => 'AU',
+        ],
+      ],
+    ];
+  }
+
+  private function resolveFulfillmentPolicyId(ListingPublishRequest $request): string {
+    $attributes = $request->getAttributes();
+    if (!empty($attributes['bargain_bin'])) {
+      return self::BARGAIN_BIN_FULFILLMENT_POLICY_ID;
+    }
+
+    return self::DEFAULT_FULFILLMENT_POLICY_ID;
   }
 
 }

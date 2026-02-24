@@ -42,6 +42,7 @@ final class BookListingAssembler {
       'topic' => $this->resolveStringField($listing, 'narrative_type'),
       'country_of_origin' => $this->resolveStringField($listing, 'country_printed'),
       'series' => $this->resolveStringField($listing, 'series'),
+      'bargain_bin' => (bool) $listing->get('bargain_bin')->value,
     ];
 
     return new ListingPublishRequest(

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\ebay_infrastructure\Service;
 
-use Drupal\Core\File\FileSystemInterface;
 use Drupal\listing_publishing\Contract\ListingImageUploaderInterface;
 use Drupal\listing_publishing\Model\ListingImageSource;
 use Drupal\listing_publishing\Model\ListingImageUploadResult;
@@ -13,7 +12,6 @@ final class EbayMediaImageUploader implements ListingImageUploaderInterface {
 
   public function __construct(
     private readonly EbayMediaApiClient $mediaApiClient,
-    private readonly FileSystemInterface $fileSystem,
   ) {}
 
   /**
@@ -27,12 +25,16 @@ final class EbayMediaImageUploader implements ListingImageUploaderInterface {
         continue;
       }
 
-      $path = $this->fileSystem->realpath($source->getUri());
-      if ($path === FALSE || !is_file($path)) {
-        throw new \RuntimeException(sprintf('Unable to resolve image %s.', $source->getUri()));
+      $handle = fopen($source->getUri(), 'rb');
+      if ($handle === false) {
+        throw new \RuntimeException(sprintf('Unable to open image %s for reading.', $source->getUri()));
       }
 
-      $remoteUrls[] = $this->mediaApiClient->createImageFromFile($path, $source->getFilename());
+      try {
+        $remoteUrls[] = $this->mediaApiClient->createImageFromStream($handle, $source->getFilename());
+      } finally {
+        fclose($handle);
+      }
     }
 
     return new ListingImageUploadResult($remoteUrls);

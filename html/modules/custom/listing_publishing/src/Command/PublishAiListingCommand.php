@@ -16,6 +16,7 @@ final class PublishAiListingCommand extends DrushCommands {
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly BookListingAssembler $assembler,
+    private readonly MarketplacePublisherInterface $publisher,
   ) {
     parent::__construct();
   }
@@ -50,19 +51,8 @@ final class PublishAiListingCommand extends DrushCommands {
 
     $request = $this->assembler->assemble($listing);
 
-    if (!\Drupal::hasService('listing_publishing.marketplace_publisher')) {
-      $this->markFailure($listing, 'No marketplace publisher is registered.');
-      return;
-    }
-
-    $publisher = \Drupal::service('listing_publishing.marketplace_publisher');
-    if (!$publisher instanceof MarketplacePublisherInterface) {
-      $this->markFailure($listing, 'Marketplace publisher does not implement the required interface.');
-      return;
-    }
-
     try {
-      $result = $publisher->publish($request);
+      $result = $this->publisher->publish($request);
     }
     catch (\Throwable $e) {
       $this->markFailure($listing, 'Publish failed: ' . $e->getMessage());

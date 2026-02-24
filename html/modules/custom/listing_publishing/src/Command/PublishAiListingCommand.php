@@ -37,6 +37,16 @@ final class PublishAiListingCommand extends DrushCommands {
       return;
     }
 
+    $status = (string) $listing->get('status')->value;
+    if ($status !== 'ready') {
+      $this->output()->writeln(sprintf(
+        '<error>Listing %d is not ready to publish (status: %s).</error>',
+        $listing->id(),
+        $status
+      ));
+      return;
+    }
+
     $request = $this->assembler->assemble($listing);
 
     $this->output()->writeln(sprintf(

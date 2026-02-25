@@ -5,29 +5,28 @@ declare(strict_types=1);
 namespace Drupal\ai_listing\Form;
 
 use Drupal\Core\Datetime\DateFormatterInterface;
+use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Link;
 use Drupal\Core\Url;
 use Drupal\ai_listing\Entity\AiBookListing;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
-final class AiBookListingLocationBatchForm extends FormBase {
+final class AiBookListingLocationBatchForm extends FormBase implements ContainerInjectionInterface {
 
-  public function __construct(
-    private readonly EntityTypeManagerInterface $entityTypeManager,
-    private readonly ListingPublisher $listingPublisher,
-    private readonly DateFormatterInterface $dateFormatter,
-  ) {}
+  private ?EntityTypeManagerInterface $entityTypeManager = null;
+  private ?ListingPublisher $listingPublisher = null;
+  private ?DateFormatterInterface $dateFormatter = null;
 
   public static function create(ContainerInterface $container): self {
-    return new self(
-      $container->get('entity_type.manager'),
-      $container->get('drupal.listing_publishing.publisher'),
-      $container->get('date.formatter'),
-    );
+    $form = new self();
+    $form->entityTypeManager = $container->get('entity_type.manager');
+    $form->listingPublisher = $container->get('drupal.listing_publishing.publisher');
+    $form->dateFormatter = $container->get('date.formatter');
+    return $form;
   }
 
   public function getFormId(): string {
@@ -105,7 +104,7 @@ final class AiBookListingLocationBatchForm extends FormBase {
       return;
     }
 
-    $storage = $this->entityTypeManager->getStorage('ai_book_listing');
+    $storage = $this->getEntityTypeManager()->getStorage('ai_book_listing');
     $success = 0;
     $errors = [];
 
@@ -120,7 +119,7 @@ final class AiBookListingLocationBatchForm extends FormBase {
       $listing->save();
 
       try {
-        $result = $this->listingPublisher->publish($listing);
+        $result = $this->getListingPublisher()->publish($listing);
       }
       catch (\Throwable $e) {
         $listing->set('status', 'failed');
@@ -164,7 +163,7 @@ final class AiBookListingLocationBatchForm extends FormBase {
   }
 
   private function buildReadyToShelveOptions(string $status): array {
-    $storage = $this->entityTypeManager->getStorage('ai_book_listing');
+    $storage = $this->getEntityTypeManager()->getStorage('ai_book_listing');
     $items = $storage->loadByProperties(['status' => $status]);
     uasort($items, fn($a, $b) => $a->get('created')->value <=> $b->get('created')->value);
 
@@ -180,10 +179,31 @@ final class AiBookListingLocationBatchForm extends FormBase {
         'author' => $listing->get('author')->value ?: $this->t('Unknown'),
         'price' => $listing->get('price')->value ?? $this->t('—'),
         'location' => $listing->get('storage_location')->value ?: $this->t('Unset yet'),
-        'created' => $this->dateFormatter->format((int) $listing->get('created')->value),
+        'created' => $this->getDateFormatter()->format((int) $listing->get('created')->value),
       ];
     }
 
     return $options;
+  }
+
+  private function getEntityTypeManager(): EntityTypeManagerInterface {
+    if ($this->entityTypeManager === null) {
+      $this->entityTypeManager = \Drupal::entityTypeManager();
+    }
+    return $this->entityTypeManager;
+  }
+
+  private function getListingPublisher(): ListingPublisher {
+    if ($this->listingPublisher === null) {
+      $this->listingPublisher = \Drupal::service('drupal.listing_publishing.publisher');
+    }
+    return $this->listingPublisher;
+  }
+
+  private function getDateFormatter(): DateFormatterInterface {
+    if ($this->dateFormatter === null) {
+      $this->dateFormatter = \Drupal::service('date.formatter');
+    }
+    return $this->dateFormatter;
   }
 }

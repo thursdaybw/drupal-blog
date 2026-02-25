@@ -125,6 +125,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#type' => 'select',
       '#title' => 'Stage',
       '#options' => [
+        'new' => $this->t('New'),
         'ready_for_review' => $this->t('Ready for review'),
         'ready_to_shelve' => $this->t('Ready to shelve'),
         'published' => $this->t('Published'),

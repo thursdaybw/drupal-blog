@@ -49,6 +49,15 @@ entity.ai_book_listing.list_published:
   requirements:
     _permission: 'administer ai listings'
 
+entity.ai_book_listing.list_failed:
+  path: '/admin/ai-listings/failed'
+  defaults:
+    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
+    _title: 'AI Book Listings – Failed'
+    status: 'failed'
+  requirements:
+    _permission: 'administer ai listings'
+
 entity.ai_book_listing.canonical:
   path: '/admin/ai-listings/{ai_book_listing}'
   defaults:

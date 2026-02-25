@@ -10,6 +10,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Link;
 use Drupal\Core\Url;
+use Drupal\ai_listing\Entity\AiBookListing;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -34,7 +35,25 @@ final class AiBookListingLocationBatchForm extends FormBase {
   }
 
   public function buildForm(array $form, FormStateInterface $form_state): array {
-    $form['listings'] = [
+    $statusFilter = $form_state->getValue('status_filter') ?? 'ready_to_shelve';
+
+    $form['status_filter'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Status filter'),
+      '#options' => AiBookListing::statusAllowedValues(),
+      '#default_value' => $statusFilter,
+      '#ajax' => [
+        'callback' => '::updateListingsCallback',
+        'wrapper' => 'ai-batch-listings',
+      ],
+    ];
+
+    $form['listings_container'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'ai-batch-listings'],
+    ];
+
+    $form['listings_container']['listings'] = [
       '#type' => 'tableselect',
       '#header' => [
         'title' => $this->t('Title'),
@@ -43,7 +62,7 @@ final class AiBookListingLocationBatchForm extends FormBase {
         'location' => $this->t('Current location'),
         'created' => $this->t('Created'),
       ],
-      '#options' => $this->buildReadyToShelveOptions(),
+      '#options' => $this->buildReadyToShelveOptions($statusFilter),
       '#empty' => $this->t('No listings are ready for shelving at the moment.'),
       '#multiple' => TRUE,
       '#default_value' => [],
@@ -65,6 +84,10 @@ final class AiBookListingLocationBatchForm extends FormBase {
     $form['#attached']['library'][] = 'ai_listing/location_table';
 
     return $form;
+  }
+
+  public function updateListingsCallback(array &$form, FormStateInterface $form_state): array {
+    return $form['listings_container'];
   }
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
@@ -140,9 +163,9 @@ final class AiBookListingLocationBatchForm extends FormBase {
     $form_state->setRebuild();
   }
 
-  private function buildReadyToShelveOptions(): array {
+  private function buildReadyToShelveOptions(string $status): array {
     $storage = $this->entityTypeManager->getStorage('ai_book_listing');
-    $items = $storage->loadByProperties(['status' => 'ready_to_shelve']);
+    $items = $storage->loadByProperties(['status' => $status]);
     uasort($items, fn($a, $b) => $a->get('created')->value <=> $b->get('created')->value);
 
     $options = [];

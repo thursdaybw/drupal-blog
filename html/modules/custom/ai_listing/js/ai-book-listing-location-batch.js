@@ -1,7 +1,7 @@
 (function (Drupal, once) {
   'use strict';
 
-  const tableSelector = 'table#edit-listings';
+  const tableSelector = 'table[data-drupal-selector="edit-listings"]';
 
   Drupal.behaviors.aiListingLocationBatch = {
     attach(context) {

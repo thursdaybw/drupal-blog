@@ -518,7 +518,11 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
   private function getNextReadyForReviewId(): ?int {
     $ids = $this->getReadyForReviewIds();
-    return $ids[0] ?? null;
+    if (empty($ids)) {
+      return null;
+    }
+
+    return (int) $ids[0];
   }
 
   public function submitAndPublish(array &$form, FormStateInterface $form_state): void {

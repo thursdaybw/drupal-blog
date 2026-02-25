@@ -10,5 +10,6 @@ services:
     class: Drupal\compute_orchestrator\Command\BadHostsCommand
     arguments:
       - '@compute_orchestrator.bad_host_registry'
+      - '@state'
     tags:
       - { name: drush.command }

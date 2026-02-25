@@ -48,6 +48,19 @@ interface VastRestClientInterface {
   public function destroyInstance(string $instanceId): array;
 
   /**
+   * Fetch instance logs (regular or debug) for diagnostics.
+   *
+   * @param string $instanceId
+   *   Instance ID to inspect.
+   * @param bool $extra
+   *   Whether to include the "extra debug logs" stream.
+   *
+   * @return array
+   *   Decoded JSON response from Vast.
+   */
+  public function getInstanceLogs(string $instanceId, bool $extra = FALSE): array;
+
+  /**
    * Search offers using structured filters.
    *
    * @param array $filters

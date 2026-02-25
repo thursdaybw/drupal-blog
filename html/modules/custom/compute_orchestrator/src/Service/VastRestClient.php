@@ -95,6 +95,14 @@ final class VastRestClient implements VastRestClientInterface {
     return $this->request('DELETE', 'instances/' . (int) $instanceId . '/');
   }
 
+  public function getInstanceLogs(string $instanceId, bool $extra = FALSE): array {
+    $uri = 'instances/' . (int) $instanceId . '/log';
+    if ($extra) {
+      $uri .= '?type=extra';
+    }
+    return $this->request('GET', $uri);
+  }
+
   private function request(string $method, string $uri, array $options = []): array {
     try {
 
@@ -185,10 +193,15 @@ final class VastRestClient implements VastRestClientInterface {
     $absoluteSafetyTimeout = max(5400, $timeoutSeconds + $adapter->getStartupTimeoutSeconds());
     $stallThresholdSeconds = 600;
     $sshLossThresholdSeconds = 300;
+    $sshFailureGraceSeconds = 180;
     $lastProgressAt = $start;
     $sshLostSince = null;
     $sshWasReachable = false;
+    $sshFailureStartedAt = null;
+    $sshFailureReason = null;
     $previousProbeResults = [];
+    $lastLogCheckAt = $start;
+    $logCheckInterval = 60;
 
     $lastCurState = null;
     $lastActualStatus = null;
@@ -281,11 +294,22 @@ final class VastRestClient implements VastRestClientInterface {
             $sshLostSince = time();
           }
           $sshLossSeconds = $sshLostSince !== null ? (time() - $sshLostSince) : 0;
+        if ($sshFailureReason !== $why) {
+          $sshFailureReason = $why;
+          $sshFailureStartedAt = time();
+        }
           if ($lastProbeKind !== 'ssh' || $lastProbeWhy !== $why) {
             $this->logWithTime('PROBE ssh not ready: ' . $why);
             $this->logger->notice('WORKLOAD ssh not ready: {why}', ['why' => $why]);
             $lastProbeKind = 'ssh';
             $lastProbeWhy = $why;
+          }
+          if (
+            $this->isSshPortForwardingFailure($why) &&
+            $sshFailureStartedAt !== null &&
+            (time() - $sshFailureStartedAt) >= $sshFailureGraceSeconds
+          ) {
+            throw new \RuntimeException('SSH port forwarding stuck: ' . $why);
           }
           if ($sshWasReachable && $sshLossSeconds >= $sshLossThresholdSeconds) {
             throw new \RuntimeException('Connectivity loss: SSH probe unavailable for ' . $sshLossSeconds . ' seconds.');
@@ -295,6 +319,8 @@ final class VastRestClient implements VastRestClientInterface {
         }
         $sshLostSince = null;
         $sshWasReachable = true;
+        $sshFailureReason = null;
+        $sshFailureStartedAt = null;
 
         $probeResults = $this->executeWorkloadProbesViaSsh($adapter->getReadinessProbeCommands(), $sshHost, (int) $sshPort, $user);
         if ($adapter->isReadyFromProbeResults($probeResults)) {
@@ -354,6 +380,10 @@ final class VastRestClient implements VastRestClientInterface {
       }
 
       $stalledFor = time() - $lastProgressAt;
+      if ($stalledFor >= ($stallThresholdSeconds / 2) && (time() - $lastLogCheckAt) >= $logCheckInterval) {
+        $lastLogCheckAt = time();
+        $this->inspectInstanceLogsForFailures($instanceId);
+      }
       if ($stalledFor >= $stallThresholdSeconds) {
         throw new \RuntimeException(
           'Instance stalled before workload readiness for ' . $stalledFor . ' seconds.'
@@ -364,9 +394,85 @@ final class VastRestClient implements VastRestClientInterface {
     }
   }
 
+  private function containsFatalLogLine(array $lines): ?string {
+    foreach ($lines as $line) {
+      $normalized = strtolower($line);
+      if ($normalized === '' || strlen($line) < 5) {
+        continue;
+      }
+      foreach ([
+        'error response from daemon',
+        'no such container',
+        'oci runtime create failed',
+        'failed to create task for container',
+        'pull access denied',
+      ] as $term) {
+        if (str_contains($normalized, $term)) {
+          return $line;
+        }
+      }
+    }
+    return null;
+  }
+
+  private function extractLogLinesFromPayload(array $payload): array {
+    $lines = [];
+    if (isset($payload['log']) && is_string($payload['log'])) {
+      $lines = array_merge($lines, $this->splitAndTrim($payload['log']));
+    }
+    if (isset($payload['lines']) && is_array($payload['lines'])) {
+      foreach ($payload['lines'] as $line) {
+        if (is_string($line)) {
+          $lines[] = trim($line);
+        }
+        elseif (is_array($line)) {
+          $text = $line['line'] ?? $line['log'] ?? null;
+          if (is_string($text)) {
+            $lines[] = trim($text);
+          }
+        }
+      }
+    }
+    if (isset($payload['debug']) && is_string($payload['debug'])) {
+      $lines = array_merge($lines, $this->splitAndTrim($payload['debug']));
+    }
+    return array_values(array_filter($lines));
+  }
+
+  private function splitAndTrim(string $chunk): array {
+    return array_filter(array_map('trim', explode("\n", $chunk)));
+  }
+
+  private function inspectInstanceLogsForFailures(string $instanceId): void {
+    foreach ([FALSE, TRUE] as $extra) {
+      try {
+        $logs = $this->getInstanceLogs($instanceId, $extra);
+      }
+      catch (\RuntimeException $e) {
+        continue;
+      }
+
+      $lines = $this->extractLogLinesFromPayload($logs);
+      $fatal = $this->containsFatalLogLine($lines);
+      if ($fatal !== null) {
+        throw new \RuntimeException('Container log fatality detected: ' . $fatal);
+      }
+    }
+  }
+
   private function isCreationFailureMessage(string $statusMsg): bool {
     $lower = strtolower($statusMsg);
     foreach (['failed', 'error', 'denied', 'cannot', 'timeout', 'unavailable'] as $term) {
+      if (str_contains($lower, $term)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private function isSshPortForwardingFailure(string $message): bool {
+    $lower = strtolower($message);
+    foreach (['remote port forwarding failed', 'port forwarding failed for'] as $term) {
       if (str_contains($lower, $term)) {
         return true;
       }
@@ -390,6 +496,7 @@ final class VastRestClient implements VastRestClientInterface {
 
     $globalBlacklist = $this->getGlobalBlacklist();
     $globallyBlockedHosts = array_keys($globalBlacklist);
+    $registryBlockedHosts = $this->badHosts->all();
 
 
     if (!empty($globallyBlockedHosts)) {
@@ -398,12 +505,18 @@ final class VastRestClient implements VastRestClientInterface {
         implode(',', $globallyBlockedHosts)
       );
     }
+    if (!empty($registryBlockedHosts)) {
+      $this->logWithTime(
+        'Loaded BAD HOST registry entries: ' . implode(',', $registryBlockedHosts)
+      );
+    }
 
     $workloadBlacklist = \Drupal::state()->get('compute_orchestrator.workload_bad_hosts', []);
     $workloadBlockedHosts = $workloadBlacklist[$workload] ?? [];
 
     $excludedHostIds = array_values(array_unique(array_merge(
       $globallyBlockedHosts,
+      $registryBlockedHosts,
       $workloadBlockedHosts
     )));
 
@@ -540,6 +653,10 @@ final class VastRestClient implements VastRestClientInterface {
         if ($isInfraFatal && $hostId !== '') {
           $this->incrementInfraFailureStats($hostId);
           $this->addToGlobalBlacklist($hostId);
+        }
+
+        foreach ($this->extractCdiDeviceIds($lastFailureMessage) as $deviceId) {
+          $this->recordHostCdiFailure($hostId, $deviceId);
         }
 
         $this->logWithTime('--- PROVISION EXCEPTION START ---');
@@ -723,6 +840,42 @@ final class VastRestClient implements VastRestClientInterface {
     $this->saveHostStats($stats);
   }
 
+  private function getHostCdiFailures(): array {
+    $value = \Drupal::state()->get('compute_orchestrator.host_cdi_failures', []);
+    return is_array($value) ? $value : [];
+  }
+
+  private function saveHostCdiFailures(array $failures): void {
+    \Drupal::state()->set('compute_orchestrator.host_cdi_failures', $failures);
+  }
+
+  private function recordHostCdiFailure(string $hostId, string $deviceId): void {
+    if ($hostId === '' || $deviceId === '') {
+      return;
+    }
+
+    $failures = $this->getHostCdiFailures();
+    if (!isset($failures[$hostId]) || !is_array($failures[$hostId])) {
+      $failures[$hostId] = [];
+    }
+
+    $failures[$hostId][] = [
+      'device' => $deviceId,
+      'when' => time(),
+    ];
+
+    if (count($failures[$hostId]) > 5) {
+      $failures[$hostId] = array_slice($failures[$hostId], -5);
+    }
+
+    $this->saveHostCdiFailures($failures);
+    $this->logWithTime(sprintf(
+      'Recorded CDI failure for host %s device %s',
+      $hostId,
+      $deviceId
+    ));
+  }
+
   private function incrementInfraFailureStats(string $hostId): void {
     if ($hostId === '') {
       return;
@@ -761,6 +914,8 @@ final class VastRestClient implements VastRestClientInterface {
     foreach ([
       'cdi',
       'oci runtime create failed',
+      'error response from daemon',
+      'no such container',
       'cuda',
       'gpu error, unable to start instance',
       'unsupported display driver / cuda driver combination',
@@ -772,6 +927,22 @@ final class VastRestClient implements VastRestClientInterface {
     }
 
     return false;
+  }
+
+  private function extractCdiDeviceIds(string $message): array {
+    if ($message === '') {
+      return [];
+    }
+
+    $matches = [];
+    preg_match_all('/(D\\.[0-9a-f]+\\/gpu=\\d+)/i', $message, $matches);
+    if (empty($matches[1])) {
+      return [];
+    }
+
+    $unique = array_unique($matches[1]);
+    $trimmed = array_map('trim', $unique);
+    return array_values(array_filter($trimmed));
   }
 
   private function resolveSshKeyPath(): ?string {

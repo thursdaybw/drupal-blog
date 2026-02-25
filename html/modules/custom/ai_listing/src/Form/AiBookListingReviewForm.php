@@ -11,6 +11,8 @@ use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\ai_listing\Entity\AiBookListing;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\listing_publishing\Service\ListingPublisher;
+use Drupal\Component\Utility\Html;
+use Drupal\Component\Utility\UrlHelper;
 
 final class AiBookListingReviewForm extends FormBase implements ContainerInjectionInterface {
 
@@ -43,6 +45,14 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#title' => 'Basic details',
       '#open' => TRUE,
       '#tree' => TRUE,
+    ];
+
+    $form['basic_search'] = [
+      '#type' => 'markup',
+      '#markup' => $this->buildEbaySearchLink($ai_book_listing),
+      '#prefix' => '<div class="ai-help">',
+      '#suffix' => '</div>',
+      '#weight' => -100,
     ];
 
 
@@ -120,9 +130,9 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
         'published' => $this->t('Published'),
         'failed' => $this->t('Failed'),
       ],
-      '#default_value' => $ai_book_listing->get('status')->value,
-      '#description' => $this->t('Choose the workflow stage for this listing.'),
-      '#required' => TRUE,
+    '#default_value' => $ai_book_listing->get('status')->value,
+    '#description' => $this->t('Choose the workflow stage for this listing.'),
+    '#required' => TRUE,
     ];
 
     $form['basic']['bargain_bin'] = [
@@ -383,6 +393,19 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $form['#attached']['library'][] = 'ai_listing/bargain_preset';
 
     return $form;
+  }
+
+  private function buildEbaySearchLink(AiBookListing $listing): string {
+    $title = trim((string) $listing->get('title')->value);
+    $author = trim((string) $listing->get('author')->value);
+    $query = trim($title . ' ' . $author);
+    if ($query === '') {
+      return '';
+    }
+
+    $url = 'https://www.ebay.com.au/sch/i.html?_nkw=' . UrlHelper::encodePath($query);
+    $titleAttr = Html::escape($this->t('Search eBay for ~%query%~', ['%query%' => $query]));
+    return sprintf('<a href="%s" target="_blank" rel="noopener noreferrer" title="%s">Search eBay for %s</a>', $url, $titleAttr, Html::escape($query));
   }
 
   public function getTitle(AiBookListing $ai_book_listing): string {

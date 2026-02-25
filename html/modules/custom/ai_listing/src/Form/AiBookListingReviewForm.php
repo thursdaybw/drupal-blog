@@ -104,6 +104,13 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#required' => TRUE,
     ];
 
+    $form['basic']['storage_location'] = [
+      '#type' => 'textfield',
+      '#title' => 'Storage location',
+      '#description' => $this->t('Set this once the listing is ready to shelve so the SKU can encode where the book lives.'),
+      '#default_value' => $ai_book_listing->get('storage_location')->value ?: '',
+    ];
+
     $form['basic']['status'] = [
       '#type' => 'select',
       '#title' => 'Stage',
@@ -442,6 +449,11 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $statusValue = $form_state->getValue(['basic', 'status']);
     if ($statusValue !== NULL) {
       $listing->set('status', $statusValue);
+    }
+
+    $storageLocation = $form_state->getValue(['basic', 'storage_location']);
+    if ($storageLocation !== NULL) {
+      $listing->set('storage_location', $storageLocation);
     }
 
     $listing->save();

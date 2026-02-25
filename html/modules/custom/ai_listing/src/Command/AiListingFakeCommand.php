@@ -28,7 +28,7 @@ final class AiListingFakeCommand extends DrushCommands {
     for ($i = 1; $i <= $count; $i++) {
 
       $listing = $storage->create([
-        'status' => 'ready',
+        'status' => 'ready_for_review',
         'title' => "Test Book {$i}",
         'subtitle' => '',
         'full_title' => "Test Book {$i}",

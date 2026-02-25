@@ -13,12 +13,18 @@ ai_listing.new:
 
 ai_listing.ready:
   title: 'Ready'
-  route_name: entity.ai_book_listing.list_ready
+  route_name: entity.ai_book_listing.list_ready_for_review
   parent: ai_listing.group
   weight: 10
+
+ai_listing.ready_to_shelve:
+  title: 'Ready to shelve'
+  route_name: entity.ai_book_listing.list_ready_to_shelve
+  parent: ai_listing.group
+  weight: 20
 
 ai_listing.published:
   title: 'Published'
   route_name: entity.ai_book_listing.list_published
   parent: ai_listing.group
-  weight: 20
+  weight: 30

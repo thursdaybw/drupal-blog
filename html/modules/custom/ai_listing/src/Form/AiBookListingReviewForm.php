@@ -104,6 +104,20 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#required' => TRUE,
     ];
 
+    $form['basic']['status'] = [
+      '#type' => 'select',
+      '#title' => 'Stage',
+      '#options' => [
+        'ready_for_review' => $this->t('Ready for review'),
+        'ready_to_shelve' => $this->t('Ready to shelve'),
+        'published' => $this->t('Published'),
+        'failed' => $this->t('Failed'),
+      ],
+      '#default_value' => $ai_book_listing->get('status')->value,
+      '#description' => $this->t('Choose the workflow stage for this listing.'),
+      '#required' => TRUE,
+    ];
+
     $form['basic']['bargain_bin'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Mark as Bargain Bin'),
@@ -425,7 +439,10 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
     $listing->set('condition_json', json_encode($conditionPayload, JSON_PRETTY_PRINT));
 
-
+    $statusValue = $form_state->getValue(['basic', 'status']);
+    if ($statusValue !== NULL) {
+      $listing->set('status', $statusValue);
+    }
 
     $listing->save();
 

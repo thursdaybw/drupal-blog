@@ -14,12 +14,21 @@ entity.ai_book_listing.list_new:
   requirements:
     _permission: 'administer ai listings'
 
-entity.ai_book_listing.list_ready:
-  path: '/admin/ai-listings/ready'
+entity.ai_book_listing.list_ready_for_review:
+  path: '/admin/ai-listings/ready-for-review'
   defaults:
     _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
-    _title: 'AI Book Listings – Ready'
-    status: 'ready'
+    _title: 'AI Book Listings – Ready for review'
+    status: 'ready_for_review'
+  requirements:
+    _permission: 'administer ai listings'
+
+entity.ai_book_listing.list_ready_to_shelve:
+  path: '/admin/ai-listings/ready-to-shelve'
+  defaults:
+    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
+    _title: 'AI Book Listings – Ready to shelve'
+    status: 'ready_to_shelve'
   requirements:
     _permission: 'administer ai listings'
 

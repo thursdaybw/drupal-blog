@@ -487,10 +487,31 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
     $trigger = $form_state->getTriggeringElement() ?: [];
     $statusValue = (string) $form_state->getValue(['basic', 'status']);
-    if (($trigger['#name'] ?? '') === 'ai_save_listing' && $statusValue === 'new') {
-      $form_state->setRedirect('entity.ai_book_listing.add_form');
-      return;
+    if (($trigger['#name'] ?? '') === 'ai_save_listing') {
+      if ($statusValue === 'new') {
+        $form_state->setRedirect('entity.ai_book_listing.add_form');
+        return;
+      }
+
+      if ($statusValue === 'ready_to_shelve') {
+        if ($this->getReadyForReviewCount() > 0) {
+          $form_state->setRedirect('entity.ai_book_listing.list_ready_for_review');
+        }
+        else {
+          $form_state->setRedirect('ai_listing.location_batch');
+        }
+        return;
+      }
     }
+  }
+
+  private function getReadyForReviewCount(): int {
+    /** @var \Drupal\ai_listing\Entity\AiBookListing[] $ids */
+    $query = $this->entityTypeManager->getStorage('ai_book_listing')->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('status', 'ready_for_review');
+
+    return (int) count($query->execute());
   }
 
   public function submitAndPublish(array &$form, FormStateInterface $form_state): void {

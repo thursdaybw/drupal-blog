@@ -3,5 +3,6 @@ ai_listing.add_action:
   title: 'Add AI Book Listing'
   appears_on:
     - entity.ai_book_listing.list_new
-    - entity.ai_book_listing.list_ready
+    - entity.ai_book_listing.list_ready_for_review
+    - entity.ai_book_listing.list_ready_to_shelve
     - entity.ai_book_listing.list_published

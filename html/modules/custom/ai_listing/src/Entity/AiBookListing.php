@@ -51,7 +51,8 @@ final class AiBookListing extends ContentEntityBase {
   private const STATUS_ALLOWED_VALUES = [
     'new' => 'New',
     'processing' => 'Processing',
-    'ready' => 'Ready',
+    'ready_for_review' => 'Ready for review',
+    'ready_to_shelve' => 'Ready to shelve',
     'published' => 'Published',
     'failed' => 'Failed',
   ];

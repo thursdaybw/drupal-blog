@@ -73,7 +73,7 @@ final class AiBookListingDataExtractionProcessor {
     $listing->set('condition_issues', is_array($condition['issues'] ?? null) ? array_values(array_map('strval', $condition['issues'])) : []);
     $listing->set('condition_grade', (string) ($condition['grade'] ?? 'good'));
 
-    $listing->set('status', 'ready');
+    $listing->set('status', 'ready_for_review');
 
     $listing->save();
   }

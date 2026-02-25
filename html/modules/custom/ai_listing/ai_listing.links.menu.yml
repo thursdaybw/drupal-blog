@@ -35,3 +35,9 @@ ai_listing.published:
   route_name: entity.ai_book_listing.list_published
   parent: ai_listing.group
   weight: 30
+
+ai_listing.failed:
+  title: 'Failed'
+  route_name: entity.ai_book_listing.list_failed
+  parent: ai_listing.group
+  weight: 40

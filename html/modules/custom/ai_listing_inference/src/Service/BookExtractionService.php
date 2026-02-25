@@ -155,7 +155,7 @@ Explore my other listings, more books and treasures added regularly!
         'genre' => (string) ($parsed['genre'] ?? ''),
         'narrative_type' => (string) ($parsed['narrative_type'] ?? ''),
         'country_printed' => (string) ($parsed['country_printed'] ?? ''),
-        'edition' => (string) ($parsed['edition'] ?? ''),
+        'edition' => $this->truncateEdition((string) ($parsed['edition'] ?? '')),
         'series' => (string) ($parsed['series'] ?? ''),
         'features' => is_array($parsed['features'] ?? null) ? array_values(array_map('strval', $parsed['features'])) : [],
         'ebay_title' => $ebayTitle,
@@ -264,6 +264,21 @@ Explore my other listings, more books and treasures added regularly!
     $final = preg_replace('/\s+/', ' ', $final) ?? $final;
 
     return substr($final, 0, $maxLen);
+  }
+
+  private function truncateEdition(string $value): string {
+    $max = 64;
+    $normalized = trim($value);
+    if ($normalized === '') {
+      return '';
+    }
+
+    if (mb_strlen($normalized) <= $max) {
+      return $normalized;
+    }
+
+    $truncated = mb_substr($normalized, 0, max(0, $max - 1));
+    return $truncated . '…';
   }
 
 }

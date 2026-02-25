@@ -75,7 +75,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#type' => 'text_format',
       '#title' => 'Description',
       '#format' => $ai_book_listing->get('description')->format ?: 'basic_html',
-      '#default_value' => $ai_book_listing->get('description')->value,
+      '#default_value' => $this->formatDescriptionText($ai_book_listing->get('description')->value ?? ''),
       '#rows' => 12,
     ];
 
@@ -222,12 +222,6 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#default_value' => $ai_book_listing->get('publication_year')->value,
     ];
 
-    $form['basic']['edition'] = [
-      '#type' => 'textfield',
-      '#title' => 'Edition',
-      '#default_value' => $ai_book_listing->get('edition')->value,
-    ];
-
     $form['basic']['series'] = [
       '#type' => 'textfield',
       '#title' => 'Series',
@@ -239,7 +233,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $form['classification'] = [
       '#type' => 'details',
       '#title' => 'Classification',
-      '#open' => FALSE,
+      '#open' => TRUE,
       '#tree' => TRUE,
     ];
 
@@ -440,7 +434,6 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listing->set('isbn', $form_state->getValue(['basic', 'isbn']));
     $listing->set('publisher', $form_state->getValue(['basic', 'publisher']));
     $listing->set('publication_year', $form_state->getValue(['basic', 'publication_year']));
-    $listing->set('edition', $form_state->getValue(['basic', 'edition']));
     $listing->set('series', $form_state->getValue(['basic', 'series']));
 
     $listing->set('format', $form_state->getValue(['classification', 'format']));
@@ -529,6 +522,14 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     }
 
     return (int) $ids[0];
+  }
+
+  private function formatDescriptionText(?string $text): string {
+    $text = $text ?? '';
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    $text = preg_replace('/\\s*---\\s*/', "\n\n---\n\n", $text);
+    $text = preg_replace('/\\n{3,}/', "\n\n", $text);
+    return trim($text);
   }
 
   private function redirectAfterReadyToShelve(FormStateInterface $form_state): void {

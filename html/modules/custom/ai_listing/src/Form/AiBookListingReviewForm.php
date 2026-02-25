@@ -249,6 +249,10 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#type' => 'textfield',
       '#title' => 'Format',
       '#default_value' => $ai_book_listing->get('format')->value,
+      '#attributes' => [
+        'list' => 'ai-format-options',
+      ],
+      '#suffix' => '<datalist id="ai-format-options"><option value="Paperback"><option value="Hardcover"></datalist>',
     ];
 
     $form['classification']['language'] = [

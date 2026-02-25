@@ -40,7 +40,7 @@ final class AiBookListingLocationBatchForm extends FormBase {
     $form['status_filter'] = [
       '#type' => 'select',
       '#title' => $this->t('Status filter'),
-      '#options' => AiBookListing::statusAllowedValues(),
+      '#options' => AiBookListing::getStatusOptions(),
       '#default_value' => $statusFilter,
       '#ajax' => [
         'callback' => '::updateListingsCallback',

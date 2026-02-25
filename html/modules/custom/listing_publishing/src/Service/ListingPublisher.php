@@ -18,7 +18,20 @@ final class ListingPublisher {
 
   public function publish(AiBookListing $listing): MarketplacePublishResult {
     $request = $this->assembler->assemble($listing);
-    return $this->publisher->publish($request);
+    $newSku = $request->getSku();
+    $previousSku = (string) $listing->get('published_sku')->value;
+
+    if ($previousSku !== '' && $previousSku !== $newSku) {
+      $this->publisher->deleteSku($previousSku);
+    }
+
+    $result = $this->publisher->publish($request);
+    if ($result->isSuccess()) {
+      $listing->set('published_sku', $newSku);
+      $listing->save();
+    }
+
+    return $result;
   }
 
 }

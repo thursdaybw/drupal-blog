@@ -8,6 +8,7 @@ use Drupal\ai_listing\Entity\AiBookListing;
 use Drupal\file\Entity\File;
 use Drupal\listing_publishing\Model\ListingImageSource;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
+use Drupal\listing_publishing\Contract\SkuGeneratorInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 
 final class BookListingAssembler {
@@ -18,13 +19,17 @@ final class BookListingAssembler {
   private const DEFAULT_CONDITION = 'good';
   private const DEFAULT_AUTHOR = 'Unknown';
 
-  public function __construct(private readonly FileUrlGeneratorInterface $fileUrlGenerator) {}
+  public function __construct(
+    private readonly FileUrlGeneratorInterface $fileUrlGenerator,
+    private readonly SkuGeneratorInterface $skuGenerator,
+  ) {}
 
   public function assemble(AiBookListing $listing): ListingPublishRequest {
     $title = $this->resolveTitle($listing);
     $description = $this->resolveDescription($listing, $title);
     $author = (string) ($listing->get('author')->value ?: self::DEFAULT_AUTHOR);
-    $sku = 'ai-book-' . $listing->id();
+    $skuSuffix = 'ai-book-' . $listing->id();
+    $sku = $this->skuGenerator->generate($listing, $skuSuffix);
     $files = $listing->get('images')->referencedEntities();
     $imageSources = $this->collectImageSources($files);
     $imageUrls = $this->collectImageUrls($files);

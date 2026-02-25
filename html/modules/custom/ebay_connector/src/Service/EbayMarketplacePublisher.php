@@ -88,6 +88,34 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     return new MarketplacePublishResult(true, 'Published', $publish['listingId']);
   }
 
+  public function deleteSku(string $sku): void {
+    $offers = $this->sellApiClient->listOffersBySku($sku);
+    foreach ($offers as $offer) {
+      if (empty($offer['offerId'])) {
+        continue;
+      }
+
+      try {
+        $this->sellApiClient->deleteOffer((string) $offer['offerId']);
+      }
+      catch (\RuntimeException $e) {
+        // Swallow not found errors so retries clean up whatever exists.
+        if (!str_contains($e->getMessage(), '404')) {
+          throw $e;
+        }
+      }
+    }
+
+    try {
+      $this->sellApiClient->deleteInventoryItem($sku);
+    }
+    catch (\RuntimeException $e) {
+      if (!str_contains($e->getMessage(), '404')) {
+        throw $e;
+      }
+    }
+  }
+
   public function getMarketplaceKey(): string {
     return 'ebay';
   }

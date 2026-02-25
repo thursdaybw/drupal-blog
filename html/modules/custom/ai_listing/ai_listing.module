@@ -71,5 +71,10 @@ function ai_listing_theme($existing, $type, $theme, $path) {
       'render element' => 'element',
       'template' => 'ai-tile-checkboxes',
     ],
+    'ai_listing_format_field' => [
+      'render element' => 'element',
+      'template' => 'ai-format-field',
+      'base hook' => 'input',
+    ],
   ];
 }

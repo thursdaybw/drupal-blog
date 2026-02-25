@@ -29,3 +29,10 @@ location_table:
   dependencies:
     - core/drupal
     - core/once
+
+format_picker:
+  js:
+    js/format-picker.js: {}
+  dependencies:
+    - core/drupal
+    - core/once

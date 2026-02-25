@@ -1,0 +1,38 @@
+{#
+/**
+ * @file
+ * Render a format textfield with a native datalist dropdown.
+ */
+#}
+{# Build the text input attributes from the element definition. #}
+{% set attributes = create_attribute(element['#attributes'] ?? {}) %}
+{% if element['#id'] %}
+  {% set attributes = attributes.setAttribute('id', element['#id']) %}
+{% endif %}
+{% if element['#name'] %}
+  {% set attributes = attributes.setAttribute('name', element['#name']) %}
+{% endif %}
+{% if element['#size'] is defined %}
+  {% set attributes = attributes.setAttribute('size', element['#size']) %}
+{% endif %}
+{% if element['#maxlength'] is defined %}
+  {% set attributes = attributes.setAttribute('maxlength', element['#maxlength']) %}
+{% endif %}
+{% if element['#autocomplete'] is defined %}
+  {% set attributes = attributes.setAttribute('autocomplete', element['#autocomplete']) %}
+{% endif %}
+{% set options = element['#format_options'] ?? [] %}
+{% set value = element['#value'] ?? element['#default_value'] ?? attributes.value ?? '' %}
+
+<div class="ai-format-picker" data-ai-format-picker>
+  <input{{ attributes
+    .addClass('form-text', 'form-element', 'form-element--type-text', 'form-element--api-textfield')
+    .setAttribute('type', 'text')
+    .setAttribute('value', value)
+  }} />
+  <div class="ai-format-suggestions">
+    {% for option in options %}
+      <button type="button" class="ai-format-suggestion" data-format-value="{{ option|e('html_attr') }}">{{ option }}</button>
+    {% endfor %}
+  </div>
+</div>

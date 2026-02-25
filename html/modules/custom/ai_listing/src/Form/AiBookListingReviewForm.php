@@ -245,32 +245,19 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#tree' => TRUE,
     ];
 
-    $formatValue = trim((string) $ai_book_listing->get('format')->value);
-    $standardFormats = [
-      'Paperback' => 'Paperback',
-      'Hardcover' => 'Hardcover',
-    ];
-    $selectedFormat = isset($standardFormats[$formatValue]) ? $formatValue : 'other';
-
     $form['classification']['format'] = [
-      '#type' => 'select',
-      '#title' => 'Format',
-      '#options' => $standardFormats + ['other' => $this->t('Other')],
-      '#default_value' => $selectedFormat,
-    ];
-
-    $form['classification']['format_other'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Custom format'),
-      '#default_value' => $selectedFormat === 'other' ? $formatValue : '',
-      '#states' => [
-        'visible' => [
-          ':input[name="basic[classification][format]"]' => ['value' => 'other'],
-        ],
-        'required' => [
-          ':input[name="basic[classification][format]"]' => ['value' => 'other'],
-        ],
+      '#title' => 'Format',
+      '#default_value' => (string) $ai_book_listing->get('format')->value,
+      '#attributes' => [
+        'autocomplete' => 'off',
       ],
+      '#attached' => [
+        'library' => ['ai_listing/format_picker'],
+      ],
+      '#theme' => 'ai_listing_format_field',
+      '#format_options' => ['Paperback', 'Hardcover'],
+      '#format_datalist_id' => 'ai-format-options',
     ];
 
     $form['classification']['language'] = [
@@ -423,14 +410,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listing->set('publication_year', $form_state->getValue(['basic', 'publication_year']));
     $listing->set('series', $form_state->getValue(['basic', 'series']));
 
-    $formatControl = $form_state->getValue(['classification', 'format']);
-    if ($formatControl === 'other') {
-      $formatValue = (string) $form_state->getValue(['classification', 'format_other']);
-    }
-    else {
-      $formatValue = $formatControl;
-    }
-    $listing->set('format', $formatValue);
+    $listing->set('format', (string) $form_state->getValue(['classification', 'format']));
     $listing->set('language', $form_state->getValue(['classification', 'language']));
     $listing->set('genre', $form_state->getValue(['classification', 'genre']));
     $listing->set('narrative_type', $form_state->getValue(['classification', 'narrative_type']));

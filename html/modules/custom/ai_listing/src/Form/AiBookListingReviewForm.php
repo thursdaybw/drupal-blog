@@ -377,11 +377,23 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       ],
     ];
 
-    $form['actions']['publish'] = [
-      '#type' => 'submit',
-      '#value' => 'Publish to eBay',
-      '#submit' => ['::submitAndPublish'],
-    ];
+    $currentStatus = $ai_book_listing->get('status')->value;
+    if ($currentStatus === 'ready_for_review') {
+      $form['actions']['mark_ready_to_shelve'] = [
+        '#type' => 'submit',
+        '#value' => $this->t('Mark ready to shelve and continue'),
+        '#submit' => ['::submitAndSetReadyToShelve'],
+        '#button_type' => 'primary',
+        '#name' => 'mark_ready_to_shelve',
+      ];
+    }
+    else {
+      $form['actions']['publish'] = [
+        '#type' => 'submit',
+        '#value' => 'Publish to eBay',
+        '#submit' => ['::submitAndPublish'],
+      ];
+    }
 
     $form['actions']['save'] = [
       '#type' => 'submit',
@@ -494,13 +506,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       }
 
       if ($statusValue === 'ready_to_shelve') {
-        $nextId = $this->getNextReadyForReviewId();
-        if ($nextId !== null) {
-          $form_state->setRedirect('entity.ai_book_listing.canonical', ['ai_book_listing' => $nextId]);
-        }
-        else {
-          $form_state->setRedirect('ai_listing.location_batch');
-        }
+        $this->redirectAfterReadyToShelve($form_state);
         return;
       }
     }
@@ -523,6 +529,22 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     }
 
     return (int) $ids[0];
+  }
+
+  private function redirectAfterReadyToShelve(FormStateInterface $form_state): void {
+    $nextId = $this->getNextReadyForReviewId();
+    if ($nextId !== null) {
+      $form_state->setRedirect('entity.ai_book_listing.canonical', ['ai_book_listing' => $nextId]);
+      return;
+    }
+
+    $form_state->setRedirect('ai_listing.location_batch');
+  }
+
+  public function submitAndSetReadyToShelve(array &$form, FormStateInterface $form_state): void {
+    $form_state->setValue(['basic', 'status'], 'ready_to_shelve');
+    $this->submitForm($form, $form_state);
+    $this->redirectAfterReadyToShelve($form_state);
   }
 
   public function submitAndPublish(array &$form, FormStateInterface $form_state): void {

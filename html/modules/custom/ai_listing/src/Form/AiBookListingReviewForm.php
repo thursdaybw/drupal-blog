@@ -494,8 +494,9 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       }
 
       if ($statusValue === 'ready_to_shelve') {
-        if ($this->getReadyForReviewCount() > 0) {
-          $form_state->setRedirect('entity.ai_book_listing.list_ready_for_review');
+        $nextId = $this->getNextReadyForReviewId();
+        if ($nextId !== null) {
+          $form_state->setRedirect('entity.ai_book_listing.canonical', ['ai_book_listing' => $nextId]);
         }
         else {
           $form_state->setRedirect('ai_listing.location_batch');
@@ -505,13 +506,19 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     }
   }
 
-  private function getReadyForReviewCount(): int {
-    /** @var \Drupal\ai_listing\Entity\AiBookListing[] $ids */
-    $query = $this->entityTypeManager->getStorage('ai_book_listing')->getQuery()
+  private function getReadyForReviewIds(): array {
+    $ids = $this->entityTypeManager->getStorage('ai_book_listing')->getQuery()
       ->accessCheck(FALSE)
-      ->condition('status', 'ready_for_review');
+      ->condition('status', 'ready_for_review')
+      ->sort('id', 'ASC')
+      ->execute();
 
-    return (int) count($query->execute());
+    return array_values($ids);
+  }
+
+  private function getNextReadyForReviewId(): ?int {
+    $ids = $this->getReadyForReviewIds();
+    return $ids[0] ?? null;
   }
 
   public function submitAndPublish(array &$form, FormStateInterface $form_state): void {

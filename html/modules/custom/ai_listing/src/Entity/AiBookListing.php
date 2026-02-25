@@ -412,7 +412,7 @@ final class AiBookListing extends ContentEntityBase {
     );
   }
 
-  private static function statusAllowedValues(): array {
+  public static function getStatusOptions(): array {
     return self::STATUS_ALLOWED_VALUES;
   }
 }

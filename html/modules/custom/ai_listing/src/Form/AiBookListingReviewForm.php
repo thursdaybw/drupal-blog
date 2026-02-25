@@ -38,6 +38,14 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
     $form_state->set('listing', $ai_book_listing);
 
+    $form['photos'] = [
+      '#type' => 'details',
+      '#title' => 'Photos',
+      '#open' => TRUE,
+    ];
+
+    $form['photos']['items'] = $this->buildPhotoItems($ai_book_listing);
+
     // ===== BASIC DETAILS =====
 
     $form['basic'] = [
@@ -279,49 +287,6 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#rows' => 5,
     ];
 
-    // ===== PHOTOS =====
-
-    $form['photos'] = [
-      '#type' => 'details',
-      '#title' => 'Photos',
-      '#open' => TRUE,
-    ];
-
-    $fileStorage = $this->entityTypeManager->getStorage('file');
-    $photo_items = [];
-
-    foreach ($ai_book_listing->get('images') as $delta => $item) {
-
-      if (empty($item->target_id)) {
-        continue;
-      }
-
-      $file = $fileStorage->load($item->target_id);
-      if (!$file) {
-        continue;
-      }
-
-      $uri = $file->getFileUri();
-      $url = \Drupal\Core\Url::fromUri(
-        $this->fileUrlGenerator->generateAbsoluteString($uri)
-      );
-
-      $photo_items[] = [
-        '#type' => 'link',
-        '#title' => [
-          '#theme' => 'image_style',
-          '#style_name' => 'thumbnail',
-          '#uri' => $uri,
-        ],
-        '#url' => $url,
-        '#attributes' => [
-          'class' => ['ai-listing-photo-link'],
-        ],
-      ];
-    }
-
-    $form['photos']['items'] = $photo_items;
-
     // ===== METADATA =====
 
     $form['metadata'] = [
@@ -540,6 +505,42 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     }
 
     $form_state->setRedirect('ai_listing.location_batch');
+  }
+
+  private function buildPhotoItems(AiBookListing $ai_book_listing): array {
+    $fileStorage = $this->entityTypeManager->getStorage('file');
+    $photoItems = [];
+
+    foreach ($ai_book_listing->get('images') as $item) {
+      if (empty($item->target_id)) {
+        continue;
+      }
+
+      $file = $fileStorage->load($item->target_id);
+      if (!$file) {
+        continue;
+      }
+
+      $uri = $file->getFileUri();
+      $url = \Drupal\Core\Url::fromUri(
+        $this->fileUrlGenerator->generateAbsoluteString($uri)
+      );
+
+      $photoItems[] = [
+        '#type' => 'link',
+        '#title' => [
+          '#theme' => 'image_style',
+          '#style_name' => 'thumbnail',
+          '#uri' => $uri,
+        ],
+        '#url' => $url,
+        '#attributes' => [
+          'class' => ['ai-listing-photo-link'],
+        ],
+      ];
+    }
+
+    return $photoItems;
   }
 
   public function submitAndSetReadyToShelve(array &$form, FormStateInterface $form_state): void {

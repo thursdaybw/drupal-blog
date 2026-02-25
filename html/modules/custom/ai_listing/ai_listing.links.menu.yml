@@ -22,6 +22,13 @@ ai_listing.ready_to_shelve:
   route_name: entity.ai_book_listing.list_ready_to_shelve
   parent: ai_listing.group
   weight: 20
+  description: 'Set locations and publish multiple shelved listings at once.'
+
+ai_listing.bulk_location:
+  title: 'Batch location update'
+  route_name: ai_listing.location_batch
+  parent: ai_listing.group
+  weight: 25
 
 ai_listing.published:
   title: 'Published'

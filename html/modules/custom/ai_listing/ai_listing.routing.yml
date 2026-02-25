@@ -32,6 +32,14 @@ entity.ai_book_listing.list_ready_to_shelve:
   requirements:
     _permission: 'administer ai listings'
 
+ai_listing.location_batch:
+  path: '/admin/ai-listings/ready-to-shelve/bulk-location'
+  defaults:
+    _form: '\Drupal\ai_listing\Form\AiBookListingLocationBatchForm'
+    _title: 'Batch location update'
+  requirements:
+    _permission: 'administer ai listings'
+
 entity.ai_book_listing.list_published:
   path: '/admin/ai-listings/published'
   defaults:

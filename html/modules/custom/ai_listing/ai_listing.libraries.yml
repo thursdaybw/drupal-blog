@@ -22,3 +22,10 @@ bargain_preset:
     js/bargain-preset.js: {}
   dependencies:
     - core/drupal
+
+location_table:
+  js:
+    js/ai-book-listing-location-batch.js: {}
+  dependencies:
+    - core/drupal
+    - core/once

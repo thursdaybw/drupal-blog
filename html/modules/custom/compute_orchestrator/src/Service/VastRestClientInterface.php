@@ -80,6 +80,17 @@ interface VastRestClientInterface {
     int $limit = 20
   ): ?array;
 
+  public function provisionInstanceFromOffers(
+    array $filters,
+    array $excludeRegions = [],
+    int $limit = 5,
+    ?float $maxPrice = null,
+    ?float $minPrice = null,
+    array $createOptions = [],
+    int $maxAttempts = 5,
+    int $bootTimeoutSeconds = 600
+  ): array;
+
   public function waitForRunningAndSsh(string $instanceId, string $workload = 'vllm', int $timeoutSeconds = 180): array;
 
 }

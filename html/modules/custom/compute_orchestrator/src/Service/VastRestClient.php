@@ -485,6 +485,7 @@ final class VastRestClient implements VastRestClientInterface {
     array $excludeRegions = [],
     int $limit = 5,
     ?float $maxPrice = null,
+    ?float $minPrice = null,
     array $createOptions = [],
     int $maxAttempts = 5,
     int $bootTimeoutSeconds = 600
@@ -546,6 +547,9 @@ final class VastRestClient implements VastRestClientInterface {
 
       $price = (float) ($offer['dph_total'] ?? 0);
       if ($maxPrice !== null && $price > $maxPrice) {
+        continue;
+      }
+      if ($minPrice !== null && $price < $minPrice) {
         continue;
       }
 

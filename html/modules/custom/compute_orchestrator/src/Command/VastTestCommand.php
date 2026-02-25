@@ -100,6 +100,7 @@ final class VastTestCommand extends Command {
         ['RU', 'CN', 'IR', 'KP', 'SY'],
         20,
         1.0,
+        $policy['min_price'],
         [
           'workload' => 'vllm',
           'prefer_success_hosts' => $policy['prefer_success_hosts'],
@@ -191,6 +192,7 @@ final class VastTestCommand extends Command {
         'reliability_gte' => 0.95,
         'direct_port_count_gte' => 4,
         'prefer_success_hosts' => false,
+        'min_price' => 0.20,
       ];
 
     case 'balanced':
@@ -198,6 +200,7 @@ final class VastTestCommand extends Command {
         'reliability_gte' => 0.98,
         'direct_port_count_gte' => 8,
         'prefer_success_hosts' => true,
+        'min_price' => 0.20,
       ];
 
     case 'strict':
@@ -206,6 +209,7 @@ final class VastTestCommand extends Command {
       'reliability_gte' => 0.995,
       'direct_port_count_gte' => 16,
       'prefer_success_hosts' => true,
+      'min_price' => 0.20,
     ];
     }
   }

@@ -192,6 +192,18 @@ final class AiBookListing extends ContentEntityBase {
       ])
       ->setDisplayConfigurable('form', TRUE);
 
+    $fields['storage_location'] = BaseFieldDefinition::create('string')
+      ->setLabel('Storage location')
+      ->setDescription('Location or shelf code to inject into the SKU when publishing.')
+      ->setDefaultValue('')
+      ->setSettings(['max_length' => 255])
+      ->setDisplayOptions('form', [
+        'type' => 'string_textfield',
+        'weight' => 3,
+      ])
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
+
     $fields['bargain_bin'] = BaseFieldDefinition::create('boolean')
       ->setLabel('Bargain bin preset')
       ->setDescription('Flag that indicates this listing should use the bargain bin shipping policy.')

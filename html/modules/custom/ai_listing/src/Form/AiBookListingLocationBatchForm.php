@@ -35,12 +35,29 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
 
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $statusFilter = $form_state->getValue('status_filter') ?? 'ready_to_shelve';
+    $bargainFilter = (bool) $form_state->getValue('bargain_bin_filter');
 
-    $form['status_filter'] = [
+    $form['filters'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-batch-filters']],
+    ];
+
+    $form['filters']['status_filter'] = [
       '#type' => 'select',
       '#title' => $this->t('Status filter'),
       '#options' => AiBookListing::getStatusOptions(),
       '#default_value' => $statusFilter,
+      '#ajax' => [
+        'callback' => '::updateListingsCallback',
+        'wrapper' => 'ai-batch-listings',
+      ],
+    ];
+
+    $form['filters']['bargain_bin_filter'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Only bargain bin'),
+      '#default_value' => $bargainFilter,
+      '#description' => $this->t('Show only listings flagged for the bargain bin shipping policy.'),
       '#ajax' => [
         'callback' => '::updateListingsCallback',
         'wrapper' => 'ai-batch-listings',
@@ -61,7 +78,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
         'location' => $this->t('Current location'),
         'created' => $this->t('Created'),
       ],
-      '#options' => $this->buildReadyToShelveOptions($statusFilter),
+      '#options' => $this->buildReadyToShelveOptions($statusFilter, $bargainFilter),
       '#empty' => $this->t('No listings are ready for shelving at the moment.'),
       '#multiple' => TRUE,
       '#default_value' => [],
@@ -162,9 +179,13 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $form_state->setRebuild();
   }
 
-  private function buildReadyToShelveOptions(string $status): array {
+  private function buildReadyToShelveOptions(string $status, bool $onlyBargainBin): array {
     $storage = $this->getEntityTypeManager()->getStorage('ai_book_listing');
-    $items = $storage->loadByProperties(['status' => $status]);
+    $properties = ['status' => $status];
+    if ($onlyBargainBin) {
+      $properties['bargain_bin'] = 1;
+    }
+    $items = $storage->loadByProperties($properties);
     uasort($items, fn($a, $b) => $a->get('created')->value <=> $b->get('created')->value);
 
     $options = [];

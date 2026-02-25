@@ -106,7 +106,7 @@ final class AiBookListingUploadForm extends FormBase {
 
     $this->messenger()->addStatus('Listing created.');
 
-    $form_state->setRedirect('entity.ai_book_listing.list_new');
+    $form_state->setRedirect('entity.ai_book_listing.add_form');
   }
 
 }

@@ -386,6 +386,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#type' => 'submit',
       '#value' => 'Save Changes',
       '#button_type' => 'primary',
+      '#name' => 'ai_save_listing',
     ];
 
     $form['#attached']['library'][] = 'ai_listing/photo_viewer';
@@ -482,6 +483,13 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listing->save();
 
     $this->messenger()->addStatus('Listing updated.');
+
+    $trigger = $form_state->getTriggeringElement() ?: [];
+    $statusValue = (string) $form_state->getValue(['basic', 'status']);
+    if (($trigger['#name'] ?? '') === 'ai_save_listing' && $statusValue === 'new') {
+      $form_state->setRedirect('entity.ai_book_listing.add_form');
+      return;
+    }
   }
 
   public function submitAndPublish(array &$form, FormStateInterface $form_state): void {

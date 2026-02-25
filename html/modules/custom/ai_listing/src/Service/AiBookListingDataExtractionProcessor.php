@@ -9,6 +9,9 @@ use Drupal\ai_listing_inference\Service\BookExtractionService;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileSystemInterface;
 
+/**
+ * Normalizes AI output for book listings.
+ */
 final class AiBookListingDataExtractionProcessor {
 
   public function __construct(
@@ -60,7 +63,7 @@ final class AiBookListingDataExtractionProcessor {
     $listing->set('language', (string) ($metadata['language'] ?? ''));
     $listing->set('genre', (string) ($metadata['genre'] ?? ''));
     $listing->set('narrative_type', (string) ($metadata['narrative_type'] ?? ''));
-    $listing->set('country_printed', (string) ($metadata['country_printed'] ?? ''));
+    $listing->set('country_printed', $this->normalizeCountry((string) ($metadata['country_printed'] ?? '')));
     $listing->set('edition', (string) ($metadata['edition'] ?? ''));
     $listing->set('series', (string) ($metadata['series'] ?? ''));
     $listing->set('features', is_array($metadata['features'] ?? null) ? array_values(array_map('strval', $metadata['features'])) : []);
@@ -76,6 +79,22 @@ final class AiBookListingDataExtractionProcessor {
     $listing->set('status', 'ready_for_review');
 
     $listing->save();
+  }
+
+  private function normalizeCountry(string $value): string {
+    $value = trim($value);
+    if ($value === '') {
+      return '';
+    }
+
+    $map = [
+      'UK' => 'United Kingdom',
+      'U.K.' => 'United Kingdom',
+      'England' => 'United Kingdom',
+      'Scotland' => 'United Kingdom',
+    ];
+
+    return $map[$value] ?? $value;
   }
 
 }

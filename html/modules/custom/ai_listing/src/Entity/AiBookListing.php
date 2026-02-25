@@ -250,6 +250,19 @@ final class AiBookListing extends ContentEntityBase {
     $fields['ebay_item_id'] = BaseFieldDefinition::create('string')
       ->setLabel('eBay Item ID');
 
+    $fields['published_sku'] = BaseFieldDefinition::create('string')
+      ->setLabel('Published SKU')
+      ->setDescription('Keeps the last SKU published to a marketplace so we can detect changes.')
+      ->setDefaultValue('')
+      ->setSettings(['max_length' => 255])
+      ->setDisplayOptions('form', [
+        'type' => 'string_textfield',
+        'weight' => 5,
+        'region' => 'hidden',
+      ])
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
+
     $fields['created'] = BaseFieldDefinition::create('created')
       ->setLabel('Created');
 
@@ -282,6 +295,7 @@ final class AiBookListing extends ContentEntityBase {
       'images' => ['type' => 'entity_reference'],
       'metadata_json' => ['type' => 'textarea', 'rows' => 5, 'region' => 'hidden'],
       'condition_json' => ['type' => 'textarea', 'rows' => 5, 'region' => 'hidden'],
+      'published_sku' => ['type' => 'string'],
     ];
 
     $weight = 0;

@@ -3,6 +3,7 @@ services:
     class: Drupal\listing_publishing\Service\BookListingAssembler
     arguments:
       - '@file_url_generator'
+      - '@listing_publishing.sku_generator'
 
   drupal.listing_publishing.publish_command:
     class: Drupal\listing_publishing\Command\PublishAiListingCommand
@@ -22,3 +23,6 @@ services:
     arguments:
       - '@drupal.listing_publishing.book_assembler'
       - '@listing_publishing.marketplace_publisher'
+
+  listing_publishing.sku_generator:
+    class: Drupal\listing_publishing\Service\SkuGenerator

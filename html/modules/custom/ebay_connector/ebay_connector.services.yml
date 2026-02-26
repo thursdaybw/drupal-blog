@@ -5,6 +5,8 @@ services:
       - '@drupal.ebay_infrastructure.sell_api'
       - '@drupal.ebay_connector.condition_mapper'
       - '@Drupal\listing_publishing\Contract\ListingImageUploaderInterface'
+      - '@drupal.ebay_infrastructure.store_service'
+      - '@logger.factory'
 
   drupal.ebay_connector.condition_mapper:
     class: Drupal\ebay_connector\Service\ConditionMapper

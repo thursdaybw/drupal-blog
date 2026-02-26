@@ -253,12 +253,13 @@ final class EbayOfferCommand extends DrushCommands {
    * Split a user provided SKU list string into individual values.
    */
   private function parseSkuList(string $skuList): array {
-    $normalized = preg_split('/[\s,]+/', trim($skuList));
-    if ($normalized === false) {
+    $skus = array_filter(array_map('trim', preg_split('/[
+,]+/', $skuList)), static fn ($sku) => $sku !== '');
+    if (empty($skus)) {
       return [];
     }
 
-    return array_values(array_filter(array_map('trim', $normalized), static fn ($sku) => $sku !== ''));
+    return array_values(array_unique($skus));
   }
 
   private function deleteInventoryForSku(string $sku): int {

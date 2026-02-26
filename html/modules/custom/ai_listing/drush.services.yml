@@ -12,3 +12,11 @@ services:
       - '@entity_type.manager'
     tags:
       - { name: drush.command }
+
+  ai_listing.publish_command:
+    class: Drupal\ai_listing\Command\AiListingPublishCommand
+    arguments:
+      - '@entity_type.manager'
+      - '@drupal.listing_publishing.publisher'
+    tags:
+      - { name: drush.command }

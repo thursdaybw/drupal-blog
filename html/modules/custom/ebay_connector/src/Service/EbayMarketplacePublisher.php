@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Drupal\ebay_connector\Service;
 
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\listing_publishing\Contract\ListingImageUploaderInterface;
 use Drupal\listing_publishing\Contract\MarketplacePublisherInterface;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
 use Drupal\listing_publishing\Model\MarketplacePublishResult;
 use Drupal\ebay_infrastructure\Service\SellApiClient;
+use Drupal\ebay_infrastructure\Service\StoreService;
 use Drupal\ebay_connector\Service\ConditionMapper;
 
 final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
@@ -19,12 +22,19 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
   private const DEFAULT_FULFILLMENT_POLICY_ID = '244080662026';
   private const DEFAULT_RETURN_POLICY_ID = '240513136026';
   private const BARGAIN_BIN_FULFILLMENT_POLICY_ID = '244519897026';
+  private const BARGAIN_BIN_STORE_CATEGORY_ID = '85529649013';
+
+  private LoggerChannelInterface $logger;
 
   public function __construct(
     private readonly SellApiClient $sellApiClient,
     private readonly ConditionMapper $conditionMapper,
     private readonly ListingImageUploaderInterface $imageUploader,
-  ) {}
+    private readonly StoreService $storeService,
+    LoggerChannelFactoryInterface $loggerFactory,
+  ) {
+    $this->logger = $loggerFactory->get('ebay_connector');
+  }
 
   public function publish(ListingPublishRequest $request): MarketplacePublishResult {
     $imageUrls = $this->imageUploader->upload($request->getImageSources())->getRemoteUrls();
@@ -57,7 +67,7 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
     $this->ensureMerchantLocation();
 
-    $offer = $this->sellApiClient->createOffer([
+    $offerPayload = [
       'sku' => $request->getSku(),
       'marketplaceId' => 'EBAY_AU',
       'format' => 'FIXED_PRICE',
@@ -68,20 +78,43 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
           'currency' => 'AUD',
         ],
       ],
-      'categoryId' => self::DEFAULT_CATEGORY_ID,
+      'categoryId' => $this->resolveCategoryId($request),
+      'storeCategoryNames' => $this->resolveStoreCategoryNames($request),
       'merchantLocationKey' => self::DEFAULT_MERCHANT_LOCATION_KEY,
-    ]);
+    ];
+
+    $payloadJson = $this->formatPayload($offerPayload);
+    $this->dumpPayloadForCli($payloadJson, 'Initial offer payload');
+
+    try {
+      $offer = $this->sellApiClient->createOffer($offerPayload);
+    }
+    catch (\RuntimeException $exception) {
+      $payload = $this->formatPayload($offerPayload);
+      $this->logger->error('Offer creation failed: @message | payload: @payload', [
+        '@message' => $exception->getMessage(),
+        '@payload' => $payload,
+      ]);
+      $this->dumpPayloadForCli($payload, 'Offer creation failed', $exception->getMessage());
+      throw $exception;
+    }
 
     $offerId = $offer['offerId'];
     $fulfillmentPolicyId = $this->resolveFulfillmentPolicyId($request);
 
-    $this->sellApiClient->updateOffer($offerId, [
+    $offerUpdate = [
       'listingPolicies' => [
         'paymentPolicyId' => self::DEFAULT_PAYMENT_POLICY_ID,
         'fulfillmentPolicyId' => $fulfillmentPolicyId,
         'returnPolicyId' => self::DEFAULT_RETURN_POLICY_ID,
       ],
-    ]);
+    ];
+
+    if (!empty($offerPayload['storeCategoryNames'])) {
+      $offerUpdate['storeCategoryNames'] = $offerPayload['storeCategoryNames'];
+    }
+
+    $this->sellApiClient->updateOffer($offerId, $offerUpdate);
 
     $publish = $this->sellApiClient->publishOffer($offerId);
 
@@ -194,6 +227,40 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     }
 
     return self::DEFAULT_FULFILLMENT_POLICY_ID;
+  }
+
+  private function resolveCategoryId(ListingPublishRequest $request): string {
+    return self::DEFAULT_CATEGORY_ID;
+  }
+
+  private function resolveStoreCategoryNames(ListingPublishRequest $request): array {
+    $attributes = $request->getAttributes();
+    if (empty($attributes['bargain_bin'])) {
+      return [];
+    }
+
+    $path = $this->storeService->getStoreCategoryPath(self::BARGAIN_BIN_STORE_CATEGORY_ID);
+    if ($path === null) {
+      return [];
+    }
+
+    return [$path];
+  }
+
+  private function formatPayload(array $payload): string {
+    return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+  }
+
+  private function dumpPayloadForCli(string $payload, string $context, string $exceptionMessage = ''): void {
+    if (PHP_SAPI !== 'cli') {
+      return;
+    }
+
+    fwrite(STDOUT, "== $context ==\n");
+    fwrite(STDOUT, $payload . "\n");
+    if ($exceptionMessage !== '') {
+      fwrite(STDOUT, "EXCEPTION: $exceptionMessage\n");
+    }
   }
 
 }

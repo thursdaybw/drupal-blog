@@ -261,7 +261,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     if ($marketplaceListingId !== null && $marketplaceListingId !== '') {
       $listing->set('ebay_item_id', $marketplaceListingId);
     }
-    $listing->set('status', 'published');
+    $listing->set('status', 'shelved');
     $listing->save();
     $context['results']['success']++;
     $context['message'] = (string) \Drupal::translation()->translate(
@@ -285,8 +285,8 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $setLocation = (bool) ($results['set_location'] ?? FALSE);
 
     if ($processedCount > 0) {
-      $singular = $setLocation ? 'Published one listing.' : 'Published/updated one listing.';
-      $plural = $setLocation ? 'Published @count listings.' : 'Published/updated @count listings.';
+      $singular = $setLocation ? 'Shelved and published one listing.' : 'Published/updated one listing.';
+      $plural = $setLocation ? 'Shelved and published @count listings.' : 'Published/updated @count listings.';
       $messenger->addStatus($translation->formatPlural($processedCount, $singular, $plural));
     }
 

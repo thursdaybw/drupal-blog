@@ -5,32 +5,6 @@ ai_listing.add:
     _title: 'Add AI Book Listing'
   requirements:
     _permission: 'administer ai listings'
-entity.ai_book_listing.list_new:
-  path: '/admin/ai-listings/new'
-  defaults:
-    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
-    _title: 'AI Book Listings – New'
-    status: 'new'
-  requirements:
-    _permission: 'administer ai listings'
-
-entity.ai_book_listing.list_ready_for_review:
-  path: '/admin/ai-listings/ready-for-review'
-  defaults:
-    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
-    _title: 'AI Book Listings – Ready for review'
-    status: 'ready_for_review'
-  requirements:
-    _permission: 'administer ai listings'
-
-entity.ai_book_listing.list_ready_to_shelve:
-  path: '/admin/ai-listings/ready-to-shelve'
-  defaults:
-    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
-    _title: 'AI Book Listings – Ready to shelve'
-    status: 'ready_to_shelve'
-  requirements:
-    _permission: 'administer ai listings'
 
 ai_listing.location_batch:
   path: '/admin/ai-listings/ready-to-shelve/bulk-location'
@@ -45,24 +19,6 @@ ai_listing.location_batch.publish_update_confirm:
   defaults:
     _form: '\Drupal\ai_listing\Form\AiBookListingPublishUpdateConfirmForm'
     _title: 'Confirm publish/update without location'
-  requirements:
-    _permission: 'administer ai listings'
-
-entity.ai_book_listing.list_published:
-  path: '/admin/ai-listings/published'
-  defaults:
-    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
-    _title: 'AI Book Listings – Published'
-    status: 'published'
-  requirements:
-    _permission: 'administer ai listings'
-
-entity.ai_book_listing.list_failed:
-  path: '/admin/ai-listings/failed'
-  defaults:
-    _controller: '\Drupal\ai_listing\Controller\AiBookListingStatusListController::listStatus'
-    _title: 'AI Book Listings – Failed'
-    status: 'failed'
   requirements:
     _permission: 'administer ai listings'
 

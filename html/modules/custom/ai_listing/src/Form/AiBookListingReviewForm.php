@@ -513,7 +513,11 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       return;
     }
 
-    $form_state->setRedirect('ai_listing.location_batch');
+    $form_state->setRedirect('ai_listing.location_batch', [], [
+      'query' => [
+        'status_filter' => 'ready_to_shelve',
+      ],
+    ]);
   }
 
   private function buildPhotoItems(AiBookListing $ai_book_listing): array {
@@ -587,7 +591,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
   private function handlePublishSuccess(AiBookListing $listing, string $marketplaceId): void {
     $listing->set('ebay_item_id', $marketplaceId);
-    $listing->set('status', 'published');
+    $listing->set('status', 'shelved');
     $listing->save();
     $this->messenger()->addStatus(sprintf('Published listing %s for entity %d.', $marketplaceId, $listing->id()));
   }

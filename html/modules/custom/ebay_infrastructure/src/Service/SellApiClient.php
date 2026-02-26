@@ -20,7 +20,7 @@ final class SellApiClient {
 
     return $this->request(
       'GET',
-      '/sell/inventory/v1/inventory_item/' . $sku
+      '/sell/inventory/v1/inventory_item/' . $this->encodeSku($sku)
     );
   }
 
@@ -28,7 +28,7 @@ final class SellApiClient {
 
     $current = $this->request(
       'GET',
-      '/sell/inventory/v1/inventory_item/' . $sku
+      '/sell/inventory/v1/inventory_item/' . $this->encodeSku($sku)
     );
 
     $merged = array_replace_recursive(
@@ -44,7 +44,7 @@ final class SellApiClient {
 
     return $this->request(
       'PUT',
-      '/sell/inventory/v1/inventory_item/' . $sku,
+      '/sell/inventory/v1/inventory_item/' . $this->encodeSku($sku),
       $merged
     );
   }
@@ -53,7 +53,7 @@ final class SellApiClient {
 
     $current = $this->request(
       'GET',
-      '/sell/inventory/v1/inventory_item/' . $sku
+      '/sell/inventory/v1/inventory_item/' . $this->encodeSku($sku)
     );
 
     $merged = array_replace_recursive(
@@ -67,7 +67,7 @@ final class SellApiClient {
 
     return $this->request(
       'PUT',
-      '/sell/inventory/v1/inventory_item/' . $sku,
+      '/sell/inventory/v1/inventory_item/' . $this->encodeSku($sku),
       $merged
     );
   }
@@ -178,7 +178,7 @@ final class SellApiClient {
 
     return $this->request(
       'PUT',
-      '/sell/inventory/v1/inventory_item/' . $sku,
+      '/sell/inventory/v1/inventory_item/' . $this->encodeSku($sku),
       $payload
     );
   }
@@ -187,7 +187,7 @@ final class SellApiClient {
 
     return $this->request(
       'DELETE',
-      '/sell/inventory/v1/inventory_item/' . $sku
+      '/sell/inventory/v1/inventory_item/' . $this->encodeSku($sku)
     );
   }
 
@@ -411,6 +411,10 @@ final class SellApiClient {
     $this->categoryTreeId = $data['categoryTreeId'];
 
     return $this->categoryTreeId;
+  }
+
+  private function encodeSku(string $sku): string {
+    return rawurlencode($sku);
   }
 
 }

@@ -40,6 +40,7 @@ final class EbayAuthorizeController implements ContainerInjectionInterface {
       'https://api.ebay.com/oauth/api_scope/sell.inventory',
       'https://api.ebay.com/oauth/api_scope/sell.account',
       'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+      'https://api.ebay.com/oauth/api_scope/sell.stores',
     ];
     $query = http_build_query([
       'client_id' => $clientId,

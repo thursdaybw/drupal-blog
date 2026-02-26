@@ -335,6 +335,21 @@ final class SellApiClient {
     );
   }
 
+  public function getStore(): array {
+    return $this->request('GET', '/sell/stores/v1/store');
+  }
+
+  public function listStoreCategories(int $limit = 25, int $offset = 0): array {
+    return $this->requestWithQuery(
+      'GET',
+      '/sell/stores/v1/store/categories',
+      [
+        'limit' => $limit,
+        'offset' => $offset,
+      ]
+    );
+  }
+
   public function suggestCategory(string $query): array {
 
     $treeId = $this->resolveCategoryTreeId();

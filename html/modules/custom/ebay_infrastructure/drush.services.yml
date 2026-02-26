@@ -11,5 +11,6 @@ services:
     arguments:
       - '@drupal.ebay_infrastructure.sell_api'
       - '@drupal.ebay_infrastructure.oauth_token'
+      - '@drupal.ebay_infrastructure.store_service'
     tags:
       - { name: drush.command }

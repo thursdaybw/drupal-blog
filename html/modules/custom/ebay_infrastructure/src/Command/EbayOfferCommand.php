@@ -6,9 +6,11 @@ namespace Drupal\ebay_infrastructure\Command;
 
 use Drupal\ebay_infrastructure\Service\SellApiClient;
 use Drupal\ebay_infrastructure\Service\OAuthTokenService;
+use Drupal\ebay_infrastructure\Service\StoreService;
 use Drupal\ebay_infrastructure\Utility\OfferExceptionHelper;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
 use InvalidArgumentException;
+use Throwable;
 use Drush\Commands\DrushCommands;
 
 final class EbayOfferCommand extends DrushCommands {
@@ -16,6 +18,7 @@ final class EbayOfferCommand extends DrushCommands {
   public function __construct(
     private readonly SellApiClient $sellApiClient,
     private readonly OAuthTokenService $oauthTokenService,
+    private readonly StoreService $storeService,
   ) {
     parent::__construct();
   }
@@ -346,6 +349,26 @@ final class EbayOfferCommand extends DrushCommands {
     $data = $this->sellApiClient->listInventoryItems($limit, $offset);
 
     $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
+  }
+
+  /**
+   * Show store categories.
+   *
+   * @command ebay-connector:store-categories
+   */
+  public function storeCategories(int $limit = 25, int $offset = 0): void {
+    try {
+      $store = $this->storeService->getStore();
+      $categories = $this->storeService->listStoreCategories($limit, $offset);
+
+      $this->output()->writeln(json_encode([
+        'store' => $store,
+        'storeCategories' => $categories,
+      ], JSON_PRETTY_PRINT));
+    }
+    catch (Throwable $e) {
+      $this->output()->writeln('<error>' . $e->getMessage() . '</error>');
+    }
   }
 
   /**

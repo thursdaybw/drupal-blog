@@ -27,3 +27,8 @@ services:
     arguments:
       - '@http_client'
       - '@drupal.ebay_infrastructure.account_manager'
+
+  drupal.ebay_infrastructure.store_service:
+    class: Drupal\ebay_infrastructure\Service\StoreService
+    arguments:
+      - '@drupal.ebay_infrastructure.sell_api'

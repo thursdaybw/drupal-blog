@@ -62,6 +62,7 @@ The marketplace publication entity should be generic and store:
    - stored marketplace publication records for concrete update targeting
    - no ad hoc eBay lookups for offer IDs
 6. Later: reduce/deprecate `ai_book_listing.published_sku` and move `published` semantics out of `ai_book_listing.status`.
+7. Future audit roadmap: build a scheduled reconciliation that compares Drupal publication records against each marketplace, flags missing/ended offers, and feeds a workbench report for remediation before adding new marketplaces.
 
 ### Clean Architecture Rules We Agreed To Apply
 
@@ -70,4 +71,3 @@ The marketplace publication entity should be generic and store:
 - Put branching behind explicit resolvers/services, not scattered field inspection.
 - Keep generic integration state generic; keep book-specific UX/book metadata specific.
 - Prefer additive pivots now over semantic rewrites later.
-

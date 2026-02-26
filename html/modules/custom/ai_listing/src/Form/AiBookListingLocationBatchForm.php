@@ -10,22 +10,27 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
+use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\Core\Url;
 use Drupal\ai_listing\Entity\AiBookListing;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 final class AiBookListingLocationBatchForm extends FormBase implements ContainerInjectionInterface {
+  public const PUBLISH_UPDATE_CONFIRM_TEMPSTORE_COLLECTION = 'ai_listing.location_batch';
+  public const PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY = 'publish_update_confirmation';
 
   private ?EntityTypeManagerInterface $entityTypeManager = null;
   private ?ListingPublisher $listingPublisher = null;
   private ?DateFormatterInterface $dateFormatter = null;
+  private ?PrivateTempStoreFactory $tempStoreFactory = null;
 
   public static function create(ContainerInterface $container): self {
     $form = new self();
     $form->entityTypeManager = $container->get('entity_type.manager');
     $form->listingPublisher = $container->get('drupal.listing_publishing.publisher');
     $form->dateFormatter = $container->get('date.formatter');
+    $form->tempStoreFactory = $container->get('tempstore.private');
     return $form;
   }
 
@@ -139,6 +144,10 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   }
 
   public function submitPublishOrUpdate(array &$form, FormStateInterface $form_state): void {
+    if ($this->redirectToPublishUpdateConfirmationIfNeeded($form_state)) {
+      return;
+    }
+
     $this->queueListingBatch($form_state, FALSE);
   }
 
@@ -161,28 +170,32 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return;
     }
 
+    batch_set(self::buildListingBatchDefinition(array_map('intval', array_keys($selected)), $setLocation, $location));
+  }
+
+  public static function buildListingBatchDefinition(array $listingIds, bool $setLocation, string $location): array {
     $operations = [];
-    foreach (array_keys($selected) as $listingId) {
+    foreach ($listingIds as $listingId) {
       $operations[] = [
         [self::class, 'processBatchOperation'],
         [(int) $listingId, $setLocation, $location],
       ];
     }
 
-    $batch = [
+    $translation = \Drupal::translation();
+
+    return [
       'title' => $setLocation
-        ? $this->t('Setting locations and publishing listings')
-        : $this->t('Publishing/updating listings'),
+        ? $translation->translate('Setting locations and publishing listings')
+        : $translation->translate('Publishing/updating listings'),
       'operations' => $operations,
       'finished' => [self::class, 'finishBatchOperation'],
       'init_message' => $setLocation
-        ? $this->t('Starting location update and publish batch...')
-        : $this->t('Starting publish/update batch...'),
-      'progress_message' => $this->t('Processed @current of @total listings.'),
-      'error_message' => $this->t('The batch finished with an unexpected error.'),
+        ? $translation->translate('Starting location update and publish batch...')
+        : $translation->translate('Starting publish/update batch...'),
+      'progress_message' => $translation->translate('Processed @current of @total listings.'),
+      'error_message' => $translation->translate('The batch finished with an unexpected error.'),
     ];
-
-    batch_set($batch);
   }
 
   public static function processBatchOperation(int $listingId, bool $setLocation, string $location, array &$context): void {
@@ -292,6 +305,56 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     return trim((string) $form_state->getValue('location'));
   }
 
+  private function redirectToPublishUpdateConfirmationIfNeeded(FormStateInterface $form_state): bool {
+    $selected = array_filter($form_state->getValue('listings') ?? []);
+    if ($selected === []) {
+      return FALSE;
+    }
+
+    $selectedIds = array_map('intval', array_keys($selected));
+    $missingLocationIds = $this->findListingsMissingStorageLocation($selectedIds);
+    if ($missingLocationIds === []) {
+      return FALSE;
+    }
+
+    $this->getConfirmTempStore()->set(self::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY, [
+      'listing_ids' => $selectedIds,
+      'set_location' => FALSE,
+      'location' => '',
+      'missing_location_ids' => $missingLocationIds,
+      'selected_count' => count($selectedIds),
+      'missing_location_count' => count($missingLocationIds),
+      'created_at' => time(),
+    ]);
+
+    $form_state->setRedirect('ai_listing.location_batch.publish_update_confirm');
+    return TRUE;
+  }
+
+  private function findListingsMissingStorageLocation(array $listingIds): array {
+    if ($listingIds === []) {
+      return [];
+    }
+
+    $storage = $this->getEntityTypeManager()->getStorage('ai_book_listing');
+    $listings = $storage->loadMultiple($listingIds);
+    $missingIds = [];
+
+    foreach ($listingIds as $listingId) {
+      $listing = $listings[$listingId] ?? null;
+      if (!$listing instanceof AiBookListing) {
+        continue;
+      }
+
+      $location = trim((string) ($listing->get('storage_location')->value ?? ''));
+      if ($location === '') {
+        $missingIds[] = $listingId;
+      }
+    }
+
+    return $missingIds;
+  }
+
   private function buildReadyToShelveOptions(string $status, bool $onlyBargainBin): array {
     $storage = $this->getEntityTypeManager()->getStorage('ai_book_listing');
     $properties = ['status' => $status];
@@ -339,5 +402,13 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       $this->dateFormatter = \Drupal::service('date.formatter');
     }
     return $this->dateFormatter;
+  }
+
+  private function getConfirmTempStore(): \Drupal\Core\TempStore\PrivateTempStore {
+    if ($this->tempStoreFactory === null) {
+      $this->tempStoreFactory = \Drupal::service('tempstore.private');
+    }
+
+    return $this->tempStoreFactory->get(self::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_COLLECTION);
   }
 }

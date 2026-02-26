@@ -40,6 +40,14 @@ ai_listing.location_batch:
   requirements:
     _permission: 'administer ai listings'
 
+ai_listing.location_batch.publish_update_confirm:
+  path: '/admin/ai-listings/ready-to-shelve/bulk-location/publish-update/confirm'
+  defaults:
+    _form: '\Drupal\ai_listing\Form\AiBookListingPublishUpdateConfirmForm'
+    _title: 'Confirm publish/update without location'
+  requirements:
+    _permission: 'administer ai listings'
+
 entity.ai_book_listing.list_published:
   path: '/admin/ai-listings/published'
   defaults:

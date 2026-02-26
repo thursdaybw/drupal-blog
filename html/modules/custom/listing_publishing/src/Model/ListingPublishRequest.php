@@ -66,6 +66,21 @@ final class ListingPublishRequest {
     );
   }
 
+  public function withSku(string $sku): self {
+    return new self(
+      $sku,
+      $this->title,
+      $this->description,
+      $this->author,
+      $this->price,
+      $this->imageSources,
+      $this->imageUrls,
+      $this->quantity,
+      $this->condition,
+      $this->attributes
+    );
+  }
+
   public function getQuantity(): int {
     return $this->quantity;
   }

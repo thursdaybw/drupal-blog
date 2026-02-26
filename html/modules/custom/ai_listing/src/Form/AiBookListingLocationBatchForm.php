@@ -88,13 +88,22 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       '#type' => 'textfield',
       '#title' => $this->t('Storage location'),
       '#description' => $this->t('Set the shelf or bin code to apply to the selected listings and publish them.'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
-    $form['actions']['submit'] = [
+    $form['actions']['set_location_and_publish'] = [
       '#type' => 'submit',
+      '#name' => 'set_location_and_publish',
       '#value' => $this->t('Set location and publish'),
       '#button_type' => 'primary',
+      '#submit' => ['::submitSetLocationAndPublish'],
+    ];
+
+    $form['actions']['publish_update'] = [
+      '#type' => 'submit',
+      '#name' => 'publish_update',
+      '#value' => $this->t('Publish/Update'),
+      '#submit' => ['::submitPublishOrUpdate'],
     ];
 
     $form['#attached']['library'][] = 'ai_listing/location_table';
@@ -106,7 +115,38 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     return $form['listings_container'];
   }
 
+  public function validateForm(array &$form, FormStateInterface $form_state): void {
+    $selected = array_filter($form_state->getValue('listings') ?? []);
+    if (empty($selected)) {
+      $form_state->setErrorByName('listings', $this->t('Select at least one listing to update.'));
+      return;
+    }
+
+    if (!$this->isSetLocationAndPublishAction($form_state)) {
+      return;
+    }
+
+    $location = $this->getRequestedLocation($form_state);
+    if ($location !== '') {
+      return;
+    }
+
+    $form_state->setErrorByName('location', $this->t('Provide a storage location before submitting.'));
+  }
+
+  public function submitSetLocationAndPublish(array &$form, FormStateInterface $form_state): void {
+    $this->processSelectedListings($form_state, TRUE);
+  }
+
+  public function submitPublishOrUpdate(array &$form, FormStateInterface $form_state): void {
+    $this->processSelectedListings($form_state, FALSE);
+  }
+
   public function submitForm(array &$form, FormStateInterface $form_state): void {
+    $this->processSelectedListings($form_state, TRUE);
+  }
+
+  private function processSelectedListings(FormStateInterface $form_state, bool $setLocation): void {
     $selected = array_filter($form_state->getValue('listings') ?? []);
     if (empty($selected)) {
       $this->messenger()->addError($this->t('Select at least one listing to update.'));
@@ -114,8 +154,8 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return;
     }
 
-    $location = trim((string) $form_state->getValue('location'));
-    if ($location === '') {
+    $location = $this->getRequestedLocation($form_state);
+    if ($setLocation && $location === '') {
       $this->messenger()->addError($this->t('Provide a storage location before submitting.'));
       $form_state->setRebuild();
       return;
@@ -132,11 +172,15 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
         continue;
       }
 
-      $listing->set('storage_location', $location);
-      $listing->save();
+      if ($setLocation) {
+        $listing->set('storage_location', $location);
+        $listing->save();
+      }
 
       try {
-        $result = $this->getListingPublisher()->publish($listing);
+        $result = $setLocation
+          ? $this->getListingPublisher()->publish($listing)
+          : $this->getListingPublisher()->publishOrUpdate($listing);
       }
       catch (\Throwable $e) {
         $listing->set('status', 'failed');
@@ -158,17 +202,26 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
         continue;
       }
 
-      $listing->set('ebay_item_id', $result->getMarketplaceId());
+      $marketplaceListingId = $result->getMarketplaceListingId() ?? $result->getMarketplaceId();
+      if ($marketplaceListingId !== null && $marketplaceListingId !== '') {
+        $listing->set('ebay_item_id', $marketplaceListingId);
+      }
       $listing->set('status', 'published');
       $listing->save();
       $success++;
     }
 
     if ($success > 0) {
+      $successMessageSingular = $setLocation
+        ? 'Published one listing.'
+        : 'Published/updated one listing.';
+      $successMessagePlural = $setLocation
+        ? 'Published @count listings.'
+        : 'Published/updated @count listings.';
       $this->messenger()->addStatus($this->formatPlural(
         $success,
-        'Published one listing.',
-        'Published @count listings.'
+        $successMessageSingular,
+        $successMessagePlural
       ));
     }
 
@@ -177,6 +230,16 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     }
 
     $form_state->setRebuild();
+  }
+
+  private function isSetLocationAndPublishAction(FormStateInterface $form_state): bool {
+    $trigger = $form_state->getTriggeringElement();
+    $triggerName = $trigger['#name'] ?? '';
+    return $triggerName === 'set_location_and_publish';
+  }
+
+  private function getRequestedLocation(FormStateInterface $form_state): string {
+    return trim((string) $form_state->getValue('location'));
   }
 
   private function buildReadyToShelveOptions(string $status, bool $onlyBargainBin): array {

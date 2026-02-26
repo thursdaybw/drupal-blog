@@ -12,5 +12,9 @@ services:
       - '@drupal.ebay_infrastructure.sell_api'
       - '@drupal.ebay_infrastructure.oauth_token'
       - '@drupal.ebay_infrastructure.store_service'
+      - '@drupal.listing_publishing.marketplace_publication_lifecycle_manager'
+      - '@entity_type.manager'
+      - '@ai_listing.inventory_sku_resolver'
+      - '@drupal.listing_publishing.marketplace_publication_recorder'
     tags:
       - { name: drush.command }

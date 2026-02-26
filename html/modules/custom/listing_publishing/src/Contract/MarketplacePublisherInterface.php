@@ -11,6 +11,12 @@ interface MarketplacePublisherInterface {
 
   public function publish(ListingPublishRequest $request): MarketplacePublishResult;
 
+  public function updatePublication(
+    string $marketplacePublicationId,
+    ListingPublishRequest $request,
+    ?string $publicationType = null,
+  ): MarketplacePublishResult;
+
   public function deleteSku(string $sku): void;
 
   public function getMarketplaceKey(): string;

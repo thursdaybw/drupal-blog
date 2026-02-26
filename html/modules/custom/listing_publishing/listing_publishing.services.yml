@@ -25,11 +25,23 @@ services:
       - '@listing_publishing.marketplace_publisher'
       - '@ai_listing.inventory_sku_resolver'
       - '@drupal.listing_publishing.marketplace_publication_recorder'
+      - '@drupal.listing_publishing.marketplace_publication_resolver'
+      - '@drupal.listing_publishing.marketplace_publication_lifecycle_manager'
 
   listing_publishing.sku_generator:
     class: Drupal\listing_publishing\Service\SkuGenerator
 
   drupal.listing_publishing.marketplace_publication_recorder:
     class: Drupal\listing_publishing\Service\MarketplacePublicationRecorder
+    arguments:
+      - '@entity_type.manager'
+
+  drupal.listing_publishing.marketplace_publication_resolver:
+    class: Drupal\listing_publishing\Service\MarketplacePublicationResolver
+    arguments:
+      - '@entity_type.manager'
+
+  drupal.listing_publishing.marketplace_publication_lifecycle_manager:
+    class: Drupal\listing_publishing\Service\MarketplacePublicationLifecycleManager
     arguments:
       - '@entity_type.manager'

@@ -42,6 +42,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#type' => 'details',
       '#title' => 'Photos',
       '#open' => TRUE,
+      '#tree' => TRUE,
     ];
 
     $form['photos']['items'] = $this->buildPhotoItems($ai_book_listing);
@@ -370,6 +371,17 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#name' => 'ai_save_listing',
     ];
 
+    $form['actions']['delete'] = [
+      '#type' => 'submit',
+      '#value' => 'Delete listing',
+      '#name' => 'ai_delete_listing',
+      '#limit_validation_errors' => [],
+      '#submit' => ['::submitRedirectToDeleteForm'],
+      '#attributes' => [
+        'class' => ['button', 'button--danger'],
+      ],
+    ];
+
     $form['#attached']['library'][] = 'ai_listing/photo_viewer';
     $form['#attached']['library'][] = 'ai_listing/review_ui';
     $form['#attached']['library'][] = 'ai_listing/bargain_preset';
@@ -450,6 +462,9 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
     $listing->set('condition_json', json_encode($conditionPayload, JSON_PRETTY_PRINT));
 
+    $listingImageItems = (array) $form_state->getValue(['photos', 'items', 'listing_image_items'], []);
+    $this->saveListingImageMetadataSelections($listing, $listingImageItems);
+
     $statusValue = $form_state->getValue(['basic', 'status']);
     if ($statusValue !== NULL) {
       $listing->set('status', $statusValue);
@@ -489,6 +504,32 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     return array_values($ids);
   }
 
+  /**
+   * @param array<string,mixed> $listingImageItems
+   */
+  private function saveListingImageMetadataSelections(AiBookListing $listing, array $listingImageItems): void {
+    if ($listingImageItems === []) {
+      return;
+    }
+
+    foreach ($this->loadListingImagesForReview($listing) as $listingImage) {
+      $listingImageId = (int) $listingImage->id();
+      if ($listingImageId === 0) {
+        continue;
+      }
+
+      $itemKey = 'listing_image_' . $listingImageId;
+      $postedItem = $listingImageItems[$itemKey] ?? null;
+
+      if (!is_array($postedItem)) {
+        continue;
+      }
+
+      $listingImage->set('is_metadata_source', !empty($postedItem['is_metadata_source']));
+      $listingImage->save();
+    }
+  }
+
   private function getNextReadyForReviewId(): ?int {
     $ids = $this->getReadyForReviewIds();
     if (empty($ids)) {
@@ -526,7 +567,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     ];
 
     $legacyItems = $this->buildLegacyPhotoLinks($ai_book_listing);
-    $listingImageItems = $this->buildListingImagePhotoLinks($ai_book_listing);
+    $listingImageItems = $this->buildListingImagePhotoItems($ai_book_listing);
 
     $photoItems['listing_image_heading'] = [
       '#type' => 'html_tag',
@@ -569,14 +610,53 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     return $photoItems;
   }
 
-  private function buildListingImagePhotoLinks(AiBookListing $ai_book_listing): array {
+  private function buildListingImagePhotoItems(AiBookListing $ai_book_listing): array {
+    $listingImages = $this->loadListingImagesForReview($ai_book_listing);
+
+    if ($listingImages === []) {
+      return [];
+    }
+
+    $photoItems = [
+      '#type' => 'container',
+    ];
+
+    foreach ($listingImages as $listingImage) {
+      $listingImageId = (int) $listingImage->id();
+      $file = $listingImage->get('file')->entity;
+
+      if ($listingImageId === 0 || $file === NULL) {
+        continue;
+      }
+
+      $itemKey = 'listing_image_' . $listingImageId;
+
+      $photoItems[$itemKey] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'style' => 'display:inline-block; margin:0 8px 12px 0; vertical-align:top;',
+        ],
+      ];
+      $photoItems[$itemKey]['thumbnail'] = $this->buildPhotoLinkItem($file->getFileUri());
+      $photoItems[$itemKey]['is_metadata_source'] = [
+        '#type' => 'checkbox',
+        '#title' => $this->t('Use for metadata'),
+        '#default_value' => (bool) $listingImage->get('is_metadata_source')->value,
+      ];
+    }
+
+    return $photoItems;
+  }
+
+  /**
+   * @return \Drupal\Core\Entity\EntityInterface[]
+   */
+  private function loadListingImagesForReview(AiBookListing $ai_book_listing): array {
     if (!$this->entityTypeManager->hasDefinition('listing_image')) {
       return [];
     }
 
     $listingImageStorage = $this->entityTypeManager->getStorage('listing_image');
-    $fileStorage = $this->entityTypeManager->getStorage('file');
-
     $ids = $listingImageStorage->getQuery()
       ->accessCheck(FALSE)
       ->condition('listing', $ai_book_listing->id())
@@ -584,28 +664,11 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       ->sort('id', 'ASC')
       ->execute();
 
-    if (empty($ids)) {
+    if ($ids === []) {
       return [];
     }
 
-    $photoItems = [];
-    $listingImages = $listingImageStorage->loadMultiple($ids);
-
-    foreach ($listingImages as $listingImage) {
-      $fileId = (int) ($listingImage->get('file')->target_id ?? 0);
-      if ($fileId === 0) {
-        continue;
-      }
-
-      $file = $fileStorage->load($fileId);
-      if (!$file) {
-        continue;
-      }
-
-      $photoItems[] = $this->buildPhotoLinkItem($file->getFileUri());
-    }
-
-    return $photoItems;
+    return $listingImageStorage->loadMultiple($ids);
   }
 
   private function buildPhotoLinkItem(string $uri): array {
@@ -652,6 +715,12 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     }
 
     $this->handlePublishSuccess($listing, $result->getMarketplaceId());
+  }
+
+  public function submitRedirectToDeleteForm(array &$form, FormStateInterface $form_state): void {
+    /** @var AiBookListing $listing */
+    $listing = $form_state->get('listing');
+    $form_state->setRedirect('entity.ai_book_listing.delete_form', ['ai_book_listing' => $listing->id()]);
   }
 
   private function handlePublishFailure(AiBookListing $listing, string $message): void {

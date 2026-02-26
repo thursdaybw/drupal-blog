@@ -111,6 +111,13 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       '#submit' => ['::submitPublishOrUpdate'],
     ];
 
+    $form['actions']['delete_selected'] = [
+      '#type' => 'submit',
+      '#name' => 'delete_selected',
+      '#value' => $this->t('Delete selected'),
+      '#submit' => ['::submitDeleteSelected'],
+    ];
+
     $form['#attached']['library'][] = 'ai_listing/location_table';
 
     return $form;
@@ -153,6 +160,17 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     $this->queueListingBatch($form_state, TRUE);
+  }
+
+  public function submitDeleteSelected(array &$form, FormStateInterface $form_state): void {
+    $selected = array_filter($form_state->getValue('listings') ?? []);
+    if ($selected === []) {
+      $this->messenger()->addError($this->t('Select at least one listing to delete.'));
+      $form_state->setRebuild();
+      return;
+    }
+
+    batch_set(self::buildDeleteBatchDefinition(array_map('intval', array_keys($selected))));
   }
 
   private function queueListingBatch(FormStateInterface $form_state, bool $setLocation): void {
@@ -288,6 +306,84 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       $singular = $setLocation ? 'Shelved and published one listing.' : 'Published/updated one listing.';
       $plural = $setLocation ? 'Shelved and published @count listings.' : 'Published/updated @count listings.';
       $messenger->addStatus($translation->formatPlural($processedCount, $singular, $plural));
+    }
+
+    foreach (($results['errors'] ?? []) as $message) {
+      $messenger->addError($message);
+    }
+  }
+
+  public static function buildDeleteBatchDefinition(array $listingIds): array {
+    $operations = [];
+    foreach ($listingIds as $listingId) {
+      $operations[] = [
+        [self::class, 'processDeleteBatchOperation'],
+        [(int) $listingId],
+      ];
+    }
+
+    $translation = \Drupal::translation();
+
+    return [
+      'title' => $translation->translate('Deleting listings'),
+      'operations' => $operations,
+      'finished' => [self::class, 'finishDeleteBatchOperation'],
+      'init_message' => $translation->translate('Starting delete batch...'),
+      'progress_message' => $translation->translate('Deleted @current of @total listings.'),
+      'error_message' => $translation->translate('The delete batch finished with an unexpected error.'),
+    ];
+  }
+
+  public static function processDeleteBatchOperation(int $listingId, array &$context): void {
+    $storage = \Drupal::entityTypeManager()->getStorage('ai_book_listing');
+    /** @var \Drupal\ai_listing\Entity\AiBookListing|null $listing */
+    $listing = $storage->load($listingId);
+
+    if (!isset($context['results']['success'])) {
+      $context['results']['success'] = 0;
+    }
+    if (!isset($context['results']['errors'])) {
+      $context['results']['errors'] = [];
+    }
+
+    if (!$listing instanceof AiBookListing) {
+      $context['message'] = (string) \Drupal::translation()->translate('Skipping missing listing @id.', ['@id' => $listingId]);
+      return;
+    }
+
+    $title = $listing->label() ?: 'Untitled';
+
+    try {
+      $listing->delete();
+      $context['results']['success']++;
+      $context['message'] = (string) \Drupal::translation()->translate('Deleted listing @id: @title', [
+        '@id' => $listingId,
+        '@title' => $title,
+      ]);
+    }
+    catch (\Throwable $e) {
+      $context['results']['errors'][] = (string) \Drupal::translation()->translate(
+        'Listing %title could not be deleted: %reason',
+        [
+          '%title' => $title,
+          '%reason' => $e->getMessage(),
+        ]
+      );
+      $context['message'] = (string) \Drupal::translation()->translate('Failed delete for listing @id.', ['@id' => $listingId]);
+    }
+  }
+
+  public static function finishDeleteBatchOperation(bool $success, array $results, array $operations): void {
+    $messenger = \Drupal::messenger();
+    $translation = \Drupal::translation();
+
+    if (!$success) {
+      $messenger->addError((string) $translation->translate('The delete batch did not complete successfully.'));
+    }
+
+    $deletedCount = (int) ($results['success'] ?? 0);
+    if ($deletedCount > 0) {
+      $messenger->addStatus($translation->formatPlural($deletedCount, 'Deleted one listing.', 'Deleted @count listings.'));
     }
 
     foreach (($results['errors'] ?? []) as $message) {

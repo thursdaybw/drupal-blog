@@ -21,16 +21,22 @@ final class BookExtractionService {
    *   condition_raw: string
    * }
    */
-  public function extract(array $imagePaths): array {
+  public function extract(array $imagePaths, ?array $metadataImagePaths = NULL): array {
 
     if (empty($imagePaths)) {
       throw new \RuntimeException('No images provided.');
     }
 
+    $metadataImagePaths = $metadataImagePaths ?? $imagePaths;
+
+    if (empty($metadataImagePaths)) {
+      throw new \RuntimeException('No metadata images provided.');
+    }
+
     $metadataPrompt = $this->buildMetadataPrompt();
     $conditionPrompt = $this->buildConditionPrompt();
 
-    $metadataResult = $this->vlmClient->infer($metadataPrompt, $imagePaths);
+    $metadataResult = $this->vlmClient->infer($metadataPrompt, $metadataImagePaths);
     $conditionResult = $this->vlmClient->infer($conditionPrompt, $imagePaths);
 
     $metadataParsed = is_array($metadataResult['parsed'] ?? null) ? $metadataResult['parsed'] : null;

@@ -190,9 +190,12 @@ final class VastRestClient implements VastRestClientInterface {
 
     $start = time();
     $adapter = $this->workloadAdapterManager->createInstance($workload);
-    $absoluteSafetyTimeout = max(5400, $timeoutSeconds + $adapter->getStartupTimeoutSeconds());
+    // Caller timeout is the hard cap; adapter startup timeout remains guidance for
+    // workload-specific warmup classification, not an override of the caller cap.
+    $absoluteSafetyTimeout = max(60, $timeoutSeconds);
     $stallThresholdSeconds = 600;
     $sshLossThresholdSeconds = 300;
+    $sshNeverReadyThresholdSeconds = 180;
     $sshFailureGraceSeconds = 180;
     $lastProgressAt = $start;
     $sshLostSince = null;
@@ -282,14 +285,19 @@ final class VastRestClient implements VastRestClientInterface {
         }
       }
 
-      // Ready check: instance running AND we can SSH AND workload probe passes.
-      if ($curState === 'running' && $sshHost !== '' && $sshPort !== '') {
+      // Only probe after Vast reports actual_status=running. Vast can expose SSH
+      // host/port while still "creating", which causes pointless probe churn.
+      if ($curState === 'running' && $actualStatus === 'running' && $sshHost !== '' && $sshPort !== '') {
 
         $user = (string) ($info['ssh_user'] ?? 'root');
 
         $sshCheck = $this->sshLoginCheck($sshHost, (int) $sshPort, $user);
         if (!$sshCheck['ok']) {
           $why = (string) $sshCheck['why'];
+          $sshUnavailableFor = 0;
+          if (!$sshWasReachable) {
+            $sshUnavailableFor = time() - $lastProgressAt;
+          }
           if ($sshWasReachable && $sshLostSince === null) {
             $sshLostSince = time();
           }
@@ -304,12 +312,19 @@ final class VastRestClient implements VastRestClientInterface {
             $lastProbeKind = 'ssh';
             $lastProbeWhy = $why;
           }
+          if ((time() - $lastLogCheckAt) >= $logCheckInterval) {
+            $lastLogCheckAt = time();
+            $this->inspectInstanceLogsForSshTunnelFailures($instanceId);
+          }
           if (
             $this->isSshPortForwardingFailure($why) &&
             $sshFailureStartedAt !== null &&
             (time() - $sshFailureStartedAt) >= $sshFailureGraceSeconds
           ) {
             throw new \RuntimeException('SSH port forwarding stuck: ' . $why);
+          }
+          if (!$sshWasReachable && $sshUnavailableFor >= $sshNeverReadyThresholdSeconds) {
+            throw new \RuntimeException('SSH never became reachable after workload container reported running for ' . $sshUnavailableFor . ' seconds. Last SSH probe: ' . $why);
           }
           if ($sshWasReachable && $sshLossSeconds >= $sshLossThresholdSeconds) {
             throw new \RuntimeException('Connectivity loss: SSH probe unavailable for ' . $sshLossSeconds . ' seconds.');
@@ -456,6 +471,41 @@ final class VastRestClient implements VastRestClientInterface {
       $fatal = $this->containsFatalLogLine($lines);
       if ($fatal !== null) {
         throw new \RuntimeException('Container log fatality detected: ' . $fatal);
+      }
+    }
+  }
+
+  private function containsSshTunnelFatalLogLine(array $lines): ?string {
+    foreach ($lines as $line) {
+      $normalized = strtolower($line);
+      if ($normalized === '' || strlen($line) < 5) {
+        continue;
+      }
+      foreach ([
+        'remote port forwarding failed for listen port',
+        'port forwarding failed for listen port',
+      ] as $term) {
+        if (str_contains($normalized, $term)) {
+          return $line;
+        }
+      }
+    }
+    return null;
+  }
+
+  private function inspectInstanceLogsForSshTunnelFailures(string $instanceId): void {
+    foreach ([FALSE, TRUE] as $extra) {
+      try {
+        $logs = $this->getInstanceLogs($instanceId, $extra);
+      }
+      catch (\RuntimeException $e) {
+        continue;
+      }
+
+      $lines = $this->extractLogLinesFromPayload($logs);
+      $fatal = $this->containsSshTunnelFatalLogLine($lines);
+      if ($fatal !== null) {
+        throw new \RuntimeException('SSH tunnel fatality detected: ' . $fatal);
       }
     }
   }
@@ -669,7 +719,10 @@ final class VastRestClient implements VastRestClientInterface {
         $this->logWithTime('Message: ' . $e->getMessage());
         $this->logWithTime('File: ' . $e->getFile());
         $this->logWithTime('Line: ' . $e->getLine());
-        $this->logWithTime('Trace: ' . $e->getTraceAsString());
+        $logProvisionTraces = (bool) \Drupal::state()->get('compute_orchestrator.log_provision_exception_traces', FALSE);
+        if ($logProvisionTraces) {
+          $this->logWithTime('Trace: ' . $e->getTraceAsString());
+        }
         $this->logWithTime('--- PROVISION EXCEPTION END ---');
 
         if (!$preserveOnFailure && !empty($contractId)) {

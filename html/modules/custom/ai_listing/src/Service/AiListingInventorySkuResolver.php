@@ -23,7 +23,11 @@ final class AiListingInventorySkuResolver {
     return (string) $skuRecord->get('sku')->value;
   }
 
-  public function setPrimarySku(AiBookListing $listing, string $sku): void {
+  public function getPrimarySkuRecord(AiBookListing $listing): ?AiListingInventorySku {
+    return $this->loadPrimarySkuRecord($listing);
+  }
+
+  public function setPrimarySku(AiBookListing $listing, string $sku): AiListingInventorySku {
     $normalizedSku = trim($sku);
     if ($normalizedSku === '') {
       throw new \InvalidArgumentException('Primary SKU cannot be empty.');
@@ -47,6 +51,8 @@ final class AiListingInventorySkuResolver {
     $skuRecord->set('sku', $normalizedSku);
     $skuRecord->set('status', 'active');
     $skuRecord->save();
+
+    return $skuRecord;
   }
 
   public function retirePrimarySku(AiBookListing $listing): void {

@@ -24,6 +24,12 @@ services:
       - '@drupal.listing_publishing.book_assembler'
       - '@listing_publishing.marketplace_publisher'
       - '@ai_listing.inventory_sku_resolver'
+      - '@drupal.listing_publishing.marketplace_publication_recorder'
 
   listing_publishing.sku_generator:
     class: Drupal\listing_publishing\Service\SkuGenerator
+
+  drupal.listing_publishing.marketplace_publication_recorder:
+    class: Drupal\listing_publishing\Service\MarketplacePublicationRecorder
+    arguments:
+      - '@entity_type.manager'

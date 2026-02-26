@@ -118,7 +118,13 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
     $publish = $this->sellApiClient->publishOffer($offerId);
 
-    return new MarketplacePublishResult(true, 'Published', $publish['listingId']);
+    return new MarketplacePublishResult(
+      true,
+      'Published',
+      $publish['listingId'] ?? null,
+      (string) $offerId,
+      'FIXED_PRICE'
+    );
   }
 
   public function deleteSku(string $sku): void {

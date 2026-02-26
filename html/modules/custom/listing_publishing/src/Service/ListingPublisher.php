@@ -15,6 +15,7 @@ final class ListingPublisher {
     private readonly BookListingAssembler $assembler,
     private readonly MarketplacePublisherInterface $publisher,
     private readonly AiListingInventorySkuResolver $skuResolver,
+    private readonly MarketplacePublicationRecorder $marketplacePublicationRecorder,
   ) {}
 
   public function publish(AiBookListing $listing): MarketplacePublishResult {
@@ -29,7 +30,13 @@ final class ListingPublisher {
 
     $result = $this->publisher->publish($request);
     if ($result->isSuccess()) {
-      $this->skuResolver->setPrimarySku($listing, $newSku);
+      $inventorySku = $this->skuResolver->setPrimarySku($listing, $newSku);
+      $this->marketplacePublicationRecorder->recordSuccessfulPublish(
+        $listing,
+        $inventorySku,
+        $this->publisher->getMarketplaceKey(),
+        $result
+      );
     }
 
     return $result;

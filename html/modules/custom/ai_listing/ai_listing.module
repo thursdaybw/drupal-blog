@@ -21,6 +21,9 @@ function ai_listing_entity_predelete(EntityInterface $entity): void {
   $skuStorage = $entityTypeManager->hasDefinition('ai_listing_inventory_sku')
     ? $entityTypeManager->getStorage('ai_listing_inventory_sku')
     : null;
+  $publicationStorage = $entityTypeManager->hasDefinition('ai_marketplace_publication')
+    ? $entityTypeManager->getStorage('ai_marketplace_publication')
+    : null;
 
   $fileSystem = \Drupal::service('file_system');
 
@@ -40,6 +43,13 @@ function ai_listing_entity_predelete(EntityInterface $entity): void {
     $skuRecords = $skuStorage->loadByProperties(['ai_book_listing' => $entity->id()]);
     foreach ($skuRecords as $skuRecord) {
       $skuRecord->delete();
+    }
+  }
+
+  if ($publicationStorage !== null) {
+    $publicationRecords = $publicationStorage->loadByProperties(['ai_book_listing' => $entity->id()]);
+    foreach ($publicationRecords as $publicationRecord) {
+      $publicationRecord->delete();
     }
   }
 

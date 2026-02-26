@@ -51,3 +51,8 @@ function ai_listing_update_1005() {
     ])->save();
   }
 }
+
+function ai_listing_update_1006() {
+  \Drupal::entityDefinitionUpdateManager()
+    ->installEntityType('ai_marketplace_publication');
+}

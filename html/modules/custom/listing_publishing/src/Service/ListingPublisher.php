@@ -16,6 +16,8 @@ final class ListingPublisher {
     private readonly MarketplacePublisherInterface $publisher,
     private readonly AiListingInventorySkuResolver $skuResolver,
     private readonly MarketplacePublicationRecorder $marketplacePublicationRecorder,
+    private readonly MarketplacePublicationResolver $marketplacePublicationResolver,
+    private readonly MarketplacePublicationLifecycleManager $marketplacePublicationLifecycleManager,
   ) {}
 
   public function publish(AiBookListing $listing): MarketplacePublishResult {
@@ -25,6 +27,10 @@ final class ListingPublisher {
 
     if ($previousSku !== '' && $previousSku !== $newSku) {
       $this->publisher->deleteSku($previousSku);
+      $this->marketplacePublicationLifecycleManager->markMarketplacePublicationsEndedBySku(
+        $this->publisher->getMarketplaceKey(),
+        $previousSku
+      );
       $this->skuResolver->retirePrimarySku($listing);
     }
 
@@ -36,6 +42,56 @@ final class ListingPublisher {
         $inventorySku,
         $this->publisher->getMarketplaceKey(),
         $result
+      );
+    }
+
+    return $result;
+  }
+
+  public function publishOrUpdate(AiBookListing $listing): MarketplacePublishResult {
+    $status = (string) ($listing->get('status')->value ?? '');
+    if ($status !== 'published') {
+      return $this->publish($listing);
+    }
+
+    return $this->updatePublishedListing($listing);
+  }
+
+  private function updatePublishedListing(AiBookListing $listing): MarketplacePublishResult {
+    $inventorySku = $this->skuResolver->getPrimarySkuRecord($listing);
+    if ($inventorySku === null) {
+      throw new \RuntimeException('Published listing has no primary inventory SKU record.');
+    }
+
+    $publication = $this->marketplacePublicationResolver->getPublicationForListing(
+      $listing,
+      $this->publisher->getMarketplaceKey(),
+      'FIXED_PRICE'
+    );
+    if ($publication === null) {
+      throw new \RuntimeException('Published listing has no stored marketplace publication record.');
+    }
+
+    $publicationId = trim((string) ($publication->get('marketplace_publication_id')->value ?? ''));
+    if ($publicationId === '') {
+      throw new \RuntimeException('Marketplace publication record is missing publication ID.');
+    }
+
+    $request = $this->assembler->assemble($listing);
+    $request = $request->withSku((string) $inventorySku->get('sku')->value);
+
+    $publicationType = (string) ($publication->get('publication_type')->value ?? '');
+    $result = $this->publisher->updatePublication($publicationId, $request, $publicationType);
+
+    if ($result->isSuccess()) {
+      $this->marketplacePublicationRecorder->recordPublicationSnapshot(
+        $listing,
+        $inventorySku,
+        $this->publisher->getMarketplaceKey(),
+        $publicationType,
+        'published',
+        $result->getMarketplacePublicationId(),
+        $result->getMarketplaceListingId()
       );
     }
 

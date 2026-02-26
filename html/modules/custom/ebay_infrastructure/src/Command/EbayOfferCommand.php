@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Drupal\ebay_infrastructure\Command;
 
+use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Service\AiListingInventorySkuResolver;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\ebay_infrastructure\Service\SellApiClient;
 use Drupal\ebay_infrastructure\Service\OAuthTokenService;
 use Drupal\ebay_infrastructure\Service\StoreService;
 use Drupal\ebay_infrastructure\Utility\OfferExceptionHelper;
+use Drupal\listing_publishing\Service\MarketplacePublicationLifecycleManager;
+use Drupal\listing_publishing\Service\MarketplacePublicationRecorder;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
 use InvalidArgumentException;
 use Throwable;
@@ -19,6 +24,10 @@ final class EbayOfferCommand extends DrushCommands {
     private readonly SellApiClient $sellApiClient,
     private readonly OAuthTokenService $oauthTokenService,
     private readonly StoreService $storeService,
+    private readonly MarketplacePublicationLifecycleManager $marketplacePublicationLifecycleManager,
+    private readonly EntityTypeManagerInterface $entityTypeManager,
+    private readonly AiListingInventorySkuResolver $inventorySkuResolver,
+    private readonly MarketplacePublicationRecorder $marketplacePublicationRecorder,
   ) {
     parent::__construct();
   }
@@ -297,6 +306,8 @@ final class EbayOfferCommand extends DrushCommands {
     }
 
     $this->sellApiClient->deleteInventoryItem($sku);
+    $this->marketplacePublicationLifecycleManager
+      ->markMarketplacePublicationsEndedBySku('ebay', $sku);
 
     return $deletedOffers;
   }
@@ -339,6 +350,60 @@ final class EbayOfferCommand extends DrushCommands {
     $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
   }
 
+  /**
+   * Reconcile local marketplace publication records for one listing from eBay.
+   *
+   * @command ebay-connector:reconcile-listing-publication
+   */
+  public function reconcileListingPublication(int $listingId): void {
+    $storage = $this->entityTypeManager->getStorage('ai_book_listing');
+    /** @var \Drupal\ai_listing\Entity\AiBookListing|null $listing */
+    $listing = $storage->load($listingId);
+
+    if (!$listing instanceof AiBookListing) {
+      $this->output()->writeln('<error>AI Book Listing not found.</error>');
+      return;
+    }
+
+    $result = $this->reconcilePublishedListingFromEbay($listing);
+    $this->output()->writeln($result);
+  }
+
+  /**
+   * Reconcile local marketplace publication records for all Drupal-published listings.
+   *
+   * @command ebay-connector:reconcile-published-listings
+   */
+  public function reconcilePublishedListings(): void {
+    $storage = $this->entityTypeManager->getStorage('ai_book_listing');
+    $listings = $storage->loadByProperties(['status' => 'published']);
+
+    $processed = 0;
+    $errors = 0;
+
+    foreach ($listings as $listing) {
+      try {
+        $message = $this->reconcilePublishedListingFromEbay($listing);
+        $this->output()->writeln($message);
+        $processed++;
+      }
+      catch (\Throwable $exception) {
+        $errors++;
+        $this->output()->writeln(sprintf(
+          '<error>Listing %d reconcile failed: %s</error>',
+          $listing->id(),
+          $exception->getMessage()
+        ));
+      }
+    }
+
+    $this->output()->writeln(sprintf(
+      'Reconciled %d published listings (%d errors).',
+      $processed,
+      $errors
+    ));
+  }
+
 
   /**
    * List inventory items.
@@ -350,6 +415,81 @@ final class EbayOfferCommand extends DrushCommands {
     $data = $this->sellApiClient->listInventoryItems($limit, $offset);
 
     $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
+  }
+
+  private function reconcilePublishedListingFromEbay(AiBookListing $listing): string {
+    $inventorySku = $this->inventorySkuResolver->getPrimarySkuRecord($listing);
+    if ($inventorySku === null) {
+      return sprintf('Listing %d skipped (no primary inventory SKU record).', $listing->id());
+    }
+
+    $sku = (string) $inventorySku->get('sku')->value;
+    if ($sku === '') {
+      return sprintf('Listing %d skipped (primary SKU is empty).', $listing->id());
+    }
+
+    try {
+      $response = $this->sellApiClient->listOffersBySku($sku);
+    }
+    catch (\RuntimeException $exception) {
+      if (OfferExceptionHelper::isOfferUnavailable($exception)) {
+        $this->marketplacePublicationLifecycleManager
+          ->markMarketplacePublicationsEndedBySku('ebay', $sku);
+        return sprintf('Listing %d SKU %s: no eBay offers found, local publications marked ended.', $listing->id(), $sku);
+      }
+
+      throw $exception;
+    }
+
+    $offers = $response['offers'] ?? [];
+    if ($offers === []) {
+      $this->marketplacePublicationLifecycleManager
+        ->markMarketplacePublicationsEndedBySku('ebay', $sku);
+      return sprintf('Listing %d SKU %s: eBay returned no offers, local publications marked ended.', $listing->id(), $sku);
+    }
+
+    $synced = 0;
+
+    foreach ($offers as $offer) {
+      $offerId = isset($offer['offerId']) ? (string) $offer['offerId'] : '';
+      if ($offerId === '') {
+        continue;
+      }
+
+      $publicationType = isset($offer['format']) ? (string) $offer['format'] : '';
+      $publicationStatus = $this->mapEbayOfferStatusToPublicationStatus($offer['status'] ?? null);
+      $listingId = isset($offer['listing']['listingId']) ? (string) $offer['listing']['listingId'] : null;
+
+      $this->marketplacePublicationRecorder->recordPublicationSnapshot(
+        $listing,
+        $inventorySku,
+        'ebay',
+        $publicationType,
+        $publicationStatus,
+        $offerId,
+        $listingId
+      );
+
+      $synced++;
+    }
+
+    return sprintf(
+      'Listing %d SKU %s: reconciled %d eBay offers.',
+      $listing->id(),
+      $sku,
+      $synced
+    );
+  }
+
+  private function mapEbayOfferStatusToPublicationStatus(mixed $ebayStatus): string {
+    $normalized = is_string($ebayStatus) ? strtoupper(trim($ebayStatus)) : '';
+
+    return match ($normalized) {
+      'PUBLISHED' => 'published',
+      'UNPUBLISHED' => 'draft',
+      'ENDED' => 'ended',
+      default => 'draft',
+    };
   }
 
   /**

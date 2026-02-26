@@ -1,43 +1,18 @@
 ai_listing.group:
   title: 'AI Listings'
   description: 'Review and publish AI generated listings'
-  route_name: entity.ai_book_listing.list_new
+  route_name: ai_listing.location_batch
   parent: bb_platform.applications
   weight: 0
 
-ai_listing.new:
-  title: 'New'
-  route_name: entity.ai_book_listing.list_new
-  parent: ai_listing.group
-  weight: 0
-
-ai_listing.ready:
-  title: 'Ready'
-  route_name: entity.ai_book_listing.list_ready_for_review
+ai_listing.add_menu:
+  title: 'Add AI Book Listing'
+  route_name: ai_listing.add
   parent: ai_listing.group
   weight: 10
-
-ai_listing.ready_to_shelve:
-  title: 'Ready to shelve'
-  route_name: entity.ai_book_listing.list_ready_to_shelve
-  parent: ai_listing.group
-  weight: 20
-  description: 'Set locations and publish multiple shelved listings at once.'
 
 ai_listing.bulk_location:
   title: 'Batch location update'
   route_name: ai_listing.location_batch
   parent: ai_listing.group
-  weight: 25
-
-ai_listing.published:
-  title: 'Published'
-  route_name: entity.ai_book_listing.list_published
-  parent: ai_listing.group
-  weight: 30
-
-ai_listing.failed:
-  title: 'Failed'
-  route_name: entity.ai_book_listing.list_failed
-  parent: ai_listing.group
-  weight: 40
+  weight: 20

@@ -18,12 +18,16 @@ final class MarketplacePublicationResolver {
     AiBookListing $listing,
     string $marketplaceKey,
     string $publicationType = '',
+    ?string $status = null,
   ): ?AiMarketplacePublication {
     $properties = [
       'ai_book_listing' => $listing->id(),
       'marketplace_key' => $marketplaceKey,
       'publication_type' => $publicationType,
     ];
+    if ($status !== null) {
+      $properties['status'] = $status;
+    }
 
     $records = $this->entityTypeManager
       ->getStorage('ai_marketplace_publication')
@@ -40,6 +44,14 @@ final class MarketplacePublicationResolver {
     /** @var \Drupal\ai_listing\Entity\AiMarketplacePublication $record */
     $record = end($records);
     return $record instanceof AiMarketplacePublication ? $record : null;
+  }
+
+  public function getPublishedPublicationForListing(
+    AiBookListing $listing,
+    string $marketplaceKey,
+    string $publicationType = '',
+  ): ?AiMarketplacePublication {
+    return $this->getPublicationForListing($listing, $marketplaceKey, $publicationType, 'published');
   }
 
 }

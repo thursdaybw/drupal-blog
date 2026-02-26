@@ -53,6 +53,7 @@ final class AiBookListing extends ContentEntityBase {
     'processing' => 'Processing',
     'ready_for_review' => 'Ready for review',
     'ready_to_shelve' => 'Ready to shelve',
+    'shelved' => 'Shelved',
     'published' => 'Published',
     'failed' => 'Failed',
   ];

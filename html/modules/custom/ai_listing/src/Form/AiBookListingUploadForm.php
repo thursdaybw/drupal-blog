@@ -440,7 +440,10 @@ final class AiBookListingUploadForm extends FormBase {
     }
 
     $this->entityTypeManager->getStorage('listing_image')->create([
-      'listing' => $listingId,
+      'owner' => [
+        'target_type' => 'ai_book_listing',
+        'target_id' => $listingId,
+      ],
       'file' => $fileId,
       'weight' => $weight,
       'is_metadata_source' => $isMetadataSource,

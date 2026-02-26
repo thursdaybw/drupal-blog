@@ -546,7 +546,7 @@ final class VastRestClient implements VastRestClientInterface {
     $workload = (string) ($createOptions['workload'] ?? 'vllm');
 
     $globalBlacklist = $this->getGlobalBlacklist();
-    $globallyBlockedHosts = array_keys($globalBlacklist);
+    $globallyBlockedHosts = $this->normalizeHostIds(array_keys($globalBlacklist));
     $registryBlockedHosts = $this->badHosts->all();
 
 
@@ -563,11 +563,11 @@ final class VastRestClient implements VastRestClientInterface {
     }
 
     $workloadBlacklist = \Drupal::state()->get('compute_orchestrator.workload_bad_hosts', []);
-    $workloadBlockedHosts = $workloadBlacklist[$workload] ?? [];
+    $workloadBlockedHosts = $this->normalizeHostIds($workloadBlacklist[$workload] ?? []);
 
     $excludedHostIds = array_values(array_unique(array_merge(
       $globallyBlockedHosts,
-      $registryBlockedHosts,
+      $this->normalizeHostIds($registryBlockedHosts),
       $workloadBlockedHosts
     )));
 
@@ -1000,6 +1000,32 @@ final class VastRestClient implements VastRestClientInterface {
     $unique = array_unique($matches[1]);
     $trimmed = array_map('trim', $unique);
     return array_values(array_filter($trimmed));
+  }
+
+  /**
+   * @param mixed $rawHostIds
+   * @return string[]
+   */
+  private function normalizeHostIds(mixed $rawHostIds): array {
+    if (!is_array($rawHostIds)) {
+      return [];
+    }
+
+    $normalized = [];
+
+    foreach ($rawHostIds as $key => $value) {
+      if (is_scalar($value) && trim((string) $value) !== '') {
+        $normalized[] = trim((string) $value);
+        continue;
+      }
+
+      // Support associative maps keyed by host ID (e.g. host => timestamp/reason).
+      if (is_scalar($key) && trim((string) $key) !== '') {
+        $normalized[] = trim((string) $key);
+      }
+    }
+
+    return array_values(array_unique($normalized));
   }
 
   private function resolveSshKeyPath(): ?string {

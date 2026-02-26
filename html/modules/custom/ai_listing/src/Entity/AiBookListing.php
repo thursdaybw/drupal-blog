@@ -248,9 +248,6 @@ final class AiBookListing extends ContentEntityBase {
     $fields['condition_json'] = BaseFieldDefinition::create('string_long')
       ->setLabel('Condition JSON');
 
-    $fields['ebay_item_id'] = BaseFieldDefinition::create('string')
-      ->setLabel('eBay Item ID');
-
     $fields['published_sku'] = BaseFieldDefinition::create('string')
       ->setLabel('Published SKU')
       ->setDescription('Keeps the last SKU published to a marketplace so we can detect changes.')

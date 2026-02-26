@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\AiBookBundleItem;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\file\FileInterface;
 
@@ -12,7 +13,10 @@ use Drupal\file\FileInterface;
  */
 function ai_listing_entity_predelete(EntityInterface $entity): void {
 
-  if (!$entity instanceof AiBookListing) {
+  $isBookListing = $entity instanceof AiBookListing;
+  $isBundleItem = $entity instanceof AiBookBundleItem;
+
+  if (!$isBookListing && !$isBundleItem) {
     return;
   }
 
@@ -30,43 +34,60 @@ function ai_listing_entity_predelete(EntityInterface $entity): void {
 
   $fileSystem = \Drupal::service('file_system');
 
-  $uuId = $entity->uuid();
-  $directory = "public://ai-listings/{$uuId}";
+  if ($isBookListing) {
+    $uuId = $entity->uuid();
+    $directory = "public://ai-listings/{$uuId}";
 
-  foreach ($entity->get('images') as $item) {
+    foreach ($entity->get('images') as $item) {
+      $file = $fileStorage->load($item->target_id);
+      if ($file) {
+        $file->delete();
+      }
+    }
 
-    $file = $fileStorage->load($item->target_id);
+    if ($skuStorage !== null) {
+      $skuRecords = $skuStorage->loadByProperties(['ai_book_listing' => $entity->id()]);
+      foreach ($skuRecords as $skuRecord) {
+        $skuRecord->delete();
+      }
+    }
 
-    if ($file) {
-      $file->delete();
+    if ($publicationStorage !== null) {
+      $publicationRecords = $publicationStorage->loadByProperties(['ai_book_listing' => $entity->id()]);
+      foreach ($publicationRecords as $publicationRecord) {
+        $publicationRecord->delete();
+      }
+    }
+
+    if ($listingImageStorage !== null) {
+      $ids = $listingImageStorage->getQuery()
+        ->accessCheck(FALSE)
+        ->condition('owner.target_type', 'ai_book_listing')
+        ->condition('owner.target_id', (int) $entity->id())
+        ->execute();
+      $listingImages = $ids === [] ? [] : $listingImageStorage->loadMultiple($ids);
+      foreach ($listingImages as $listingImage) {
+        $listingImage->delete();
+      }
+    }
+
+    if ($fileSystem->prepareDirectory($directory, FileSystemInterface::MODIFY_PERMISSIONS)) {
+      $realPath = $fileSystem->realpath($directory);
+      if ($realPath && is_dir($realPath)) {
+        $fileSystem->deleteRecursive($directory);
+      }
     }
   }
 
-  if ($skuStorage !== null) {
-    $skuRecords = $skuStorage->loadByProperties(['ai_book_listing' => $entity->id()]);
-    foreach ($skuRecords as $skuRecord) {
-      $skuRecord->delete();
-    }
-  }
-
-  if ($publicationStorage !== null) {
-    $publicationRecords = $publicationStorage->loadByProperties(['ai_book_listing' => $entity->id()]);
-    foreach ($publicationRecords as $publicationRecord) {
-      $publicationRecord->delete();
-    }
-  }
-
-  if ($listingImageStorage !== null) {
-    $listingImages = $listingImageStorage->loadByProperties(['listing' => $entity->id()]);
+  if ($isBundleItem && $listingImageStorage !== null) {
+    $ids = $listingImageStorage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('owner.target_type', 'ai_book_bundle_item')
+      ->condition('owner.target_id', (int) $entity->id())
+      ->execute();
+    $listingImages = $ids === [] ? [] : $listingImageStorage->loadMultiple($ids);
     foreach ($listingImages as $listingImage) {
       $listingImage->delete();
-    }
-  }
-
-  if ($fileSystem->prepareDirectory($directory, FileSystemInterface::MODIFY_PERMISSIONS)) {
-    $realPath = $fileSystem->realpath($directory);
-    if ($realPath && is_dir($realPath)) {
-      $fileSystem->deleteRecursive($directory);
     }
   }
 }

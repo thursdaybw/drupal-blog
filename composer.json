@@ -33,6 +33,7 @@
         "drupal/core-project-message": "^10.1",
         "drupal/core-recommended": "^10.1",
         "drupal/default_content": "^2.0@alpha",
+        "drupal/dynamic_entity_reference": "^3.2",
         "drupal/jsonapi_extras": "^3.26",
         "drupal/markdown": "^3.0@RC",
         "drupal/matomo": "^1.23",

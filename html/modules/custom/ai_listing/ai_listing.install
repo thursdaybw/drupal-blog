@@ -14,3 +14,40 @@ function ai_listing_update_1003() {
   \Drupal::entityDefinitionUpdateManager()
     ->installEntityType('ai_book_listing');
 }
+
+function ai_listing_update_1004() {
+  \Drupal::entityDefinitionUpdateManager()
+    ->installEntityType('ai_listing_inventory_sku');
+}
+
+function ai_listing_update_1005() {
+  $entityTypeManager = \Drupal::entityTypeManager();
+  $listingStorage = $entityTypeManager->getStorage('ai_book_listing');
+  $skuStorage = $entityTypeManager->getStorage('ai_listing_inventory_sku');
+
+  $listings = $listingStorage->loadMultiple();
+
+  foreach ($listings as $listing) {
+    $legacySku = trim((string) ($listing->get('published_sku')->value ?? ''));
+    if ($legacySku === '') {
+      continue;
+    }
+
+    $existing = $skuStorage->loadByProperties([
+      'ai_book_listing' => $listing->id(),
+      'is_primary' => 1,
+      'status' => 'active',
+    ]);
+
+    if ($existing !== []) {
+      continue;
+    }
+
+    $skuStorage->create([
+      'ai_book_listing' => $listing->id(),
+      'sku' => $legacySku,
+      'status' => 'active',
+      'is_primary' => TRUE,
+    ])->save();
+  }
+}

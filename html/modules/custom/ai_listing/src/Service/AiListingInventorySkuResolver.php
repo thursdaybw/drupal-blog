@@ -1,0 +1,85 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Drupal\ai_listing\Service;
+
+use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\AiListingInventorySku;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+
+final class AiListingInventorySkuResolver {
+
+  public function __construct(
+    private readonly EntityTypeManagerInterface $entityTypeManager,
+  ) {}
+
+  public function getPrimarySku(AiBookListing $listing): ?string {
+    $skuRecord = $this->loadPrimarySkuRecord($listing);
+    if (!$skuRecord instanceof AiListingInventorySku) {
+      return null;
+    }
+
+    return (string) $skuRecord->get('sku')->value;
+  }
+
+  public function setPrimarySku(AiBookListing $listing, string $sku): void {
+    $normalizedSku = trim($sku);
+    if ($normalizedSku === '') {
+      throw new \InvalidArgumentException('Primary SKU cannot be empty.');
+    }
+
+    if (!$this->entityTypeManager->hasDefinition('ai_listing_inventory_sku')) {
+      throw new \RuntimeException('Inventory SKU entity type is not installed.');
+    }
+
+    $skuRecord = $this->loadPrimarySkuRecord($listing);
+
+    if (!$skuRecord instanceof AiListingInventorySku) {
+      $skuRecord = $this->entityTypeManager
+        ->getStorage('ai_listing_inventory_sku')
+        ->create([
+        'ai_book_listing' => $listing->id(),
+        'is_primary' => TRUE,
+      ]);
+    }
+
+    $skuRecord->set('sku', $normalizedSku);
+    $skuRecord->set('status', 'active');
+    $skuRecord->save();
+  }
+
+  public function retirePrimarySku(AiBookListing $listing): void {
+    if (!$this->entityTypeManager->hasDefinition('ai_listing_inventory_sku')) {
+      return;
+    }
+
+    $skuRecord = $this->loadPrimarySkuRecord($listing);
+    if ($skuRecord instanceof AiListingInventorySku) {
+      $skuRecord->set('status', 'retired');
+      $skuRecord->save();
+    }
+  }
+
+  private function loadPrimarySkuRecord(AiBookListing $listing): ?AiListingInventorySku {
+    if (!$this->entityTypeManager->hasDefinition('ai_listing_inventory_sku')) {
+      return null;
+    }
+
+    $storage = $this->entityTypeManager->getStorage('ai_listing_inventory_sku');
+    $records = $storage->loadByProperties([
+      'ai_book_listing' => $listing->id(),
+      'is_primary' => 1,
+      'status' => 'active',
+    ]);
+
+    if ($records === []) {
+      return null;
+    }
+
+    /** @var \Drupal\ai_listing\Entity\AiListingInventorySku $record */
+    $record = reset($records);
+    return $record;
+  }
+
+}

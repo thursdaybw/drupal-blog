@@ -7,10 +7,11 @@ namespace Drupal\ai_listing\Entity;
 use Drupal\Core\Entity\ContentEntityBase;
 use Drupal\Core\Entity\EntityChangedTrait;
 use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 
 /**
- * Stores images owned by an AI book listing.
+ * Stores one image owned by a listing inference unit.
  *
  * @ContentEntityType(
  *   id = "listing_image",
@@ -34,10 +35,14 @@ final class ListingImage extends ContentEntityBase {
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type): array {
     $fields = parent::baseFieldDefinitions($entity_type);
 
-    $fields['listing'] = BaseFieldDefinition::create('entity_reference')
-      ->setLabel('Listing')
+    $fields['owner'] = BaseFieldDefinition::create('dynamic_entity_reference')
+      ->setLabel('Owner')
       ->setRequired(TRUE)
-      ->setSetting('target_type', 'ai_book_listing');
+      ->setSetting('exclude_entity_types', FALSE)
+      ->setSetting('entity_type_ids', [
+        'ai_book_listing' => 'ai_book_listing',
+        'ai_book_bundle_item' => 'ai_book_bundle_item',
+      ]);
 
     $fields['file'] = BaseFieldDefinition::create('entity_reference')
       ->setLabel('File')
@@ -61,6 +66,28 @@ final class ListingImage extends ContentEntityBase {
       ->setLabel('Changed');
 
     return $fields;
+  }
+
+  public function preSave(EntityStorageInterface $storage): void {
+    parent::preSave($storage);
+
+    $ownerItem = $this->get('owner')->first();
+    $ownerTargetType = (string) ($ownerItem?->target_type ?? '');
+    $ownerTargetId = (int) ($ownerItem?->target_id ?? 0);
+
+    if ($ownerTargetType === '' || $ownerTargetId === 0) {
+      throw new \InvalidArgumentException('ListingImage owner is required.');
+    }
+
+    if ($ownerTargetType === 'ai_book_listing') {
+      return;
+    }
+
+    if ($ownerTargetType === 'ai_book_bundle_item') {
+      return;
+    }
+
+    throw new \InvalidArgumentException('ListingImage owner type is not supported: ' . $ownerTargetType);
   }
 
 }

@@ -30,7 +30,7 @@ final class AiBookListingDataExtractionProcessor {
     $metadataImagePaths = $this->loadMetadataImagePaths($listing);
 
     if (empty($metadataImagePaths)) {
-      return;
+      throw new \RuntimeException('No metadata source images selected.');
     }
 
     $result = $this->bookExtraction->extract($imagePaths, $metadataImagePaths);
@@ -123,7 +123,8 @@ final class AiBookListingDataExtractionProcessor {
 
     $ids = $listingImageStorage->getQuery()
       ->accessCheck(FALSE)
-      ->condition('listing', $listing->id())
+      ->condition('owner.target_type', 'ai_book_listing')
+      ->condition('owner.target_id', (int) $listing->id())
       ->condition('is_metadata_source', 1)
       ->sort('weight', 'ASC')
       ->sort('id', 'ASC')

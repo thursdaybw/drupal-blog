@@ -275,10 +275,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return;
     }
 
-    $marketplaceListingId = $result->getMarketplaceListingId() ?? $result->getMarketplaceId();
-    if ($marketplaceListingId !== null && $marketplaceListingId !== '') {
-      $listing->set('ebay_item_id', $marketplaceListingId);
-    }
     $listing->set('status', 'shelved');
     $listing->save();
     $context['results']['success']++;

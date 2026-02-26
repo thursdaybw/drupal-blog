@@ -75,7 +75,6 @@ final class PublishAiListingCommand extends DrushCommands {
   }
 
   private function markPublished(AiBookListing $listing, string $marketplaceId): void {
-    $listing->set('ebay_item_id', $marketplaceId);
     $listing->set('status', 'shelved');
     $listing->save();
   }

@@ -659,7 +659,8 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listingImageStorage = $this->entityTypeManager->getStorage('listing_image');
     $ids = $listingImageStorage->getQuery()
       ->accessCheck(FALSE)
-      ->condition('listing', $ai_book_listing->id())
+      ->condition('owner.target_type', 'ai_book_listing')
+      ->condition('owner.target_id', (int) $ai_book_listing->id())
       ->sort('weight', 'ASC')
       ->sort('id', 'ASC')
       ->execute();
@@ -730,7 +731,6 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
   }
 
   private function handlePublishSuccess(AiBookListing $listing, string $marketplaceId): void {
-    $listing->set('ebay_item_id', $marketplaceId);
     $listing->set('status', 'shelved');
     $listing->save();
     $this->messenger()->addStatus(sprintf('Published listing %s for entity %d.', $marketplaceId, $listing->id()));

@@ -21,30 +21,19 @@ final class AiBookListingDataExtractionProcessor {
   ) {}
 
   public function process(AiBookListing $listing): void {
-
-    $fileStorage = $this->entityTypeManager->getStorage('file');
-
-    $imagePaths = [];
-
-    foreach ($listing->get('images') as $item) {
-      $file = $fileStorage->load($item->target_id);
-      if ($file) {
-        $uri = $file->getFileUri();
-        $realPath = $this->fileSystem->realpath($uri);
-
-        if (!$realPath || !file_exists($realPath)) {
-          throw new \RuntimeException("File not found: {$uri}");
-        }
-
-        $imagePaths[] = $realPath;
-      }
-    }
+    $imagePaths = $this->loadAllImagePaths($listing);
 
     if (empty($imagePaths)) {
       throw new \RuntimeException('No images attached.');
     }
 
-    $result = $this->bookExtraction->extract($imagePaths);
+    $metadataImagePaths = $this->loadMetadataImagePaths($listing);
+
+    if (empty($metadataImagePaths)) {
+      return;
+    }
+
+    $result = $this->bookExtraction->extract($imagePaths, $metadataImagePaths);
 
     $metadata = $result['metadata'] ?? [];
     $condition = $result['condition'] ?? ['issues' => []];
@@ -95,6 +84,83 @@ final class AiBookListingDataExtractionProcessor {
     ];
 
     return $map[$value] ?? $value;
+  }
+
+  /**
+   * @return string[]
+   */
+  private function loadAllImagePaths(AiBookListing $listing): array {
+    $fileStorage = $this->entityTypeManager->getStorage('file');
+    $imagePaths = [];
+
+    foreach ($listing->get('images') as $item) {
+      $fileId = (int) ($item->target_id ?? 0);
+      if ($fileId === 0) {
+        continue;
+      }
+
+      $file = $fileStorage->load($fileId);
+      if (!$file) {
+        continue;
+      }
+
+      $imagePaths[] = $this->resolveExistingFilePath($file->getFileUri());
+    }
+
+    return $imagePaths;
+  }
+
+  /**
+   * @return string[]
+   */
+  private function loadMetadataImagePaths(AiBookListing $listing): array {
+    if (!$this->entityTypeManager->hasDefinition('listing_image')) {
+      return [];
+    }
+
+    $listingImageStorage = $this->entityTypeManager->getStorage('listing_image');
+    $fileStorage = $this->entityTypeManager->getStorage('file');
+
+    $ids = $listingImageStorage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('listing', $listing->id())
+      ->condition('is_metadata_source', 1)
+      ->sort('weight', 'ASC')
+      ->sort('id', 'ASC')
+      ->execute();
+
+    if (empty($ids)) {
+      return [];
+    }
+
+    $listingImages = $listingImageStorage->loadMultiple($ids);
+    $imagePaths = [];
+
+    foreach ($listingImages as $listingImage) {
+      $fileId = (int) ($listingImage->get('file')->target_id ?? 0);
+      if ($fileId === 0) {
+        continue;
+      }
+
+      $file = $fileStorage->load($fileId);
+      if (!$file) {
+        continue;
+      }
+
+      $imagePaths[] = $this->resolveExistingFilePath($file->getFileUri());
+    }
+
+    return $imagePaths;
+  }
+
+  private function resolveExistingFilePath(string $uri): string {
+    $realPath = $this->fileSystem->realpath($uri);
+
+    if (!$realPath || !file_exists($realPath)) {
+      throw new \RuntimeException("File not found: {$uri}");
+    }
+
+    return $realPath;
   }
 
 }

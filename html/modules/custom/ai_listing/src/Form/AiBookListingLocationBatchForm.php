@@ -135,18 +135,18 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   }
 
   public function submitSetLocationAndPublish(array &$form, FormStateInterface $form_state): void {
-    $this->processSelectedListings($form_state, TRUE);
+    $this->queueListingBatch($form_state, TRUE);
   }
 
   public function submitPublishOrUpdate(array &$form, FormStateInterface $form_state): void {
-    $this->processSelectedListings($form_state, FALSE);
+    $this->queueListingBatch($form_state, FALSE);
   }
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $this->processSelectedListings($form_state, TRUE);
+    $this->queueListingBatch($form_state, TRUE);
   }
 
-  private function processSelectedListings(FormStateInterface $form_state, bool $setLocation): void {
+  private function queueListingBatch(FormStateInterface $form_state, bool $setLocation): void {
     $selected = array_filter($form_state->getValue('listings') ?? []);
     if (empty($selected)) {
       $this->messenger()->addError($this->t('Select at least one listing to update.'));
@@ -161,75 +161,125 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return;
     }
 
-    $storage = $this->getEntityTypeManager()->getStorage('ai_book_listing');
-    $success = 0;
-    $errors = [];
+    $operations = [];
+    foreach (array_keys($selected) as $listingId) {
+      $operations[] = [
+        [self::class, 'processBatchOperation'],
+        [(int) $listingId, $setLocation, $location],
+      ];
+    }
 
-    foreach ($selected as $id) {
-      /** @var \Drupal\ai_listing\Entity\AiBookListing|null $listing */
-      $listing = $storage->load($id);
-      if (!$listing) {
-        continue;
-      }
+    $batch = [
+      'title' => $setLocation
+        ? $this->t('Setting locations and publishing listings')
+        : $this->t('Publishing/updating listings'),
+      'operations' => $operations,
+      'finished' => [self::class, 'finishBatchOperation'],
+      'init_message' => $setLocation
+        ? $this->t('Starting location update and publish batch...')
+        : $this->t('Starting publish/update batch...'),
+      'progress_message' => $this->t('Processed @current of @total listings.'),
+      'error_message' => $this->t('The batch finished with an unexpected error.'),
+    ];
 
-      if ($setLocation) {
-        $listing->set('storage_location', $location);
-        $listing->save();
-      }
+    batch_set($batch);
+  }
 
-      try {
-        $result = $setLocation
-          ? $this->getListingPublisher()->publish($listing)
-          : $this->getListingPublisher()->publishOrUpdate($listing);
-      }
-      catch (\Throwable $e) {
-        $listing->set('status', 'failed');
-        $listing->save();
-        $errors[] = $this->t('Listing %title failed: %reason', [
+  public static function processBatchOperation(int $listingId, bool $setLocation, string $location, array &$context): void {
+    $entityTypeManager = \Drupal::entityTypeManager();
+    $storage = $entityTypeManager->getStorage('ai_book_listing');
+    /** @var \Drupal\ai_listing\Entity\AiBookListing|null $listing */
+    $listing = $storage->load($listingId);
+
+    if (!isset($context['results']['success'])) {
+      $context['results']['success'] = 0;
+    }
+    if (!isset($context['results']['errors'])) {
+      $context['results']['errors'] = [];
+    }
+    $context['results']['set_location'] = $setLocation;
+
+    if (!$listing instanceof AiBookListing) {
+      $context['message'] = (string) \Drupal::translation()->translate('Skipping missing listing @id.', ['@id' => $listingId]);
+      return;
+    }
+
+    if ($setLocation) {
+      $listing->set('storage_location', $location);
+      $listing->save();
+    }
+
+    $publisher = \Drupal::service('drupal.listing_publishing.publisher');
+
+    try {
+      $result = $setLocation
+        ? $publisher->publish($listing)
+        : $publisher->publishOrUpdate($listing);
+    }
+    catch (\Throwable $e) {
+      $listing->set('status', 'failed');
+      $listing->save();
+      $context['results']['errors'][] = (string) \Drupal::translation()->translate(
+        'Listing %title failed: %reason',
+        [
           '%title' => $listing->label(),
           '%reason' => $e->getMessage(),
-        ]);
-        continue;
-      }
+        ]
+      );
+      $context['message'] = (string) \Drupal::translation()->translate('Failed listing @id.', ['@id' => $listingId]);
+      return;
+    }
 
-      if (!$result->isSuccess()) {
-        $listing->set('status', 'failed');
-        $listing->save();
-        $errors[] = $this->t('Listing %title failed: %reason', [
+    if (!$result->isSuccess()) {
+      $listing->set('status', 'failed');
+      $listing->save();
+      $context['results']['errors'][] = (string) \Drupal::translation()->translate(
+        'Listing %title failed: %reason',
+        [
           '%title' => $listing->label(),
           '%reason' => $result->getMessage(),
-        ]);
-        continue;
-      }
-
-      $marketplaceListingId = $result->getMarketplaceListingId() ?? $result->getMarketplaceId();
-      if ($marketplaceListingId !== null && $marketplaceListingId !== '') {
-        $listing->set('ebay_item_id', $marketplaceListingId);
-      }
-      $listing->set('status', 'published');
-      $listing->save();
-      $success++;
+        ]
+      );
+      $context['message'] = (string) \Drupal::translation()->translate('Failed listing @id.', ['@id' => $listingId]);
+      return;
     }
 
-    if ($success > 0) {
-      $successMessageSingular = $setLocation
-        ? 'Published one listing.'
-        : 'Published/updated one listing.';
-      $successMessagePlural = $setLocation
-        ? 'Published @count listings.'
-        : 'Published/updated @count listings.';
-      $this->messenger()->addStatus($this->formatPlural(
-        $success,
-        $successMessageSingular,
-        $successMessagePlural
-      ));
+    $marketplaceListingId = $result->getMarketplaceListingId() ?? $result->getMarketplaceId();
+    if ($marketplaceListingId !== null && $marketplaceListingId !== '') {
+      $listing->set('ebay_item_id', $marketplaceListingId);
+    }
+    $listing->set('status', 'published');
+    $listing->save();
+    $context['results']['success']++;
+    $context['message'] = (string) \Drupal::translation()->translate(
+      'Processed listing @id: @title',
+      [
+        '@id' => $listingId,
+        '@title' => $listing->label() ?: 'Untitled',
+      ]
+    );
+  }
+
+  public static function finishBatchOperation(bool $success, array $results, array $operations): void {
+    $messenger = \Drupal::messenger();
+    $translation = \Drupal::translation();
+
+    if (!$success) {
+      $messenger->addError((string) $translation->translate('The batch process did not complete successfully.'));
     }
 
-    foreach ($errors as $message) {
-      $this->messenger()->addError($message);
+    $processedCount = (int) ($results['success'] ?? 0);
+    $setLocation = (bool) ($results['set_location'] ?? FALSE);
+
+    if ($processedCount > 0) {
+      $singular = $setLocation ? 'Published one listing.' : 'Published/updated one listing.';
+      $plural = $setLocation ? 'Published @count listings.' : 'Published/updated @count listings.';
+      $messenger->addStatus($translation->formatPlural($processedCount, $singular, $plural));
     }
 
-    $form_state->setRebuild();
+    foreach (($results['errors'] ?? []) as $message) {
+      $messenger->addError($message);
+    }
   }
 
   private function isSetLocationAndPublishAction(FormStateInterface $form_state): bool {

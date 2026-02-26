@@ -34,13 +34,12 @@ final class BookExtractionService {
     }
 
     $metadataPrompt = $this->buildMetadataPrompt();
-    $conditionPrompt = $this->buildConditionPrompt();
 
     $metadataResult = $this->vlmClient->infer($metadataPrompt, $metadataImagePaths);
-    $conditionResult = $this->vlmClient->infer($conditionPrompt, $imagePaths);
+    $conditionResult = $this->inferConditionFromImages($imagePaths);
 
     $metadataParsed = is_array($metadataResult['parsed'] ?? null) ? $metadataResult['parsed'] : null;
-    $conditionParsed = is_array($conditionResult['parsed'] ?? null) ? $conditionResult['parsed'] : null;
+    $conditionParsed = $conditionResult['parsed'] ?? null;
 
     $metadataStructured = $metadataParsed ? $this->normalizeMetadata($metadataParsed) : null;
     $conditionStructured = $conditionParsed ? $this->normalizeCondition($conditionParsed) : null;
@@ -51,6 +50,54 @@ final class BookExtractionService {
       'condition' => $conditionStructured,
       'condition_raw' => (string) ($conditionResult['raw'] ?? ''),
     ];
+  }
+
+  /**
+   * Runs condition inference one image at a time and aggregates visible issues.
+   *
+   * @param string[] $imagePaths
+   * @return array{parsed: array{issues: string[]}, raw: string}
+   */
+  private function inferConditionFromImages(array $imagePaths): array {
+    $conditionPrompt = $this->buildConditionPrompt();
+    $allIssues = [];
+    $rawParts = [];
+
+    foreach ($imagePaths as $index => $imagePath) {
+      $imageNumber = $index + 1;
+      $conditionResult = $this->vlmClient->infer($conditionPrompt, [$imagePath]);
+      $conditionParsed = is_array($conditionResult['parsed'] ?? null) ? $conditionResult['parsed'] : [];
+      $normalizedCondition = $this->normalizeCondition($conditionParsed);
+
+      foreach ($normalizedCondition['issues'] as $issue) {
+        if ($issue === '') {
+          continue;
+        }
+        $allIssues[$issue] = TRUE;
+      }
+
+      $rawParts[] = $this->formatConditionRawPart(
+        $imageNumber,
+        (string) ($conditionResult['raw'] ?? '')
+      );
+    }
+
+    $aggregatedIssues = array_keys($allIssues);
+    sort($aggregatedIssues);
+
+    return [
+      'parsed' => ['issues' => $aggregatedIssues],
+      'raw' => implode("\n\n", array_filter($rawParts)),
+    ];
+  }
+
+  private function formatConditionRawPart(int $imageNumber, string $raw): string {
+    $trimmed = trim($raw);
+    if ($trimmed === '') {
+      return 'Image ' . $imageNumber . ': (empty)';
+    }
+
+    return 'Image ' . $imageNumber . ': ' . $trimmed;
   }
 
   private function buildMetadataPrompt(): string {
@@ -70,14 +117,19 @@ Use any of the following issue categories:
 - foxing
 - tearing
 - tanning/toning
-- edge wear
-- dust jacket damage
+- removable dust jacket damage
+- cover wear
 - surface wear
 - paper ageing
 - staining
+- loose pages
+- tape/adhesive residue
 
 Rules:
 - If no issues are visible, return: { \"issues\": [] }
+- Use \"gift inscription/pen marks\" only for visible handwritten or pen/pencil marks on pages, endpapers, or inside covers.
+- Do not use \"gift inscription/pen marks\" for printed labels, stickers, dymo labels, or tape.
+- Use \"tape/adhesive residue\" for visible tape, tape marks, adhesive staining, or tape residue.
 
 Return only a single JSON object in this format:
 
@@ -162,7 +214,7 @@ Explore my other listings, more books and treasures added regularly!
         'narrative_type' => (string) ($parsed['narrative_type'] ?? ''),
         'country_printed' => (string) ($parsed['country_printed'] ?? ''),
         'edition' => $this->truncateEdition((string) ($parsed['edition'] ?? '')),
-        'series' => (string) ($parsed['series'] ?? ''),
+        'series' => is_scalar($parsed['series'] ?? null) ? (string) $parsed['series'] : '',
         'features' => is_array($parsed['features'] ?? null) ? array_values(array_map('strval', $parsed['features'])) : [],
         'ebay_title' => $ebayTitle,
         'description' => $description,
@@ -184,6 +236,8 @@ Explore my other listings, more books and treasures added regularly!
         fn($v) => strtolower(trim((string) $v)),
         $parsed['issues']
       ));
+
+      $issues = $this->canonicalizeConditionIssues($issues);
 
       return ['issues' => $issues];
     }
@@ -270,6 +324,33 @@ Explore my other listings, more books and treasures added regularly!
     $final = preg_replace('/\s+/', ' ', $final) ?? $final;
 
     return substr($final, 0, $maxLen);
+  }
+
+  /**
+   * @param string[] $issues
+   * @return string[]
+   */
+  private function canonicalizeConditionIssues(array $issues): array {
+    $aliases = [
+      'edge wear' => 'surface wear',
+      'edgewear' => 'surface wear',
+      'dust jacket damage' => 'removable dust jacket damage',
+    ];
+
+    $canonicalIssues = [];
+    foreach ($issues as $issue) {
+      if ($issue === '') {
+        continue;
+      }
+
+      $canonical = $aliases[$issue] ?? $issue;
+      $canonicalIssues[$canonical] = TRUE;
+    }
+
+    $result = array_keys($canonicalIssues);
+    sort($result);
+
+    return $result;
   }
 
   private function truncateEdition(string $value): string {

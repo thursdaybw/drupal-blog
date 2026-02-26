@@ -353,6 +353,15 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
 
     $title = $listing->label() ?: 'Untitled';
 
+    if (self::listingHasInventoryAndMarketplaceData($listingId)) {
+      $context['results']['errors'][] = (string) \Drupal::translation()->translate(
+        'Listing %title was not deleted because Drupal has inventory and marketplace publication records for it.',
+        ['%title' => $title]
+      );
+      $context['message'] = (string) \Drupal::translation()->translate('Blocked delete for listing @id.', ['@id' => $listingId]);
+      return;
+    }
+
     try {
       $listing->delete();
       $context['results']['success']++;
@@ -389,6 +398,30 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     foreach (($results['errors'] ?? []) as $message) {
       $messenger->addError($message);
     }
+  }
+
+  private static function listingHasInventoryAndMarketplaceData(int $listingId): bool {
+    $entityTypeManager = \Drupal::entityTypeManager();
+
+    $inventoryIds = $entityTypeManager->getStorage('ai_listing_inventory_sku')
+      ->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('ai_book_listing', $listingId)
+      ->range(0, 1)
+      ->execute();
+
+    if ($inventoryIds === []) {
+      return FALSE;
+    }
+
+    $publicationIds = $entityTypeManager->getStorage('ai_marketplace_publication')
+      ->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('ai_book_listing', $listingId)
+      ->range(0, 1)
+      ->execute();
+
+    return $publicationIds !== [];
   }
 
   private function isSetLocationAndPublishAction(FormStateInterface $form_state): bool {

@@ -521,6 +521,35 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
   }
 
   private function buildPhotoItems(AiBookListing $ai_book_listing): array {
+    $photoItems = [
+      '#type' => 'container',
+    ];
+
+    $legacyItems = $this->buildLegacyPhotoLinks($ai_book_listing);
+    $listingImageItems = $this->buildListingImagePhotoLinks($ai_book_listing);
+
+    $photoItems['listing_image_heading'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'h4',
+      '#value' => 'ListingImage entities',
+    ];
+    $photoItems['listing_image_items'] = !empty($listingImageItems)
+      ? $listingImageItems
+      : ['#markup' => '<p><em>No ListingImage entities found.</em></p>'];
+
+    $photoItems['legacy_heading'] = [
+      '#type' => 'html_tag',
+      '#tag' => 'h4',
+      '#value' => 'Legacy ai_book_listing.images field',
+    ];
+    $photoItems['legacy_items'] = !empty($legacyItems)
+      ? $legacyItems
+      : ['#markup' => '<p><em>No legacy image field items found.</em></p>'];
+
+    return $photoItems;
+  }
+
+  private function buildLegacyPhotoLinks(AiBookListing $ai_book_listing): array {
     $fileStorage = $this->entityTypeManager->getStorage('file');
     $photoItems = [];
 
@@ -534,26 +563,68 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
         continue;
       }
 
-      $uri = $file->getFileUri();
-      $url = \Drupal\Core\Url::fromUri(
-        $this->fileUrlGenerator->generateAbsoluteString($uri)
-      );
-
-      $photoItems[] = [
-        '#type' => 'link',
-        '#title' => [
-          '#theme' => 'image_style',
-          '#style_name' => 'thumbnail',
-          '#uri' => $uri,
-        ],
-        '#url' => $url,
-        '#attributes' => [
-          'class' => ['ai-listing-photo-link'],
-        ],
-      ];
+      $photoItems[] = $this->buildPhotoLinkItem($file->getFileUri());
     }
 
     return $photoItems;
+  }
+
+  private function buildListingImagePhotoLinks(AiBookListing $ai_book_listing): array {
+    if (!$this->entityTypeManager->hasDefinition('listing_image')) {
+      return [];
+    }
+
+    $listingImageStorage = $this->entityTypeManager->getStorage('listing_image');
+    $fileStorage = $this->entityTypeManager->getStorage('file');
+
+    $ids = $listingImageStorage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('listing', $ai_book_listing->id())
+      ->sort('weight', 'ASC')
+      ->sort('id', 'ASC')
+      ->execute();
+
+    if (empty($ids)) {
+      return [];
+    }
+
+    $photoItems = [];
+    $listingImages = $listingImageStorage->loadMultiple($ids);
+
+    foreach ($listingImages as $listingImage) {
+      $fileId = (int) ($listingImage->get('file')->target_id ?? 0);
+      if ($fileId === 0) {
+        continue;
+      }
+
+      $file = $fileStorage->load($fileId);
+      if (!$file) {
+        continue;
+      }
+
+      $photoItems[] = $this->buildPhotoLinkItem($file->getFileUri());
+    }
+
+    return $photoItems;
+  }
+
+  private function buildPhotoLinkItem(string $uri): array {
+    $url = \Drupal\Core\Url::fromUri(
+      $this->fileUrlGenerator->generateAbsoluteString($uri)
+    );
+
+    return [
+      '#type' => 'link',
+      '#title' => [
+        '#theme' => 'image_style',
+        '#style_name' => 'thumbnail',
+        '#uri' => $uri,
+      ],
+      '#url' => $url,
+      '#attributes' => [
+        'class' => ['ai-listing-photo-link'],
+      ],
+    ];
   }
 
   public function submitAndSetReadyToShelve(array &$form, FormStateInterface $form_state): void {

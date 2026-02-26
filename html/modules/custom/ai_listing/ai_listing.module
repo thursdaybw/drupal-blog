@@ -24,6 +24,9 @@ function ai_listing_entity_predelete(EntityInterface $entity): void {
   $publicationStorage = $entityTypeManager->hasDefinition('ai_marketplace_publication')
     ? $entityTypeManager->getStorage('ai_marketplace_publication')
     : null;
+  $listingImageStorage = $entityTypeManager->hasDefinition('listing_image')
+    ? $entityTypeManager->getStorage('listing_image')
+    : null;
 
   $fileSystem = \Drupal::service('file_system');
 
@@ -50,6 +53,13 @@ function ai_listing_entity_predelete(EntityInterface $entity): void {
     $publicationRecords = $publicationStorage->loadByProperties(['ai_book_listing' => $entity->id()]);
     foreach ($publicationRecords as $publicationRecord) {
       $publicationRecord->delete();
+    }
+  }
+
+  if ($listingImageStorage !== null) {
+    $listingImages = $listingImageStorage->loadByProperties(['listing' => $entity->id()]);
+    foreach ($listingImages as $listingImage) {
+      $listingImage->delete();
     }
   }
 

@@ -33,8 +33,8 @@ ai_listing.location_batch.publish_update_confirm:
 entity.bb_ai_listing.canonical:
   path: '/admin/ai-listings/{bb_ai_listing}'
   defaults:
-    _form: '\Drupal\ai_listing\Form\AiBookListingReviewForm'
-    _title_callback: '\Drupal\ai_listing\Form\AiBookListingReviewForm::getTitle'
+    _controller: '\Drupal\ai_listing\Controller\AiListingReviewController::build'
+    _title_callback: '\Drupal\ai_listing\Controller\AiListingReviewController::getTitle'
   requirements:
     _permission: 'administer ai listings'
   options:

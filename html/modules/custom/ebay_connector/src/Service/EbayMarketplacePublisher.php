@@ -232,7 +232,11 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
     if (($attributes['product_type'] ?? null) === 'book') {
       $aspects['Book Title'] = [$request->getTitle()];
-      $aspects['Author'] = [$attributes['author'] ?? $request->getAuthor()];
+      $authorValues = $this->deriveAuthorAspectValues((string) ($attributes['author'] ?? $request->getAuthor()));
+      if ($authorValues === []) {
+        $authorValues = ['Various Authors'];
+      }
+      $aspects['Author'] = $authorValues;
       $aspects['Language'] = [$attributes['language'] ?? 'English'];
       $this->addAspectIfValue($aspects, 'ISBN', $attributes['isbn'] ?? '');
       $this->addAspectIfValue($aspects, 'Book Series', $attributes['series'] ?? '');
@@ -262,6 +266,85 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     }
 
     $aspects[$name] = [$normalized];
+  }
+
+  /**
+   * @return array<int,string>
+   */
+  private function deriveAuthorAspectValues(string $rawAuthor): array {
+    $normalized = trim(preg_replace('/\s+/', ' ', $rawAuthor) ?? '');
+    if ($normalized === '') {
+      return [];
+    }
+
+    $lower = strtolower($normalized);
+    if (in_array($lower, ['unknown', 'unbranded', 'n/a', 'na'], TRUE)) {
+      return ['Various Authors'];
+    }
+
+    $commaSplit = preg_split('/\s*,\s*/', $normalized);
+    if (is_array($commaSplit) && count($commaSplit) > 1) {
+      return $this->normalizeAuthorValues($commaSplit);
+    }
+
+    $ampersandSplit = preg_split('/\s*&\s*/', $normalized);
+    if (is_array($ampersandSplit) && count($ampersandSplit) > 1 && $this->allAuthorPartsLookComplete($ampersandSplit)) {
+      return $this->normalizeAuthorValues($ampersandSplit);
+    }
+
+    $andSplit = preg_split('/\s+and\s+/i', $normalized);
+    if (is_array($andSplit) && count($andSplit) > 1 && $this->allAuthorPartsLookComplete($andSplit)) {
+      return $this->normalizeAuthorValues($andSplit);
+    }
+
+    return [$normalized];
+  }
+
+  /**
+   * @param array<int,string> $parts
+   */
+  private function allAuthorPartsLookComplete(array $parts): bool {
+    foreach ($parts as $part) {
+      $tokens = preg_split('/\s+/', trim($part));
+      if (!is_array($tokens)) {
+        return FALSE;
+      }
+
+      $nonEmptyTokens = array_values(array_filter($tokens, static fn(string $token): bool => $token !== ''));
+      if (count($nonEmptyTokens) < 2) {
+        return FALSE;
+      }
+    }
+
+    return TRUE;
+  }
+
+  /**
+   * @param array<int,string> $parts
+   * @return array<int,string>
+   */
+  private function normalizeAuthorValues(array $parts): array {
+    $values = [];
+    $placeholderValues = ['unknown', 'unbranded', 'n/a', 'na', 'various authors', 'various'];
+    foreach ($parts as $part) {
+      $value = trim($part);
+      if ($value === '') {
+        continue;
+      }
+
+      $lower = strtolower($value);
+      if (in_array($lower, $placeholderValues, TRUE)) {
+        continue;
+      }
+
+      $values[] = $value;
+    }
+
+    if ($values === []) {
+      return ['Various Authors'];
+    }
+
+    return array_values(array_unique($values));
   }
 
   private function ensureMerchantLocation(): void {

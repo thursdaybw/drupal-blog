@@ -143,11 +143,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return;
     }
 
-    if ($this->selectionContainsBundleListings($selection)) {
-      $form_state->setErrorByName('listings', $this->t('Publish/location batch actions currently support single-book listings only. Remove bundle listings from the selection.'));
-      return;
-    }
-
     if (!$this->isSetLocationAndPublishAction($form_state)) {
       return;
     }
@@ -192,11 +187,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $selection = $this->getSelectedListingRefs($form_state);
     if ($selection === []) {
       $this->messenger()->addError($this->t('Select at least one listing to update.'));
-      $form_state->setRebuild();
-      return;
-    }
-    if ($this->selectionContainsBundleListings($selection)) {
-      $this->messenger()->addError($this->t('Publish/location batch actions currently support single-book listings only. Remove bundle listings from the selection.'));
       $form_state->setRebuild();
       return;
     }
@@ -252,7 +242,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   }
 
   public static function processBatchOperation(string $listingType, int $listingId, bool $setLocation, string $location, string $operationMode, array &$context): void {
-    if ($listingType !== 'book') {
+    if (!in_array($listingType, ['book', 'book_bundle'], TRUE)) {
       $context['message'] = (string) \Drupal::translation()->translate('Skipping unsupported listing type @type:@id.', ['@type' => $listingType, '@id' => $listingId]);
       return;
     }
@@ -490,10 +480,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return FALSE;
     }
 
-    if ($this->selectionContainsBundleListings($selection)) {
-      return FALSE;
-    }
-
     $selectedIds = [];
     foreach ($selection as $item) {
       $selectedIds[] = (int) $item['id'];
@@ -599,9 +585,15 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
         continue;
       }
 
+      $bundleLabel = (string) ($listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled bundle'));
+      $bundleLink = Link::fromTextAndUrl(
+        $bundleLabel,
+        Url::fromRoute('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $listing->id()])
+      );
+
       $options[$this->buildSelectionKey('book_bundle', (int) $listing->id())] = [
         'type' => $this->t('Book bundle'),
-        'title' => (string) ($listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled bundle')),
+        'title' => $bundleLink->toString(),
         'author' => $this->t('—'),
         'price' => $listing->get('price')->value ?? $this->t('—'),
         'location' => $listing->get('storage_location')->value ?: $this->t('Unset yet'),
@@ -656,19 +648,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       'listing_type' => $listingType,
       'id' => $entityId,
     ];
-  }
-
-  /**
-   * @param array<int,array{listing_type:string,id:int}> $selection
-   */
-  private function selectionContainsBundleListings(array $selection): bool {
-    foreach ($selection as $item) {
-      if ($item['listing_type'] === 'book_bundle') {
-        return TRUE;
-      }
-    }
-
-    return FALSE;
   }
 
   private function getEntityTypeManager(): EntityTypeManagerInterface {

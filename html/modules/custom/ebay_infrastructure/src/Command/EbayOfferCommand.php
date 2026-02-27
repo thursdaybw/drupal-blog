@@ -249,9 +249,33 @@ final class EbayOfferCommand extends DrushCommands {
     }
 
     foreach ($skus as $sku) {
-      $deletedOffers = $this->deleteInventoryForSku($sku);
+      $deletedOffers = $this->deleteInventoryForSku($sku, TRUE);
       $this->output()->writeln(sprintf(
         'Deleted %d offers and inventory item %s',
+        $deletedOffers,
+        $sku
+      ));
+    }
+  }
+
+  /**
+   * Delete inventory and offers on eBay only, without touching Drupal records.
+   *
+   * @command ebay-connector:delete-inventory-remote-only
+   *
+   * @usage  ebay-connector:delete-inventory-remote-only "SKU1 SKU2"
+   */
+  public function deleteInventoryRemoteOnly(string $skuList): void {
+    $skus = $this->parseSkuList($skuList);
+
+    if ([] === $skus) {
+      throw new InvalidArgumentException('At least one SKU must be provided to delete.');
+    }
+
+    foreach ($skus as $sku) {
+      $deletedOffers = $this->deleteInventoryForSku($sku, FALSE);
+      $this->output()->writeln(sprintf(
+        'Deleted %d offers and inventory item on eBay only: %s',
         $deletedOffers,
         $sku
       ));
@@ -271,7 +295,7 @@ final class EbayOfferCommand extends DrushCommands {
     return array_values(array_unique($skus));
   }
 
-  private function deleteInventoryForSku(string $sku): int {
+  private function deleteInventoryForSku(string $sku, bool $markLocalPublicationsEnded): int {
     $offers = [];
     try {
       $offers = $this->sellApiClient->listOffersBySku($sku);
@@ -306,8 +330,10 @@ final class EbayOfferCommand extends DrushCommands {
     }
 
     $this->sellApiClient->deleteInventoryItem($sku);
-    $this->marketplacePublicationLifecycleManager
-      ->markMarketplacePublicationsEndedBySku('ebay', $sku);
+    if ($markLocalPublicationsEnded) {
+      $this->marketplacePublicationLifecycleManager
+        ->markMarketplacePublicationsEndedBySku('ebay', $sku);
+    }
 
     return $deletedOffers;
   }
@@ -407,6 +433,90 @@ final class EbayOfferCommand extends DrushCommands {
     ));
   }
 
+  /**
+   * Audit title-based SKU/listing remap candidates.
+   *
+   * @command ebay-connector:audit-title-remap
+   */
+  public function auditTitleRemap(int $limit = 0): void {
+    $plan = $this->buildTitleBasedSkuRemapPlan($limit);
+    $this->output()->writeln(json_encode([
+      'count' => count($plan),
+      'items' => $plan,
+    ], JSON_PRETTY_PRINT));
+  }
+
+  /**
+   * Audit title-remap diagnostics with explicit skip reasons.
+   *
+   * @command ebay-connector:audit-title-remap-diagnostics
+   */
+  public function auditTitleRemapDiagnostics(int $limit = 0): void {
+    $report = $this->buildTitleBasedSkuRemapDiagnostics($limit);
+    $this->output()->writeln(json_encode($report, JSON_PRETTY_PRINT));
+  }
+
+  /**
+   * Apply title-based SKU/listing remap candidates.
+   *
+   * @command ebay-connector:apply-title-remap
+   * @option apply
+   *   Apply the remap changes. Without --apply this command prints a dry-run plan.
+   */
+  public function applyTitleRemap(int $limit = 0, array $options = ['apply' => FALSE]): void {
+    $plan = $this->buildTitleBasedSkuRemapPlan($limit);
+    $applyChanges = !empty($options['apply']);
+
+    if (!$applyChanges) {
+      $this->output()->writeln(json_encode([
+        'mode' => 'dry_run',
+        'message' => 'Pass --apply to apply changes.',
+        'count' => count($plan),
+        'items' => $plan,
+      ], JSON_PRETTY_PRINT));
+      return;
+    }
+
+    $skuStorage = $this->entityTypeManager->getStorage('ai_listing_inventory_sku');
+    $publicationStorage = $this->entityTypeManager->getStorage('ai_marketplace_publication');
+
+    $updatedSkuRows = 0;
+    $updatedPublications = 0;
+
+    foreach ($plan as $item) {
+      $skuRowId = (int) ($item['sku_row_id'] ?? 0);
+      $targetListingId = (int) ($item['to_listing_id'] ?? 0);
+      $sku = (string) ($item['sku'] ?? '');
+      if ($skuRowId <= 0 || $targetListingId <= 0 || $sku === '') {
+        continue;
+      }
+
+      $skuRow = $skuStorage->load($skuRowId);
+      if ($skuRow !== null) {
+        $skuRow->set('listing', $targetListingId);
+        $skuRow->save();
+        $updatedSkuRows++;
+      }
+
+      $publications = $publicationStorage->loadByProperties([
+        'marketplace_key' => 'ebay',
+        'inventory_sku_value' => $sku,
+      ]);
+      foreach ($publications as $publication) {
+        $publication->set('listing', $targetListingId);
+        $publication->save();
+        $updatedPublications++;
+      }
+    }
+
+    $this->output()->writeln(json_encode([
+      'mode' => 'applied',
+      'remap_count' => count($plan),
+      'updated_sku_rows' => $updatedSkuRows,
+      'updated_publications' => $updatedPublications,
+    ], JSON_PRETTY_PRINT));
+  }
+
 
   /**
    * List inventory items.
@@ -445,6 +555,287 @@ final class EbayOfferCommand extends DrushCommands {
     }
 
     $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
+  }
+
+  /**
+   * @return array<int,array{
+   *   sku_row_id:int,
+   *   sku:string,
+   *   from_listing_id:int,
+   *   from_title:string,
+   *   remote_title:string,
+   *   to_listing_id:int,
+   *   to_title:string,
+   *   publication_ids:array<int,int>
+   * }>
+   */
+  private function buildTitleBasedSkuRemapPlan(int $limit = 0): array {
+    $skuStorage = $this->entityTypeManager->getStorage('ai_listing_inventory_sku');
+    $listingStorage = $this->entityTypeManager->getStorage('bb_ai_listing');
+    $publicationStorage = $this->entityTypeManager->getStorage('ai_marketplace_publication');
+
+    $skuRows = $skuStorage->loadByProperties([
+      'is_primary' => 1,
+      'status' => 'active',
+    ]);
+    if ($skuRows === []) {
+      return [];
+    }
+
+    $plan = [];
+    $processed = 0;
+
+    foreach ($skuRows as $skuRow) {
+      if ($limit > 0 && $processed >= $limit) {
+        break;
+      }
+
+      $sku = trim((string) ($skuRow->get('sku')->value ?? ''));
+      $sourceListingId = (int) ($skuRow->get('listing')->target_id ?? 0);
+      if ($sku === '' || $sourceListingId <= 0) {
+        continue;
+      }
+
+      $remoteTitle = $this->fetchEbayInventoryTitleBySku($sku);
+      if ($remoteTitle === null) {
+        continue;
+      }
+
+      $candidateListingId = $this->resolveSingleListingCandidateByEbayTitle($remoteTitle);
+      if ($candidateListingId === null || $candidateListingId === $sourceListingId) {
+        continue;
+      }
+
+      /** @var \Drupal\ai_listing\Entity\BbAiListing|null $sourceListing */
+      $sourceListing = $listingStorage->load($sourceListingId);
+      /** @var \Drupal\ai_listing\Entity\BbAiListing|null $targetListing */
+      $targetListing = $listingStorage->load($candidateListingId);
+      if (!$sourceListing instanceof BbAiListing || !$targetListing instanceof BbAiListing) {
+        continue;
+      }
+
+      $publicationIds = [];
+      $publications = $publicationStorage->loadByProperties([
+        'marketplace_key' => 'ebay',
+        'inventory_sku_value' => $sku,
+      ]);
+      foreach ($publications as $publication) {
+        $publicationId = (int) $publication->id();
+        if ($publicationId > 0) {
+          $publicationIds[] = $publicationId;
+        }
+      }
+
+      $plan[] = [
+        'sku_row_id' => (int) $skuRow->id(),
+        'sku' => $sku,
+        'from_listing_id' => $sourceListingId,
+        'from_title' => (string) $sourceListing->label(),
+        'remote_title' => $remoteTitle,
+        'to_listing_id' => $candidateListingId,
+        'to_title' => (string) $targetListing->label(),
+        'publication_ids' => $publicationIds,
+      ];
+      $processed++;
+    }
+
+    return $plan;
+  }
+
+  /**
+   * @return array<string,mixed>
+   */
+  private function buildTitleBasedSkuRemapDiagnostics(int $limit = 0): array {
+    $skuStorage = $this->entityTypeManager->getStorage('ai_listing_inventory_sku');
+    $listingStorage = $this->entityTypeManager->getStorage('bb_ai_listing');
+
+    $skuRows = $skuStorage->loadByProperties([
+      'is_primary' => 1,
+      'status' => 'active',
+    ]);
+
+    $reasonCounts = [
+      'candidate' => 0,
+      'skipped_non_book_listing' => 0,
+      'skipped_missing_or_empty_sku' => 0,
+      'skipped_missing_source_listing' => 0,
+      'skipped_no_remote_inventory_title' => 0,
+      'skipped_no_title_match' => 0,
+      'skipped_ambiguous_title_match' => 0,
+      'skipped_already_correct_owner' => 0,
+      'skipped_missing_target_listing' => 0,
+    ];
+
+    $samples = [];
+    $sampleLimit = 40;
+    $scanned = 0;
+    $candidates = 0;
+
+    foreach ($skuRows as $skuRow) {
+      if ($limit > 0 && $scanned >= $limit) {
+        break;
+      }
+      $scanned++;
+
+      $sku = trim((string) ($skuRow->get('sku')->value ?? ''));
+      $sourceListingId = (int) ($skuRow->get('listing')->target_id ?? 0);
+      if ($sku === '' || $sourceListingId <= 0) {
+        $reasonCounts['skipped_missing_or_empty_sku']++;
+        $this->appendDiagnosticSample($samples, $sampleLimit, [
+          'sku_row_id' => (int) $skuRow->id(),
+          'sku' => $sku,
+          'source_listing_id' => $sourceListingId,
+          'reason' => 'skipped_missing_or_empty_sku',
+        ]);
+        continue;
+      }
+
+      /** @var \Drupal\ai_listing\Entity\BbAiListing|null $sourceListing */
+      $sourceListing = $listingStorage->load($sourceListingId);
+      if (!$sourceListing instanceof BbAiListing) {
+        $reasonCounts['skipped_missing_source_listing']++;
+        $this->appendDiagnosticSample($samples, $sampleLimit, [
+          'sku_row_id' => (int) $skuRow->id(),
+          'sku' => $sku,
+          'source_listing_id' => $sourceListingId,
+          'reason' => 'skipped_missing_source_listing',
+        ]);
+        continue;
+      }
+
+      if ($sourceListing->bundle() !== 'book') {
+        $reasonCounts['skipped_non_book_listing']++;
+        continue;
+      }
+
+      $remoteTitle = $this->fetchEbayInventoryTitleBySku($sku);
+      if ($remoteTitle === null) {
+        $reasonCounts['skipped_no_remote_inventory_title']++;
+        $this->appendDiagnosticSample($samples, $sampleLimit, [
+          'sku_row_id' => (int) $skuRow->id(),
+          'sku' => $sku,
+          'source_listing_id' => $sourceListingId,
+          'reason' => 'skipped_no_remote_inventory_title',
+        ]);
+        continue;
+      }
+
+      $candidateIds = $this->findListingCandidatesByRemoteEbayTitle($remoteTitle);
+      if ($candidateIds === []) {
+        $reasonCounts['skipped_no_title_match']++;
+        $this->appendDiagnosticSample($samples, $sampleLimit, [
+          'sku_row_id' => (int) $skuRow->id(),
+          'sku' => $sku,
+          'source_listing_id' => $sourceListingId,
+          'source_ebay_title' => trim((string) ($sourceListing->get('ebay_title')->value ?? '')),
+          'source_title' => (string) $sourceListing->label(),
+          'remote_title' => $remoteTitle,
+          'reason' => 'skipped_no_title_match',
+        ]);
+        continue;
+      }
+      if (count($candidateIds) > 1) {
+        $reasonCounts['skipped_ambiguous_title_match']++;
+        $this->appendDiagnosticSample($samples, $sampleLimit, [
+          'sku_row_id' => (int) $skuRow->id(),
+          'sku' => $sku,
+          'source_listing_id' => $sourceListingId,
+          'remote_title' => $remoteTitle,
+          'candidate_ids' => $candidateIds,
+          'reason' => 'skipped_ambiguous_title_match',
+        ]);
+        continue;
+      }
+
+      $targetListingId = (int) $candidateIds[0];
+      if ($targetListingId === $sourceListingId) {
+        $reasonCounts['skipped_already_correct_owner']++;
+        continue;
+      }
+
+      /** @var \Drupal\ai_listing\Entity\BbAiListing|null $targetListing */
+      $targetListing = $listingStorage->load($targetListingId);
+      if (!$targetListing instanceof BbAiListing) {
+        $reasonCounts['skipped_missing_target_listing']++;
+        $this->appendDiagnosticSample($samples, $sampleLimit, [
+          'sku_row_id' => (int) $skuRow->id(),
+          'sku' => $sku,
+          'source_listing_id' => $sourceListingId,
+          'remote_title' => $remoteTitle,
+          'target_listing_id' => $targetListingId,
+          'reason' => 'skipped_missing_target_listing',
+        ]);
+        continue;
+      }
+
+      $reasonCounts['candidate']++;
+      $candidates++;
+      $this->appendDiagnosticSample($samples, $sampleLimit, [
+        'sku_row_id' => (int) $skuRow->id(),
+        'sku' => $sku,
+        'source_listing_id' => $sourceListingId,
+        'source_title' => (string) $sourceListing->label(),
+        'remote_title' => $remoteTitle,
+        'target_listing_id' => $targetListingId,
+        'target_title' => (string) $targetListing->label(),
+        'reason' => 'candidate',
+      ]);
+    }
+
+    return [
+      'scanned' => $scanned,
+      'candidates' => $candidates,
+      'reason_counts' => $reasonCounts,
+      'samples' => $samples,
+    ];
+  }
+
+  private function fetchEbayInventoryTitleBySku(string $sku): ?string {
+    try {
+      $inventory = $this->sellApiClient->getInventoryItem($sku);
+    }
+    catch (\Throwable) {
+      return null;
+    }
+
+    $title = trim((string) ($inventory['product']['title'] ?? ''));
+    if ($title === '') {
+      return null;
+    }
+
+    return $title;
+  }
+
+  private function resolveSingleListingCandidateByEbayTitle(string $remoteTitle): ?int {
+    $candidateIds = $this->findListingCandidatesByRemoteEbayTitle($remoteTitle);
+    if (count($candidateIds) !== 1) {
+      return null;
+    }
+
+    return (int) $candidateIds[0];
+  }
+
+  /**
+   * @return int[]
+   */
+  private function findListingCandidatesByRemoteEbayTitle(string $remoteTitle): array {
+    $listingStorage = $this->entityTypeManager->getStorage('bb_ai_listing');
+
+    $query = $listingStorage->getQuery()->accessCheck(FALSE);
+    $query->condition('listing_type', 'book');
+    $query->condition('ebay_title', $remoteTitle);
+    return array_values($query->execute());
+  }
+
+  /**
+   * @param array<int,array<string,mixed>> $samples
+   * @param array<string,mixed> $sample
+   */
+  private function appendDiagnosticSample(array &$samples, int $sampleLimit, array $sample): void {
+    if (count($samples) >= $sampleLimit) {
+      return;
+    }
+    $samples[] = $sample;
   }
 
   private function reconcilePublishedListingFromEbay(BbAiListing $listing): string {

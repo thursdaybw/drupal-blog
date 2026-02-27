@@ -18,9 +18,9 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 abstract class AiListingReviewFormBase extends FormBase implements ContainerInjectionInterface {
 
   public function __construct(
-    protected readonly EntityTypeManagerInterface $entityTypeManager,
-    protected readonly FileUrlGeneratorInterface $fileUrlGenerator,
-    protected readonly ListingPublisher $listingPublisher,
+    protected EntityTypeManagerInterface $entityTypeManager,
+    protected FileUrlGeneratorInterface $fileUrlGenerator,
+    protected ListingPublisher $listingPublisher,
   ) {}
 
   public static function create(ContainerInterface $container): static {
@@ -122,7 +122,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
         'new' => $this->t('New'),
         'ready_for_review' => $this->t('Ready for review'),
         'ready_to_shelve' => $this->t('Ready to shelve'),
-        'published' => $this->t('Published'),
+        'shelved' => $this->t('Shelved'),
         'failed' => $this->t('Failed'),
       ],
       '#default_value' => (string) ($listing->get('status')->value ?? 'new'),
@@ -245,6 +245,15 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#default_value' => (string) ($listing->get('condition_note')->value ?? $this->buildConditionNote($existingIssues)),
       '#rows' => 3,
     ];
+    $ebayListingId = $this->getEbayMarketplaceListingId($listing);
+    if ($ebayListingId !== null) {
+      $form['condition']['ebay_listing'] = [
+        '#type' => 'markup',
+        '#markup' => $this->buildEbayListingLinkMarkup($ebayListingId),
+        '#prefix' => '<div class="ai-help">',
+        '#suffix' => '</div>',
+      ];
+    }
 
     $form['metadata'] = [
       '#type' => 'details',
@@ -432,6 +441,19 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
   }
 
   public function submitRedirectToDeleteForm(array &$form, FormStateInterface $form_state): void {
+    /** @var \Drupal\ai_listing\Entity\BbAiListing $listing */
+    $listing = $form_state->get('listing');
+    if (!$listing instanceof BbAiListing) {
+      $form_state->setRedirect('ai_listing.location_batch');
+      return;
+    }
+
+    $selection = [[
+      'listing_type' => (string) $listing->bundle(),
+      'id' => (int) $listing->id(),
+    ]];
+
+    batch_set(AiBookListingLocationBatchForm::buildDeleteBatchDefinition($selection));
     $form_state->setRedirect('ai_listing.location_batch');
   }
 
@@ -673,6 +695,49 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     }
 
     return trim((string) ($metadata[$metadataKey] ?? ''));
+  }
+
+  private function getEbayMarketplaceListingId(BbAiListing $listing): ?string {
+    if (!$this->entityTypeManager->hasDefinition('ai_marketplace_publication')) {
+      return null;
+    }
+
+    $publicationStorage = $this->entityTypeManager->getStorage('ai_marketplace_publication');
+    $query = $publicationStorage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('listing', (int) $listing->id())
+      ->condition('marketplace_key', 'ebay')
+      ->condition('marketplace_listing_id', '', '<>')
+      ->sort('changed', 'DESC')
+      ->sort('id', 'DESC')
+      ->range(0, 1);
+    $publicationIds = array_values($query->execute());
+    if ($publicationIds === []) {
+      return null;
+    }
+
+    $publicationId = (int) $publicationIds[0];
+    $publication = $publicationStorage->load($publicationId);
+    if ($publication === null) {
+      return null;
+    }
+
+    $marketplaceListingId = trim((string) ($publication->get('marketplace_listing_id')->value ?? ''));
+    if ($marketplaceListingId === '') {
+      return null;
+    }
+
+    return $marketplaceListingId;
+  }
+
+  private function buildEbayListingLinkMarkup(string $ebayListingId): string {
+    $escapedListingId = Html::escape($ebayListingId);
+    $url = 'https://www.ebay.com.au/itm/' . rawurlencode($ebayListingId);
+    return sprintf(
+      '<a href="%s" target="_blank" rel="noopener noreferrer">View eBay listing %s</a>',
+      Html::escape($url),
+      $escapedListingId
+    );
   }
 
   abstract protected function resolveListing(?BbAiListing $listing): BbAiListing;

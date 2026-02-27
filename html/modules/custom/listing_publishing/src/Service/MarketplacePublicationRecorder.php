@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\listing_publishing\Service;
 
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\AiListingInventorySku;
 use Drupal\ai_listing\Entity\AiMarketplacePublication;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -17,7 +17,7 @@ final class MarketplacePublicationRecorder {
   ) {}
 
   public function recordSuccessfulPublish(
-    AiBookListing $listing,
+    BbAiListing $listing,
     AiListingInventorySku $inventorySku,
     string $marketplaceKey,
     MarketplacePublishResult $result,
@@ -34,7 +34,7 @@ final class MarketplacePublicationRecorder {
   }
 
   public function recordPublicationSnapshot(
-    AiBookListing $listing,
+    BbAiListing $listing,
     AiListingInventorySku $inventorySku,
     string $marketplaceKey,
     string $publicationType,
@@ -85,7 +85,7 @@ final class MarketplacePublicationRecorder {
   }
 
   private function loadPublicationRecord(
-    AiBookListing $listing,
+    BbAiListing $listing,
     string $marketplaceKey,
     string $publicationType,
   ): ?AiMarketplacePublication {

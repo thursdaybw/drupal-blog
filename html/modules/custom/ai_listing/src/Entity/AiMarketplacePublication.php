@@ -32,9 +32,9 @@ final class AiMarketplacePublication extends ContentEntityBase {
     $fields = parent::baseFieldDefinitions($entity_type);
 
     $fields['ai_book_listing'] = BaseFieldDefinition::create('entity_reference')
-      ->setLabel('AI Book Listing')
+      ->setLabel('BB AI Listing')
       ->setRequired(TRUE)
-      ->setSetting('target_type', 'ai_book_listing');
+      ->setSetting('target_type', 'bb_ai_listing');
 
     $fields['inventory_sku'] = BaseFieldDefinition::create('entity_reference')
       ->setLabel('Inventory SKU')

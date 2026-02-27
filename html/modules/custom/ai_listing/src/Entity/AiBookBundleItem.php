@@ -34,7 +34,7 @@ final class AiBookBundleItem extends ContentEntityBase {
     $fields['bundle_listing'] = BaseFieldDefinition::create('entity_reference')
       ->setLabel('Bundle listing')
       ->setRequired(TRUE)
-      ->setSetting('target_type', 'ai_book_bundle_listing');
+      ->setSetting('target_type', 'bb_ai_listing');
 
     $fields['weight'] = BaseFieldDefinition::create('integer')
       ->setLabel('Weight')

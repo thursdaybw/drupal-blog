@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\ai_listing\Form;
 
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileSystemInterface;
@@ -192,7 +192,8 @@ final class AiBookListingUploadForm extends FormBase {
       return;
     }
 
-    $listing = AiBookListing::create([
+    $listing = BbAiListing::create([
+      'listing_type' => 'book',
       'status' => 'new',
     ]);
     $listing->save();
@@ -218,9 +219,6 @@ final class AiBookListingUploadForm extends FormBase {
       $file->setPermanent();
       $file->save();
 
-      // Keep legacy field synced during transition.
-      $listing->get('images')->appendItem($file->id());
-
       $itemKey = 'file_' . $fid;
       $isMetadataSource = !empty($metadataSelections[$itemKey]['is_metadata_source']);
       $this->createListingImageRecord($listingId, (int) $file->id(), $weight, $isMetadataSource);
@@ -231,7 +229,7 @@ final class AiBookListingUploadForm extends FormBase {
     $this->clearStagedFileIds($form_state);
 
     $this->messenger()->addStatus('Listing created.');
-    $form_state->setRedirect('entity.ai_book_listing.add_form');
+    $form_state->setRedirect('ai_listing.add');
   }
 
   /**
@@ -441,7 +439,7 @@ final class AiBookListingUploadForm extends FormBase {
 
     $this->entityTypeManager->getStorage('listing_image')->create([
       'owner' => [
-        'target_type' => 'ai_book_listing',
+        'target_type' => 'bb_ai_listing',
         'target_id' => $listingId,
       ],
       'file' => $fileId,

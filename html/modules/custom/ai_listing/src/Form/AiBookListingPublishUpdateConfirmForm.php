@@ -62,6 +62,7 @@ final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implem
     $listingIds = array_map('intval', $payload['listing_ids'] ?? []);
     $setLocation = (bool) ($payload['set_location'] ?? FALSE);
     $location = (string) ($payload['location'] ?? '');
+    $operationMode = (string) ($payload['operation_mode'] ?? 'publish_update');
 
     $this->getConfirmTempStore()->delete(AiBookListingLocationBatchForm::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY);
 
@@ -71,7 +72,7 @@ final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implem
       return;
     }
 
-    batch_set(AiBookListingLocationBatchForm::buildListingBatchDefinition($listingIds, $setLocation, $location));
+    batch_set(AiBookListingLocationBatchForm::buildListingBatchDefinition($listingIds, $setLocation, $location, $operationMode));
   }
 
   private function getPayload(): array {

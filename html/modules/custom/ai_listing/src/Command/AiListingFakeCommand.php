@@ -23,34 +23,35 @@ final class AiListingFakeCommand extends DrushCommands {
    */
   public function generate(int $count = 5): void {
 
-    $storage = $this->entityTypeManager->getStorage('ai_book_listing');
+    $storage = $this->entityTypeManager->getStorage('bb_ai_listing');
 
     for ($i = 1; $i <= $count; $i++) {
 
       $listing = $storage->create([
+        'listing_type' => 'book',
         'status' => 'ready_for_review',
-        'title' => "Test Book {$i}",
-        'subtitle' => '',
-        'full_title' => "Test Book {$i}",
-        'author' => 'Dev Author',
-        'isbn' => '0000000000',
-        'publisher' => 'Dev Press',
-        'publication_year' => '2025',
-        'format' => 'paperback',
-        'language' => 'English',
-        'genre' => 'Non-fiction',
-        'narrative_type' => 'Non-fiction',
-        'country_printed' => 'Australia',
-        'edition' => 'First',
-        'series' => '',
-        'features' => [],
+        'field_title' => "Test Book {$i}",
+        'field_subtitle' => '',
+        'field_full_title' => "Test Book {$i}",
+        'field_author' => 'Dev Author',
+        'field_isbn' => '0000000000',
+        'field_publisher' => 'Dev Press',
+        'field_publication_year' => '2025',
+        'field_format' => 'paperback',
+        'field_language' => 'English',
+        'field_genre' => 'Non-fiction',
+        'field_narrative_type' => 'Non-fiction',
+        'field_country_printed' => 'Australia',
+        'field_edition' => 'First',
+        'field_series' => '',
+        'field_features' => [],
         'ebay_title' => "Test Book {$i} Paperback",
         'description' => [
           'value' => $this->fakeDescription($i),
           'format' => 'basic_html',
         ],
         'condition_grade' => 'good',
-        'condition_issues' => ['edge wear'],
+        'field_condition_issues' => ['surface wear'],
         'condition_note' => 'This item is pre-owned and shows signs of previous use with edge wear. Please see photos for full details.',
       ]);
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\listing_publishing\Command;
 
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Drush\Commands\DrushCommands;
@@ -26,9 +26,9 @@ final class PublishAiListingCommand extends DrushCommands {
    *   AI book listing entity ID.
    */
   public function publish(int $id): void {
-    $storage = $this->entityTypeManager->getStorage('ai_book_listing');
+    $storage = $this->entityTypeManager->getStorage('bb_ai_listing');
 
-    /** @var \Drupal\ai_listing\Entity\AiBookListing|null $listing */
+    /** @var \Drupal\ai_listing\Entity\BbAiListing|null $listing */
     $listing = $storage->load($id);
 
     if (!$listing) {
@@ -68,13 +68,13 @@ final class PublishAiListingCommand extends DrushCommands {
     ));
   }
 
-  private function markFailure(AiBookListing $listing, string $message): void {
+  private function markFailure(BbAiListing $listing, string $message): void {
     $this->output()->writeln('<error>' . $message . '</error>');
     $listing->set('status', 'failed');
     $listing->save();
   }
 
-  private function markPublished(AiBookListing $listing, string $marketplaceId): void {
+  private function markPublished(BbAiListing $listing, string $marketplaceId): void {
     $listing->set('status', 'shelved');
     $listing->save();
   }

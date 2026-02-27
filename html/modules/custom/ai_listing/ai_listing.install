@@ -56,3 +56,220 @@ function ai_listing_update_1006() {
   \Drupal::entityDefinitionUpdateManager()
     ->installEntityType('ai_marketplace_publication');
 }
+
+/**
+ * Add bundle-specific fields to bb_ai_listing and backfill migrated rows.
+ */
+function ai_listing_update_1007() {
+  ai_listing_apply_bb_ai_listing_bundle_field_migration();
+}
+
+/**
+ * Add bundle-specific fields to bb_ai_listing and backfill migrated rows.
+ */
+function ai_listing_update_8001() {
+  ai_listing_apply_bb_ai_listing_bundle_field_migration();
+}
+
+/**
+ * Add additional book_bundle-only fields to bb_ai_listing and backfill values.
+ */
+function ai_listing_update_8002() {
+  ai_listing_apply_bb_ai_listing_bundle_field_migration();
+}
+
+/**
+ * Remove accidental bundle-count field from bb_ai_listing.
+ */
+function ai_listing_update_8003() {
+  $field = \Drupal\field\Entity\FieldConfig::loadByName('bb_ai_listing', 'book_bundle', 'field_book_bundle_count');
+  if ($field !== NULL) {
+    $field->delete();
+  }
+
+  $storage = \Drupal\field\Entity\FieldStorageConfig::loadByName('bb_ai_listing', 'field_book_bundle_count');
+  if ($storage !== NULL) {
+    $storage->delete();
+  }
+}
+
+/**
+ * Add bundle-specific fields to bb_ai_listing and backfill migrated rows.
+ */
+function ai_listing_apply_bb_ai_listing_bundle_field_migration(): void {
+  $bookFields = [
+    'field_title' => ['type' => 'string', 'label' => 'Title', 'settings' => ['max_length' => 255]],
+    'field_subtitle' => ['type' => 'string', 'label' => 'Subtitle', 'settings' => ['max_length' => 255]],
+    'field_full_title' => ['type' => 'string', 'label' => 'Full title', 'settings' => ['max_length' => 255]],
+    'field_author' => ['type' => 'string', 'label' => 'Author', 'settings' => ['max_length' => 255]],
+    'field_isbn' => ['type' => 'string', 'label' => 'ISBN', 'settings' => ['max_length' => 32]],
+    'field_publisher' => ['type' => 'string', 'label' => 'Publisher', 'settings' => ['max_length' => 255]],
+    'field_publication_year' => ['type' => 'string', 'label' => 'Publication year', 'settings' => ['max_length' => 8]],
+    'field_format' => ['type' => 'string', 'label' => 'Format', 'settings' => ['max_length' => 64]],
+    'field_language' => ['type' => 'string', 'label' => 'Language', 'settings' => ['max_length' => 64]],
+    'field_genre' => ['type' => 'string', 'label' => 'Genre', 'settings' => ['max_length' => 128]],
+    'field_narrative_type' => ['type' => 'string', 'label' => 'Narrative type', 'settings' => ['max_length' => 128]],
+    'field_country_printed' => ['type' => 'string', 'label' => 'Country printed', 'settings' => ['max_length' => 128]],
+    'field_edition' => ['type' => 'string', 'label' => 'Edition', 'settings' => ['max_length' => 64]],
+    'field_series' => ['type' => 'string', 'label' => 'Series', 'settings' => ['max_length' => 255]],
+    'field_features' => ['type' => 'string', 'label' => 'Features', 'settings' => ['max_length' => 255], 'cardinality' => -1],
+  ];
+
+  $sharedBundleFields = [
+    'field_condition_issues' => ['type' => 'string', 'label' => 'Condition issues', 'settings' => ['max_length' => 255], 'cardinality' => -1],
+  ];
+
+  $bundleOnlyFields = [
+    'field_title' => ['type' => 'string', 'label' => 'Bundle title', 'settings' => ['max_length' => 255]],
+  ];
+
+  foreach ($bookFields as $fieldName => $definition) {
+    ai_listing_ensure_bb_ai_listing_field_storage($fieldName, $definition);
+    ai_listing_ensure_bb_ai_listing_bundle_field($fieldName, 'book', $definition['label']);
+  }
+  foreach ($sharedBundleFields as $fieldName => $definition) {
+    ai_listing_ensure_bb_ai_listing_field_storage($fieldName, $definition);
+    ai_listing_ensure_bb_ai_listing_bundle_field($fieldName, 'book', $definition['label']);
+    ai_listing_ensure_bb_ai_listing_bundle_field($fieldName, 'book_bundle', $definition['label']);
+  }
+  foreach ($bundleOnlyFields as $fieldName => $definition) {
+    ai_listing_ensure_bb_ai_listing_field_storage($fieldName, $definition);
+    ai_listing_ensure_bb_ai_listing_bundle_field($fieldName, 'book_bundle', $definition['label']);
+  }
+
+  ai_listing_backfill_bb_ai_listing_book_fields();
+  ai_listing_backfill_bb_ai_listing_book_bundle_fields();
+}
+
+/**
+ * @param array{type:string,label:string,settings?:array<string,mixed>,cardinality?:int} $definition
+ */
+function ai_listing_ensure_bb_ai_listing_field_storage(string $fieldName, array $definition): void {
+  $storage = \Drupal\field\Entity\FieldStorageConfig::loadByName('bb_ai_listing', $fieldName);
+  if ($storage !== NULL) {
+    return;
+  }
+
+  $storage = \Drupal\field\Entity\FieldStorageConfig::create([
+    'field_name' => $fieldName,
+    'entity_type' => 'bb_ai_listing',
+    'type' => $definition['type'],
+    'settings' => $definition['settings'] ?? [],
+    'cardinality' => $definition['cardinality'] ?? 1,
+  ]);
+  $storage->save();
+}
+
+function ai_listing_ensure_bb_ai_listing_bundle_field(string $fieldName, string $bundle, string $label): void {
+  $field = \Drupal\field\Entity\FieldConfig::loadByName('bb_ai_listing', $bundle, $fieldName);
+  if ($field !== NULL) {
+    return;
+  }
+
+  $field = \Drupal\field\Entity\FieldConfig::create([
+    'field_name' => $fieldName,
+    'entity_type' => 'bb_ai_listing',
+    'bundle' => $bundle,
+    'label' => $label,
+    'required' => FALSE,
+  ]);
+  $field->save();
+}
+
+function ai_listing_backfill_bb_ai_listing_book_fields(): void {
+  $connection = \Drupal::database();
+  if (!$connection->schema()->tableExists('bb_ai_listing_legacy_map')) {
+    return;
+  }
+
+  $rows = $connection->select('bb_ai_listing_legacy_map', 'm')
+    ->fields('m', ['source_entity_id', 'bb_ai_listing_id'])
+    ->condition('m.source_entity_type', 'ai_book_listing')
+    ->execute()
+    ->fetchAllAssoc('source_entity_id');
+
+  if ($rows === []) {
+    return;
+  }
+
+  $sourceStorage = \Drupal::entityTypeManager()->getStorage('ai_book_listing');
+  $targetStorage = \Drupal::entityTypeManager()->getStorage('bb_ai_listing');
+
+  /** @var \Drupal\ai_listing\Entity\AiBookListing[] $source */
+  $source = $sourceStorage->loadMultiple(array_map('intval', array_keys($rows)));
+  $targetIds = [];
+  foreach ($rows as $row) {
+    $targetIds[] = (int) $row->bb_ai_listing_id;
+  }
+  /** @var \Drupal\ai_listing\Entity\BbAiListing[] $target */
+  $target = $targetStorage->loadMultiple($targetIds);
+
+  foreach ($source as $sourceEntity) {
+    $sourceId = (int) $sourceEntity->id();
+    $targetId = (int) ($rows[$sourceId]->bb_ai_listing_id ?? 0);
+    $targetEntity = $target[$targetId] ?? NULL;
+    if ($targetId <= 0 || $targetEntity === NULL) {
+      continue;
+    }
+
+    $targetEntity->set('field_title', (string) ($sourceEntity->get('title')->value ?? ''));
+    $targetEntity->set('field_subtitle', (string) ($sourceEntity->get('subtitle')->value ?? ''));
+    $targetEntity->set('field_full_title', (string) ($sourceEntity->get('full_title')->value ?? ''));
+    $targetEntity->set('field_author', (string) ($sourceEntity->get('author')->value ?? ''));
+    $targetEntity->set('field_isbn', (string) ($sourceEntity->get('isbn')->value ?? ''));
+    $targetEntity->set('field_publisher', (string) ($sourceEntity->get('publisher')->value ?? ''));
+    $targetEntity->set('field_publication_year', (string) ($sourceEntity->get('publication_year')->value ?? ''));
+    $targetEntity->set('field_format', (string) ($sourceEntity->get('format')->value ?? ''));
+    $targetEntity->set('field_language', (string) ($sourceEntity->get('language')->value ?? ''));
+    $targetEntity->set('field_genre', (string) ($sourceEntity->get('genre')->value ?? ''));
+    $targetEntity->set('field_narrative_type', (string) ($sourceEntity->get('narrative_type')->value ?? ''));
+    $targetEntity->set('field_country_printed', (string) ($sourceEntity->get('country_printed')->value ?? ''));
+    $targetEntity->set('field_edition', (string) ($sourceEntity->get('edition')->value ?? ''));
+    $targetEntity->set('field_series', (string) ($sourceEntity->get('series')->value ?? ''));
+    $targetEntity->set('field_features', $sourceEntity->get('features')->getValue());
+    $targetEntity->set('field_condition_issues', $sourceEntity->get('condition_issues')->getValue());
+    $targetEntity->save();
+  }
+}
+
+function ai_listing_backfill_bb_ai_listing_book_bundle_fields(): void {
+  $connection = \Drupal::database();
+  if (!$connection->schema()->tableExists('bb_ai_listing_legacy_map')) {
+    return;
+  }
+
+  $rows = $connection->select('bb_ai_listing_legacy_map', 'm')
+    ->fields('m', ['source_entity_id', 'bb_ai_listing_id'])
+    ->condition('m.source_entity_type', 'ai_book_bundle_listing')
+    ->execute()
+    ->fetchAllAssoc('source_entity_id');
+
+  if ($rows === []) {
+    return;
+  }
+
+  $sourceStorage = \Drupal::entityTypeManager()->getStorage('ai_book_bundle_listing');
+  $targetStorage = \Drupal::entityTypeManager()->getStorage('bb_ai_listing');
+
+  /** @var \Drupal\ai_listing\Entity\AiBookBundleListing[] $source */
+  $source = $sourceStorage->loadMultiple(array_map('intval', array_keys($rows)));
+  $targetIds = [];
+  foreach ($rows as $row) {
+    $targetIds[] = (int) $row->bb_ai_listing_id;
+  }
+  /** @var \Drupal\ai_listing\Entity\BbAiListing[] $target */
+  $target = $targetStorage->loadMultiple($targetIds);
+
+  foreach ($source as $sourceEntity) {
+    $sourceId = (int) $sourceEntity->id();
+    $targetId = (int) ($rows[$sourceId]->bb_ai_listing_id ?? 0);
+    $targetEntity = $target[$targetId] ?? NULL;
+    if ($targetId <= 0 || $targetEntity === NULL) {
+      continue;
+    }
+
+    $targetEntity->set('field_title', (string) ($sourceEntity->get('title')->value ?? ''));
+    $targetEntity->set('field_condition_issues', $sourceEntity->get('condition_issues')->getValue());
+    $targetEntity->save();
+  }
+}

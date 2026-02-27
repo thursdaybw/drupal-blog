@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\listing_publishing\Service;
 
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\file\Entity\File;
 use Drupal\listing_publishing\Model\ListingImageSource;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
@@ -22,15 +23,16 @@ final class BookListingAssembler {
   public function __construct(
     private readonly FileUrlGeneratorInterface $fileUrlGenerator,
     private readonly SkuGeneratorInterface $skuGenerator,
+    private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {}
 
-  public function assemble(AiBookListing $listing): ListingPublishRequest {
+  public function assemble(BbAiListing $listing): ListingPublishRequest {
     $title = $this->resolveTitle($listing);
     $description = $this->resolveDescription($listing, $title);
-    $author = (string) ($listing->get('author')->value ?: self::DEFAULT_AUTHOR);
+    $author = $this->resolveStringField($listing, 'field_author') ?: self::DEFAULT_AUTHOR;
     $skuSuffix = 'ai-book-' . $listing->id();
     $sku = $this->skuGenerator->generate($listing, $skuSuffix);
-    $files = $listing->get('images')->referencedEntities();
+    $files = $this->loadImageFiles($listing);
     $imageSources = $this->collectImageSources($files);
     $imageUrls = $this->collectImageUrls($files);
     $condition = (string) ($listing->get('condition_grade')->value ?? self::DEFAULT_CONDITION);
@@ -38,15 +40,15 @@ final class BookListingAssembler {
     $attributes = [
       'product_type' => 'book',
       'author' => $author,
-      'language' => $this->resolveStringField($listing, 'language') ?: 'English',
-      'isbn' => $this->resolveStringField($listing, 'isbn'),
-      'publisher' => $this->resolveStringField($listing, 'publisher'),
-      'publication_year' => $this->resolveStringField($listing, 'publication_year'),
-      'format' => $this->resolveStringField($listing, 'format'),
-      'genre' => $this->resolveStringField($listing, 'genre'),
-      'topic' => $this->resolveStringField($listing, 'narrative_type'),
-      'country_of_origin' => $this->resolveStringField($listing, 'country_printed'),
-      'series' => $this->resolveStringField($listing, 'series'),
+      'language' => $this->resolveStringField($listing, 'field_language') ?: 'English',
+      'isbn' => $this->resolveStringField($listing, 'field_isbn'),
+      'publisher' => $this->resolveStringField($listing, 'field_publisher'),
+      'publication_year' => $this->resolveStringField($listing, 'field_publication_year'),
+      'format' => $this->resolveStringField($listing, 'field_format'),
+      'genre' => $this->resolveStringField($listing, 'field_genre'),
+      'topic' => $this->resolveStringField($listing, 'field_narrative_type'),
+      'country_of_origin' => $this->resolveStringField($listing, 'field_country_printed'),
+      'series' => $this->resolveStringField($listing, 'field_series'),
       'bargain_bin' => (bool) $listing->get('bargain_bin')->value,
     ];
 
@@ -64,13 +66,13 @@ final class BookListingAssembler {
     );
   }
 
-  private function resolveTitle(AiBookListing $listing): string {
-    $title = (string) $listing->get('title')->value;
+  private function resolveTitle(BbAiListing $listing): string {
+    $title = $this->resolveStringField($listing, 'field_title');
     if ($title !== '') {
       return $title;
     }
 
-    $fullTitle = (string) $listing->get('full_title')->value;
+    $fullTitle = $this->resolveStringField($listing, 'field_full_title');
     if ($fullTitle !== '') {
       return $fullTitle;
     }
@@ -78,7 +80,7 @@ final class BookListingAssembler {
     return 'Untitled AI Listing';
   }
 
-  private function resolveDescription(AiBookListing $listing, string $title): string {
+  private function resolveDescription(BbAiListing $listing, string $title): string {
     $description = (string) $listing->get('description')->value;
     if ($description !== '') {
       return $description;
@@ -87,7 +89,7 @@ final class BookListingAssembler {
     return "AI-assisted metadata for {$title}.";
   }
 
-  private function resolvePrice(AiBookListing $listing): string {
+  private function resolvePrice(BbAiListing $listing): string {
     $value = $listing->get('price')->value ?? '';
     $resolved = is_numeric($value) ? (string) $value : '';
     return $resolved !== '' ? $resolved : self::DEFAULT_PRICE;
@@ -129,9 +131,48 @@ final class BookListingAssembler {
     return $urls;
   }
 
-  private function resolveStringField(AiBookListing $listing, string $field): string {
+  private function resolveStringField(BbAiListing $listing, string $field): string {
     $value = $listing->get($field)->value ?? '';
     return is_string($value) ? $value : '';
+  }
+
+  /**
+   * @return File[]
+   */
+  private function loadImageFiles(BbAiListing $listing): array {
+    if (!$this->entityTypeManager->hasDefinition('listing_image')) {
+      return [];
+    }
+
+    $listingImageStorage = $this->entityTypeManager->getStorage('listing_image');
+    $fileStorage = $this->entityTypeManager->getStorage('file');
+    $ids = $listingImageStorage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('owner.target_type', 'bb_ai_listing')
+      ->condition('owner.target_id', (int) $listing->id())
+      ->sort('weight', 'ASC')
+      ->sort('id', 'ASC')
+      ->range(0, 24)
+      ->execute();
+
+    if ($ids === []) {
+      return [];
+    }
+
+    $listingImages = $listingImageStorage->loadMultiple($ids);
+    $files = [];
+    foreach ($listingImages as $listingImage) {
+      $fileId = (int) ($listingImage->get('file')->target_id ?? 0);
+      if ($fileId <= 0) {
+        continue;
+      }
+      $file = $fileStorage->load($fileId);
+      if ($file instanceof File) {
+        $files[] = $file;
+      }
+    }
+
+    return $files;
   }
 
 }

@@ -11,8 +11,20 @@ ai_listing.add_menu:
   parent: ai_listing.group
   weight: 10
 
+ai_listing.add_bundle_menu:
+  title: 'Add AI Book Bundle Listing'
+  route_name: ai_listing.bundle_add
+  parent: ai_listing.group
+  weight: 11
+
 ai_listing.bulk_location:
   title: 'Batch location update'
   route_name: ai_listing.location_batch
   parent: ai_listing.group
   weight: 20
+
+ai_listing.types:
+  title: 'Listing types'
+  route_name: entity.bb_ai_listing_type.collection
+  parent: ai_listing.group
+  weight: 30

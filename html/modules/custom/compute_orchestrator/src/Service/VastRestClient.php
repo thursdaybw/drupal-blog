@@ -146,14 +146,16 @@ final class VastRestClient implements VastRestClientInterface {
   public function selectBestOffer( array $filters, array $excludeHosts = [], array $excludeRegions = [], int $limit = 5, ?float $maxPrice = null): ?array {
 
     $offers = $this->searchOffersStructured($filters, $limit);
+    $excludedHostIds = $this->normalizeHostIds($excludeHosts);
+    $hostStats = $this->getHostStats();
 
     $valid = [];
 
     foreach ($offers as $offer) {
 
-      $hostId = (string) ($offer['host_id'] ?? '');
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
 
-      if (in_array($hostId, $excludeHosts, true)) {
+      if ($hostId !== '' && in_array($hostId, $excludedHostIds, true)) {
         continue;
       }
 
@@ -178,6 +180,8 @@ final class VastRestClient implements VastRestClientInterface {
     if (empty($valid)) {
       return null;
     }
+
+    $valid = $this->preferKnownGoodOffersWhenAvailable($valid, $hostStats);
 
     usort($valid, function ($a, $b) {
       return ($a['dph_total'] ?? 0) <=> ($b['dph_total'] ?? 0);
@@ -266,7 +270,8 @@ final class VastRestClient implements VastRestClientInterface {
       if ($statusMsg !== '' && (
         stripos($statusMsg, 'OCI runtime create failed') !== false ||
         stripos($statusMsg, 'failed to create task for container') !== false ||
-        stripos($statusMsg, 'Error response from daemon') !== false
+        stripos($statusMsg, 'Error response from daemon') !== false ||
+        stripos($statusMsg, 'no such container') !== false
       )) {
         throw new \RuntimeException('Container start failed: ' . $statusMsg);
       }
@@ -541,7 +546,6 @@ final class VastRestClient implements VastRestClientInterface {
     int $bootTimeoutSeconds = 600
   ): array {
 
-    $preferSuccessHosts = (bool) ($createOptions['prefer_success_hosts'] ?? true);
     $preserveOnFailure = (bool) ($createOptions['preserve_on_failure'] ?? false);
     $workload = (string) ($createOptions['workload'] ?? 'vllm');
 
@@ -577,13 +581,19 @@ final class VastRestClient implements VastRestClientInterface {
       throw new \RuntimeException('No offers returned from Vast.');
     }
 
+    $offerHostIds = $this->extractOfferHostIds($offers);
+    $matchedGlobalBadHosts = $this->findMatchedHostIds($offerHostIds, $globallyBlockedHosts);
+    $matchedWorkloadBadHosts = $this->findMatchedHostIds($offerHostIds, $workloadBlockedHosts);
+
+    $this->logMatchedBadHostsForOfferSelection($workload, $matchedGlobalBadHosts, $matchedWorkloadBadHosts);
+
     // Filter + sort same logic as selectBestOffer
     $valid = [];
 
     foreach ($offers as $offer) {
 
-      $hostId = (string) ($offer['host_id'] ?? '');
-      if (in_array($hostId, $excludedHostIds, true)) {
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
+      if ($hostId !== '' && in_array($hostId, $excludedHostIds, true)) {
         continue;
       }
 
@@ -611,15 +621,16 @@ final class VastRestClient implements VastRestClientInterface {
     }
 
     $hostStats = $this->getHostStats();
-    usort($valid, function ($a, $b) use ($hostStats, $preferSuccessHosts) {
-      if ($preferSuccessHosts) {
-        $hostA = (string) ($a['host_id'] ?? '');
-        $hostB = (string) ($b['host_id'] ?? '');
-        $successA = (int) ($hostStats[$hostA]['success'] ?? 0);
-        $successB = (int) ($hostStats[$hostB]['success'] ?? 0);
-        if ($successA !== $successB) {
-          return $successB <=> $successA;
-        }
+    $valid = $this->preferKnownGoodOffersWhenAvailable($valid, $hostStats);
+
+    usort($valid, function ($a, $b) use ($hostStats) {
+      $hostA = $this->normalizeHostId($a['host_id'] ?? null);
+      $hostB = $this->normalizeHostId($b['host_id'] ?? null);
+      $successA = (int) ($hostStats[$hostA]['success'] ?? 0);
+      $successB = (int) ($hostStats[$hostB]['success'] ?? 0);
+
+      if ($successA !== $successB) {
+        return $successB <=> $successA;
       }
 
       return ($a['dph_total'] ?? 0) <=> ($b['dph_total'] ?? 0);
@@ -634,8 +645,8 @@ final class VastRestClient implements VastRestClientInterface {
         break;
       }
 
-      $hostId = (string) ($offer['host_id'] ?? '');
-      if (in_array($hostId, $excludedHostIds, true)) {
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
+      if ($hostId !== '' && in_array($hostId, $excludedHostIds, true)) {
         continue;
       }
 
@@ -682,24 +693,33 @@ final class VastRestClient implements VastRestClientInterface {
           $isInfraFatal = $e->getFailureClass() === FailureClass::INFRA_FATAL;
         }
 
-        if ($e instanceof WorkloadReadinessException) {
+        if ($hostId !== '') {
+          $shouldRecordWorkloadBadHost = false;
+          $workloadBadHostReason = '';
 
-          $failureClass = $e->getFailureClass();
-
-          if ($failureClass === FailureClass::WORKLOAD_INCOMPATIBLE && $hostId !== '') {
-
-            $key = 'compute_orchestrator.workload_bad_hosts';
-            $all = \Drupal::state()->get($key, []);
-
-            if (!isset($all[$workload]) || !is_array($all[$workload])) {
-              $all[$workload] = [];
+          if ($e instanceof WorkloadReadinessException) {
+            $failureClass = $e->getFailureClass();
+            if ($failureClass === FailureClass::WORKLOAD_INCOMPATIBLE) {
+              $shouldRecordWorkloadBadHost = true;
+              $workloadBadHostReason = 'workload_incompatible';
             }
+          }
 
-            if (!in_array($hostId, $all[$workload], true)) {
-              $all[$workload][] = $hostId;
-              \Drupal::state()->set($key, $all);
-              $this->logWithTime("Added host {$hostId} to WORKLOAD blacklist [{$workload}]");
-            }
+          if (
+            !$shouldRecordWorkloadBadHost &&
+            $this->isAbsoluteSafetyTimeoutForWorkload($lastFailureMessage, $workload)
+          ) {
+            $shouldRecordWorkloadBadHost = true;
+            $workloadBadHostReason = 'absolute_safety_timeout';
+          }
+
+          if ($shouldRecordWorkloadBadHost) {
+            $this->addHostToWorkloadBlacklist(
+              $hostId,
+              $workload,
+              $contractId,
+              $workloadBadHostReason
+            );
           }
         }
 
@@ -707,6 +727,11 @@ final class VastRestClient implements VastRestClientInterface {
         if ($isInfraFatal && $hostId !== '') {
           $this->incrementInfraFailureStats($hostId);
           $this->addToGlobalBlacklist($hostId);
+          $this->logWithTime(sprintf(
+            'Recorded GLOBAL bad host: instance=%s host=%s',
+            !empty($contractId) ? (string) $contractId : '(unknown)',
+            $hostId
+          ));
         }
 
         foreach ($this->extractCdiDeviceIds($lastFailureMessage) as $deviceId) {
@@ -741,9 +766,14 @@ final class VastRestClient implements VastRestClientInterface {
 
         if ($hostId !== '') {
           $excludedHostIds[] = $hostId;
+          $excludedHostIds = array_values(array_unique($this->normalizeHostIds($excludedHostIds)));
           if ($isInfraFatal) {
             $this->badHosts->add($hostId);
-            $this->logWithTime('Added bad host to registry: ' . $hostId);
+            $this->logWithTime(sprintf(
+              'Recorded REGISTRY bad host: instance=%s host=%s',
+              !empty($contractId) ? (string) $contractId : '(unknown)',
+              $hostId
+            ));
           }
         }
 
@@ -1014,18 +1044,168 @@ final class VastRestClient implements VastRestClientInterface {
     $normalized = [];
 
     foreach ($rawHostIds as $key => $value) {
-      if (is_scalar($value) && trim((string) $value) !== '') {
-        $normalized[] = trim((string) $value);
-        continue;
+      if (is_scalar($value)) {
+        $normalizedValue = $this->normalizeHostId($value);
+        if ($normalizedValue !== '') {
+          $normalized[] = $normalizedValue;
+          continue;
+        }
       }
 
       // Support associative maps keyed by host ID (e.g. host => timestamp/reason).
-      if (is_scalar($key) && trim((string) $key) !== '') {
-        $normalized[] = trim((string) $key);
+      if (is_scalar($key)) {
+        $normalizedKey = $this->normalizeHostId($key);
+        if ($normalizedKey !== '') {
+          $normalized[] = $normalizedKey;
+        }
+        continue;
       }
     }
 
     return array_values(array_unique($normalized));
+  }
+
+  private function normalizeHostId(mixed $rawHostId): string {
+    if (!is_scalar($rawHostId)) {
+      return '';
+    }
+
+    $hostId = trim((string) $rawHostId);
+    if ($hostId === '') {
+      return '';
+    }
+
+    // Normalize numeric host IDs so integer and float-like string encodings match.
+    if (preg_match('/^[0-9]+(?:\\.0+)?$/', $hostId) === 1) {
+      $hostId = (string) ((int) (float) $hostId);
+    }
+
+    return $hostId;
+  }
+
+  private function preferKnownGoodOffersWhenAvailable(array $offers, array $hostStats): array {
+    $knownGoodOffers = [];
+
+    foreach ($offers as $offer) {
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
+      $hostSuccessCount = (int) ($hostStats[$hostId]['success'] ?? 0);
+
+      if ($hostSuccessCount > 0) {
+        $knownGoodOffers[] = $offer;
+      }
+    }
+
+    if (!empty($knownGoodOffers)) {
+      $this->logWithTime(
+        sprintf(
+          'Known-good preference active: using %d known-good offers out of %d candidates.',
+          count($knownGoodOffers),
+          count($offers)
+        )
+      );
+      return $knownGoodOffers;
+    }
+
+    return $offers;
+  }
+
+  private function logMatchedBadHostsForOfferSelection(string $workload, array $matchedGlobalBadHosts, array $matchedWorkloadBadHosts): void {
+    if (!empty($matchedGlobalBadHosts)) {
+      $this->logWithTime(
+        'Offer selection matched GLOBAL bad hosts: ' . implode(',', $matchedGlobalBadHosts)
+      );
+    }
+    else {
+      $this->logWithTime('Offer selection matched GLOBAL bad hosts: (none)');
+    }
+
+    if (!empty($matchedWorkloadBadHosts)) {
+      $this->logWithTime(
+        sprintf(
+          'Offer selection matched WORKLOAD bad hosts [%s]: %s',
+          $workload,
+          implode(',', $matchedWorkloadBadHosts)
+        )
+      );
+    }
+    else {
+      $this->logWithTime(
+        sprintf(
+          'Offer selection matched WORKLOAD bad hosts [%s]: (none)',
+          $workload
+        )
+      );
+    }
+  }
+
+  private function extractOfferHostIds(array $offers): array {
+    $hostIds = [];
+
+    foreach ($offers as $offer) {
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
+      if ($hostId === '') {
+        continue;
+      }
+
+      $hostIds[] = $hostId;
+    }
+
+    return array_values(array_unique($hostIds));
+  }
+
+  private function findMatchedHostIds(array $offerHostIds, array $blockedHostIds): array {
+    if (empty($offerHostIds) || empty($blockedHostIds)) {
+      return [];
+    }
+
+    $normalizedOfferHostIds = $this->normalizeHostIds($offerHostIds);
+    $normalizedBlockedHostIds = $this->normalizeHostIds($blockedHostIds);
+    $matched = array_values(array_intersect($normalizedOfferHostIds, $normalizedBlockedHostIds));
+
+    return array_values(array_unique($matched));
+  }
+
+  private function addHostToWorkloadBlacklist(string $hostId, string $workload, ?string $contractId, string $reason): void {
+    $key = 'compute_orchestrator.workload_bad_hosts';
+    $all = \Drupal::state()->get($key, []);
+
+    if (!isset($all[$workload]) || !is_array($all[$workload])) {
+      $all[$workload] = [];
+    }
+
+    $normalizedWorkloadHosts = $this->normalizeHostIds($all[$workload]);
+    if (in_array($hostId, $normalizedWorkloadHosts, true)) {
+      return;
+    }
+
+    $all[$workload][] = $hostId;
+    \Drupal::state()->set($key, $all);
+
+    $this->logWithTime(sprintf(
+      'Recorded WORKLOAD bad host: instance=%s host=%s workload=%s reason=%s',
+      !empty($contractId) ? (string) $contractId : '(unknown)',
+      $hostId,
+      $workload,
+      $reason !== '' ? $reason : '(unknown)'
+    ));
+  }
+
+  private function isAbsoluteSafetyTimeoutForWorkload(string $message, string $workload): bool {
+    if ($message === '') {
+      return false;
+    }
+
+    $lower = strtolower($message);
+    $prefix = 'instance exceeded absolute safety timeout for workload ';
+    if (!str_contains($lower, $prefix)) {
+      return false;
+    }
+
+    if ($workload === '') {
+      return true;
+    }
+
+    return str_contains($lower, strtolower($workload));
   }
 
   private function resolveSshKeyPath(): ?string {

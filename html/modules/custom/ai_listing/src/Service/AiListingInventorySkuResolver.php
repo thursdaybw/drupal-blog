@@ -43,7 +43,7 @@ final class AiListingInventorySkuResolver {
       $skuRecord = $this->entityTypeManager
         ->getStorage('ai_listing_inventory_sku')
         ->create([
-        'ai_book_listing' => $listing->id(),
+        'listing' => $listing->id(),
         'is_primary' => TRUE,
       ]);
     }
@@ -74,7 +74,7 @@ final class AiListingInventorySkuResolver {
 
     $storage = $this->entityTypeManager->getStorage('ai_listing_inventory_sku');
     $records = $storage->loadByProperties([
-      'ai_book_listing' => $listing->id(),
+      'listing' => $listing->id(),
       'is_primary' => 1,
       'status' => 'active',
     ]);

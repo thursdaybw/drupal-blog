@@ -41,8 +41,6 @@ final class ListingImage extends ContentEntityBase {
       ->setSetting('exclude_entity_types', FALSE)
       ->setSetting('entity_type_ids', [
         'bb_ai_listing' => 'bb_ai_listing',
-        'ai_book_listing' => 'ai_book_listing',
-        'ai_book_bundle_listing' => 'ai_book_bundle_listing',
         'ai_book_bundle_item' => 'ai_book_bundle_item',
       ]);
 
@@ -82,14 +80,6 @@ final class ListingImage extends ContentEntityBase {
     }
 
     if ($ownerTargetType === 'bb_ai_listing') {
-      return;
-    }
-
-    if ($ownerTargetType === 'ai_book_listing') {
-      return;
-    }
-
-    if ($ownerTargetType === 'ai_book_bundle_listing') {
       return;
     }
 

@@ -50,13 +50,13 @@ final class MarketplacePublicationRecorder {
       $publication = $this->entityTypeManager
         ->getStorage('ai_marketplace_publication')
         ->create([
-          'ai_book_listing' => $listing->id(),
+          'listing' => $listing->id(),
           'marketplace_key' => $marketplaceKey,
           'publication_type' => $normalizedPublicationType,
         ]);
     }
 
-    $publication->set('ai_book_listing', $listing->id());
+    $publication->set('listing', $listing->id());
     $publication->set('inventory_sku', $inventorySku->id());
     $publication->set('inventory_sku_value', (string) $inventorySku->get('sku')->value);
     $publication->set('marketplace_key', $marketplaceKey);
@@ -92,7 +92,7 @@ final class MarketplacePublicationRecorder {
     $storage = $this->entityTypeManager->getStorage('ai_marketplace_publication');
 
     $records = $storage->loadByProperties([
-      'ai_book_listing' => $listing->id(),
+      'listing' => $listing->id(),
       'marketplace_key' => $marketplaceKey,
       'publication_type' => $publicationType,
     ]);

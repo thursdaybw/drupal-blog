@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\AiBookBundleItem;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\file\FileInterface;
@@ -13,7 +13,7 @@ use Drupal\file\FileInterface;
  */
 function ai_listing_entity_predelete(EntityInterface $entity): void {
 
-  $isBookListing = $entity instanceof AiBookListing;
+  $isBookListing = $entity instanceof BbAiListing;
   $isBundleItem = $entity instanceof AiBookBundleItem;
 
   if (!$isBookListing && !$isBundleItem) {
@@ -38,22 +38,15 @@ function ai_listing_entity_predelete(EntityInterface $entity): void {
     $uuId = $entity->uuid();
     $directory = "public://ai-listings/{$uuId}";
 
-    foreach ($entity->get('images') as $item) {
-      $file = $fileStorage->load($item->target_id);
-      if ($file) {
-        $file->delete();
-      }
-    }
-
     if ($skuStorage !== null) {
-      $skuRecords = $skuStorage->loadByProperties(['ai_book_listing' => $entity->id()]);
+      $skuRecords = $skuStorage->loadByProperties(['listing' => $entity->id()]);
       foreach ($skuRecords as $skuRecord) {
         $skuRecord->delete();
       }
     }
 
     if ($publicationStorage !== null) {
-      $publicationRecords = $publicationStorage->loadByProperties(['ai_book_listing' => $entity->id()]);
+      $publicationRecords = $publicationStorage->loadByProperties(['listing' => $entity->id()]);
       foreach ($publicationRecords as $publicationRecord) {
         $publicationRecord->delete();
       }
@@ -62,13 +55,26 @@ function ai_listing_entity_predelete(EntityInterface $entity): void {
     if ($listingImageStorage !== null) {
       $ids = $listingImageStorage->getQuery()
         ->accessCheck(FALSE)
-        ->condition('owner.target_type', 'ai_book_listing')
+        ->condition('owner.target_type', 'bb_ai_listing')
         ->condition('owner.target_id', (int) $entity->id())
         ->execute();
       $listingImages = $ids === [] ? [] : $listingImageStorage->loadMultiple($ids);
       foreach ($listingImages as $listingImage) {
+        $fileId = (int) ($listingImage->get('file')->target_id ?? 0);
+        if ($fileId > 0) {
+          $file = $fileStorage->load($fileId);
+          if ($file) {
+            $file->delete();
+          }
+        }
         $listingImage->delete();
       }
+    }
+
+    $bundleItems = $entityTypeManager->getStorage('ai_book_bundle_item')
+      ->loadByProperties(['bundle_listing' => $entity->id()]);
+    foreach ($bundleItems as $bundleItem) {
+      $bundleItem->delete();
     }
 
     if ($fileSystem->prepareDirectory($directory, FileSystemInterface::MODIFY_PERMISSIONS)) {

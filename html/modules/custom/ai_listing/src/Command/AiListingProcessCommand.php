@@ -42,11 +42,12 @@ final class AiListingProcessCommand extends Command {
     foreach (array_values($ids) as $index => $id) {
       $listing = $this->batchProcessor->loadListing($id);
       if (!$listing) {
-        $output->writeln(sprintf('Book %d/%d (ID %d) not found, skipping.', $index + 1, $total, $id));
+        $output->writeln(sprintf('Listing %d/%d (ID %d) not found, skipping.', $index + 1, $total, $id));
         continue;
       }
 
-      $output->writeln(sprintf('Book %d/%d (ID %d): processing...', $index + 1, $total, $id));
+      $listingLabel = $listing->bundle() === 'book_bundle' ? 'Bundle' : 'Book';
+      $output->writeln(sprintf('%s %d/%d (ID %d): processing...', $listingLabel, $index + 1, $total, $id));
       $itemStart = microtime(true);
 
       try {
@@ -60,8 +61,8 @@ final class AiListingProcessCommand extends Command {
       finally {
         $duration = microtime(true) - $itemStart;
         $durations[] = $duration;
-        $title = (string) ($listing->get('field_title')->value ?? '');
-        $edition = (string) ($listing->get('field_edition')->value ?? '');
+        $title = $listing->hasField('field_title') ? (string) ($listing->get('field_title')->value ?? '') : '';
+        $edition = $listing->hasField('field_edition') ? (string) ($listing->get('field_edition')->value ?? '') : '';
         $output->writeln(sprintf('  Title: %s', $title ?: '<unknown>'));
         $output->writeln(sprintf('  Edition: %s', $edition ?: '<n/a>'));
         $output->writeln(sprintf('  Took %0.2fs', $duration));
@@ -75,7 +76,7 @@ final class AiListingProcessCommand extends Command {
     $output->writeln(sprintf('  Total time: %0.2fs', $totalTime));
     if (!empty($durations)) {
       $average = array_sum($durations) / count($durations);
-      $output->writeln(sprintf('  Average per book: %0.2fs', $average));
+      $output->writeln(sprintf('  Average per listing: %0.2fs', $average));
     }
 
     return self::SUCCESS;

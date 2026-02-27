@@ -40,7 +40,7 @@ final class AiBookListingBatchDataExtractionProcessor {
       ->getQuery()
       ->accessCheck(FALSE)
       ->condition('status', 'new')
-      ->condition('listing_type', 'book')
+      ->condition('listing_type', ['book', 'book_bundle'], 'IN')
       ->execute());
   }
 

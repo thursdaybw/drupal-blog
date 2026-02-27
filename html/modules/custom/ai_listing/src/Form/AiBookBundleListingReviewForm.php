@@ -185,6 +185,9 @@ final class AiBookBundleListingReviewForm extends AiListingReviewFormBase {
         '#theme' => 'image_style',
         '#style_name' => 'thumbnail',
         '#uri' => $uri,
+        '#attributes' => [
+          'data-full-src' => $this->fileUrlGenerator->generateString($uri),
+        ],
       ],
       'is_metadata_source' => [
         '#type' => 'checkbox',
@@ -241,4 +244,3 @@ final class AiBookBundleListingReviewForm extends AiListingReviewFormBase {
   }
 
 }
-

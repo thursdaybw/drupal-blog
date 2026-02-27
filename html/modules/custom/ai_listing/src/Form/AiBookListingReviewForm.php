@@ -112,6 +112,9 @@ final class AiBookListingReviewForm extends AiListingReviewFormBase {
         '#theme' => 'image_style',
         '#style_name' => 'thumbnail',
         '#uri' => $file->getFileUri(),
+        '#attributes' => [
+          'data-full-src' => $this->fileUrlGenerator->generateString($file->getFileUri()),
+        ],
       ];
       $items[$itemKey]['is_metadata_source'] = [
         '#type' => 'checkbox',
@@ -148,4 +151,3 @@ final class AiBookListingReviewForm extends AiListingReviewFormBase {
   }
 
 }
-

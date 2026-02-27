@@ -12,6 +12,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\Core\Url;
+use Drupal\Component\Render\MarkupInterface;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -39,8 +40,10 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   }
 
   public function buildForm(array $form, FormStateInterface $form_state): array {
-    $statusFilter = $form_state->getValue('status_filter') ?? 'ready_to_shelve';
-    $bargainFilter = (bool) $form_state->getValue('bargain_bin_filter');
+    $statusFilter = $this->resolveFilterValue($form_state, 'status_filter', 'any');
+    $bargainFilterMode = $this->resolveFilterValue($form_state, 'bargain_bin_filter', 'any');
+    $publishedToEbayFilterMode = $this->resolveFilterValue($form_state, 'published_to_ebay_filter', 'any');
+    $searchQuery = trim($this->resolveFilterValue($form_state, 'search_query', ''));
 
     $form['filters'] = [
       '#type' => 'container',
@@ -51,12 +54,12 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       '#type' => 'select',
       '#title' => $this->t('Status filter'),
       '#options' => [
+        'any' => $this->t('Any'),
         'new' => $this->t('New'),
         'processing' => $this->t('Processing'),
         'ready_for_review' => $this->t('Ready for review'),
         'ready_to_shelve' => $this->t('Ready to shelve'),
         'shelved' => $this->t('Shelved'),
-        'published' => $this->t('Published'),
         'failed' => $this->t('Failed'),
       ],
       '#default_value' => $statusFilter,
@@ -67,10 +70,58 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     ];
 
     $form['filters']['bargain_bin_filter'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Only bargain bin'),
-      '#default_value' => $bargainFilter,
-      '#description' => $this->t('Show only listings flagged for the bargain bin shipping policy.'),
+      '#type' => 'select',
+      '#title' => $this->t('Bargain bin'),
+      '#options' => [
+        'any' => $this->t('Any'),
+        'yes' => $this->t('Yes'),
+        'no' => $this->t('No'),
+      ],
+      '#default_value' => $bargainFilterMode,
+      '#description' => $this->t('Filter by bargain bin flag.'),
+      '#ajax' => [
+        'callback' => '::updateListingsCallback',
+        'wrapper' => 'ai-batch-listings',
+      ],
+    ];
+
+    $form['filters']['published_to_ebay_filter'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Published to eBay'),
+      '#options' => [
+        'any' => $this->t('Any'),
+        'yes' => $this->t('Yes'),
+        'no' => $this->t('No'),
+      ],
+      '#default_value' => $publishedToEbayFilterMode,
+      '#description' => $this->t('Filter by active eBay publication record.'),
+      '#ajax' => [
+        'callback' => '::updateListingsCallback',
+        'wrapper' => 'ai-batch-listings',
+      ],
+    ];
+
+    $form['filters']['search_query'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Search'),
+      '#default_value' => $searchQuery,
+      '#description' => $this->t('Match title, author, or description.'),
+      '#attributes' => [
+        'id' => 'ai-listing-search-query',
+        'autocomplete' => 'off',
+        'placeholder' => 'title, author, description',
+      ],
+    ];
+
+    $form['filters']['apply_filters'] = [
+      '#type' => 'submit',
+      '#name' => 'apply_filters',
+      '#value' => $this->t('Apply filters'),
+      '#limit_validation_errors' => [],
+      '#submit' => ['::submitApplyFilters'],
+      '#attributes' => [
+        'id' => 'ai-listing-apply-filters',
+      ],
       '#ajax' => [
         'callback' => '::updateListingsCallback',
         'wrapper' => 'ai-batch-listings',
@@ -86,14 +137,19 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       '#type' => 'tableselect',
       '#header' => [
         'type' => $this->t('Type'),
+        'entity_id' => $this->t('Entity ID'),
+        'sku' => $this->t('SKU'),
+        'status' => $this->t('Status'),
+        'ebay' => $this->t('eBay'),
         'title' => $this->t('Title'),
         'author' => $this->t('Author'),
         'price' => $this->t('Price'),
         'location' => $this->t('Current location'),
+        'published_to_ebay' => $this->t('Published to eBay'),
         'created' => $this->t('Created'),
       ],
-      '#options' => $this->buildReadyToShelveOptions($statusFilter, $bargainFilter),
-      '#empty' => $this->t('No listings are ready for shelving at the moment.'),
+      '#options' => $this->buildReadyToShelveOptions($statusFilter, $bargainFilterMode, $publishedToEbayFilterMode, $searchQuery),
+      '#empty' => $this->t('No listings match the selected filters.'),
       '#multiple' => TRUE,
       '#default_value' => [],
     ];
@@ -136,7 +192,15 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     return $form['listings_container'];
   }
 
+  public function submitApplyFilters(array &$form, FormStateInterface $form_state): void {
+    $form_state->setRebuild();
+  }
+
   public function validateForm(array &$form, FormStateInterface $form_state): void {
+    if ($this->isApplyFiltersAction($form_state) || $this->isFilterDropdownAjaxAction($form_state)) {
+      return;
+    }
+
     $selection = $this->getSelectedListingRefs($form_state);
     if ($selection === []) {
       $form_state->setErrorByName('listings', $this->t('Select at least one listing to update.'));
@@ -458,6 +522,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       ->getQuery()
       ->accessCheck(FALSE)
       ->condition('listing', $listingId)
+      ->condition('status', ['published', 'publishing'], 'IN')
       ->range(0, 1)
       ->execute();
 
@@ -468,6 +533,50 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $trigger = $form_state->getTriggeringElement();
     $triggerName = $trigger['#name'] ?? '';
     return $triggerName === 'set_location_and_publish';
+  }
+
+  private function isApplyFiltersAction(FormStateInterface $form_state): bool {
+    $trigger = $form_state->getTriggeringElement();
+    $triggerName = $trigger['#name'] ?? '';
+    return $triggerName === 'apply_filters';
+  }
+
+  private function isFilterDropdownAjaxAction(FormStateInterface $form_state): bool {
+    $trigger = $form_state->getTriggeringElement();
+    if (!is_array($trigger)) {
+      return FALSE;
+    }
+
+    $triggerName = $trigger['#name'] ?? '';
+    if (in_array($triggerName, ['status_filter', 'bargain_bin_filter', 'published_to_ebay_filter'], TRUE)) {
+      return TRUE;
+    }
+
+    $parents = $trigger['#parents'] ?? null;
+    if (!is_array($parents) || $parents === []) {
+      return FALSE;
+    }
+
+    return (string) $parents[0] === 'filters';
+  }
+
+  private function resolveFilterValue(FormStateInterface $form_state, string $key, string $default): string {
+    $input = $form_state->getUserInput();
+    if (isset($input[$key]) && is_scalar($input[$key])) {
+      return trim((string) $input[$key]);
+    }
+
+    $value = $form_state->getValue($key);
+    if ($value !== null && is_scalar($value)) {
+      return trim((string) $value);
+    }
+
+    $queryValue = \Drupal::request()->query->get($key);
+    if (is_string($queryValue)) {
+      return trim($queryValue);
+    }
+
+    return $default;
   }
 
   private function getRequestedLocation(FormStateInterface $form_state): string {
@@ -532,11 +641,22 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     return $missingIds;
   }
 
-  private function buildReadyToShelveOptions(string $status, bool $onlyBargainBin): array {
+  private function buildReadyToShelveOptions(
+    string $status,
+    string $bargainBinFilterMode,
+    string $publishedToEbayFilterMode,
+    string $searchQuery,
+  ): array {
     $entityTypeManager = $this->getEntityTypeManager();
-    $properties = ['status' => $status];
-    if ($onlyBargainBin) {
+    $properties = [];
+    if ($status !== 'any') {
+      $properties['status'] = $status;
+    }
+    if ($bargainBinFilterMode === 'yes') {
       $properties['bargain_bin'] = 1;
+    }
+    if ($bargainBinFilterMode === 'no') {
+      $properties['bargain_bin'] = 0;
     }
     $rows = [];
     $items = $entityTypeManager->getStorage('bb_ai_listing')->loadByProperties($properties);
@@ -552,6 +672,10 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     }
 
     usort($rows, static fn(array $a, array $b): int => $a['created'] <=> $b['created']);
+    $listingIds = $this->extractListingIdsFromRows($rows);
+    $primarySkuLookup = $this->buildPrimaryActiveSkuLookup($listingIds);
+    $publishedToEbayLookup = $this->buildPublishedToEbayLookup($listingIds);
+    $ebayListingIdLookup = $this->buildEbayMarketplaceListingIdLookup($listingIds);
 
     $options = [];
     foreach ($rows as $row) {
@@ -563,19 +687,38 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
         continue;
       }
 
+      $listingId = (int) $listing->id();
+      $isPublishedToEbay = isset($publishedToEbayLookup[$listingId]) && $publishedToEbayLookup[$listingId] === TRUE;
+      $ebayListingId = $ebayListingIdLookup[$listingId] ?? null;
+      if ($publishedToEbayFilterMode === 'yes' && !$isPublishedToEbay) {
+        continue;
+      }
+      if ($publishedToEbayFilterMode === 'no' && $isPublishedToEbay) {
+        continue;
+      }
+
+      if (!$this->listingMatchesSearchQuery($listing, $searchQuery)) {
+        continue;
+      }
+
       if ($listingType === 'book') {
         $label = (string) ($listing->get('field_full_title')->value ?: $listing->get('field_title')->value ?: $listing->label());
         $link = Link::fromTextAndUrl(
           $label ?: $this->t('Untitled listing'),
-          Url::fromRoute('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $listing->id()])
+          Url::fromRoute('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $listingId])
         );
 
-        $options[$this->buildSelectionKey('book', (int) $listing->id())] = [
+        $options[$this->buildSelectionKey('book', $listingId)] = [
           'type' => $this->t('Book'),
+          'entity_id' => $listingId,
+          'sku' => $primarySkuLookup[$listingId] ?? $this->t('—'),
+          'status' => $listing->get('status')->value ?: $this->t('—'),
+          'ebay' => $this->buildEbayItemLink($ebayListingId),
           'title' => $link->toString(),
           'author' => $listing->get('field_author')->value ?: $this->t('Unknown'),
           'price' => $listing->get('price')->value ?? $this->t('—'),
           'location' => $listing->get('storage_location')->value ?: $this->t('Unset yet'),
+          'published_to_ebay' => $isPublishedToEbay ? $this->t('Yes') : $this->t('No'),
           'created' => $this->getDateFormatter()->format($created),
         ];
         continue;
@@ -588,20 +731,238 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       $bundleLabel = (string) ($listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled bundle'));
       $bundleLink = Link::fromTextAndUrl(
         $bundleLabel,
-        Url::fromRoute('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $listing->id()])
+        Url::fromRoute('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $listingId])
       );
 
-      $options[$this->buildSelectionKey('book_bundle', (int) $listing->id())] = [
+      $options[$this->buildSelectionKey('book_bundle', $listingId)] = [
         'type' => $this->t('Book bundle'),
+        'entity_id' => $listingId,
+        'sku' => $primarySkuLookup[$listingId] ?? $this->t('—'),
+        'status' => $listing->get('status')->value ?: $this->t('—'),
+        'ebay' => $this->buildEbayItemLink($ebayListingId),
         'title' => $bundleLink->toString(),
         'author' => $this->t('—'),
         'price' => $listing->get('price')->value ?? $this->t('—'),
         'location' => $listing->get('storage_location')->value ?: $this->t('Unset yet'),
+        'published_to_ebay' => $isPublishedToEbay ? $this->t('Yes') : $this->t('No'),
         'created' => $this->getDateFormatter()->format($created),
       ];
     }
 
     return $options;
+  }
+
+  /**
+   * @param array<int,array{listing_type:string,entity:\Drupal\ai_listing\Entity\BbAiListing,created:int}> $rows
+   *
+   * @return int[]
+   */
+  private function extractListingIdsFromRows(array $rows): array {
+    $listingIds = [];
+    foreach ($rows as $row) {
+      $entity = $row['entity'] ?? null;
+      if (!$entity instanceof BbAiListing) {
+        continue;
+      }
+
+      $listingId = (int) $entity->id();
+      if ($listingId > 0) {
+        $listingIds[] = $listingId;
+      }
+    }
+
+    return $listingIds;
+  }
+
+  /**
+   * @param int[] $listingIds
+   *
+   * @return array<int,bool>
+   */
+  private function buildPublishedToEbayLookup(array $listingIds): array {
+    if ($listingIds === []) {
+      return [];
+    }
+
+    $entityTypeManager = $this->getEntityTypeManager();
+    if (!$entityTypeManager->hasDefinition('ai_marketplace_publication')) {
+      return [];
+    }
+
+    $publicationStorage = $entityTypeManager->getStorage('ai_marketplace_publication');
+    $publicationIds = $publicationStorage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('listing', $listingIds, 'IN')
+      ->condition('marketplace_key', 'ebay')
+      ->condition('status', 'published')
+      ->execute();
+    if ($publicationIds === []) {
+      return [];
+    }
+
+    $lookup = [];
+    $publications = $publicationStorage->loadMultiple($publicationIds);
+    foreach ($publications as $publication) {
+      $listingId = (int) ($publication->get('listing')->target_id ?? 0);
+      if ($listingId > 0) {
+        $lookup[$listingId] = TRUE;
+      }
+    }
+
+    return $lookup;
+  }
+
+  /**
+   * @param int[] $listingIds
+   *
+   * @return array<int,string>
+   */
+  private function buildPrimaryActiveSkuLookup(array $listingIds): array {
+    if ($listingIds === []) {
+      return [];
+    }
+
+    $entityTypeManager = $this->getEntityTypeManager();
+    if (!$entityTypeManager->hasDefinition('ai_listing_inventory_sku')) {
+      return [];
+    }
+
+    $skuStorage = $entityTypeManager->getStorage('ai_listing_inventory_sku');
+    $skuRows = $skuStorage->loadByProperties([
+      'listing' => $listingIds,
+      'is_primary' => 1,
+      'status' => 'active',
+    ]);
+    if ($skuRows === []) {
+      return [];
+    }
+
+    $lookup = [];
+    foreach ($skuRows as $skuRow) {
+      $listingId = (int) ($skuRow->get('listing')->target_id ?? 0);
+      $skuValue = trim((string) ($skuRow->get('sku')->value ?? ''));
+      if ($listingId <= 0 || $skuValue === '') {
+        continue;
+      }
+
+      $lookup[$listingId] = $skuValue;
+    }
+
+    return $lookup;
+  }
+
+  /**
+   * @param int[] $listingIds
+   *
+   * @return array<int,string>
+   */
+  private function buildEbayMarketplaceListingIdLookup(array $listingIds): array {
+    if ($listingIds === []) {
+      return [];
+    }
+
+    $entityTypeManager = $this->getEntityTypeManager();
+    if (!$entityTypeManager->hasDefinition('ai_marketplace_publication')) {
+      return [];
+    }
+
+    $lookup = [];
+    $this->addEbayMarketplaceListingIdsToLookup($listingIds, 'published', $lookup);
+    $this->addEbayMarketplaceListingIdsToLookup($listingIds, null, $lookup);
+    return $lookup;
+  }
+
+  /**
+   * @param int[] $listingIds
+   * @param array<int,string> $lookup
+   */
+  private function addEbayMarketplaceListingIdsToLookup(array $listingIds, ?string $status, array &$lookup): void {
+    $publicationStorage = $this->getEntityTypeManager()->getStorage('ai_marketplace_publication');
+    $query = $publicationStorage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('listing', $listingIds, 'IN')
+      ->condition('marketplace_key', 'ebay')
+      ->condition('marketplace_listing_id', '', '<>')
+      ->sort('changed', 'DESC')
+      ->sort('id', 'DESC');
+    if ($status !== null) {
+      $query->condition('status', $status);
+    }
+
+    $publicationIds = array_values($query->execute());
+    if ($publicationIds === []) {
+      return;
+    }
+
+    $publications = $publicationStorage->loadMultiple($publicationIds);
+    foreach ($publicationIds as $publicationId) {
+      $publication = $publications[$publicationId] ?? null;
+      if ($publication === null) {
+        continue;
+      }
+
+      $listingId = (int) ($publication->get('listing')->target_id ?? 0);
+      if ($listingId <= 0 || isset($lookup[$listingId])) {
+        continue;
+      }
+
+      $marketplaceListingId = trim((string) ($publication->get('marketplace_listing_id')->value ?? ''));
+      if ($marketplaceListingId === '') {
+        continue;
+      }
+
+      $lookup[$listingId] = $marketplaceListingId;
+    }
+  }
+
+  private function buildEbayItemLink(?string $ebayListingId): string|MarkupInterface {
+    if ($ebayListingId === null || $ebayListingId === '') {
+      return (string) $this->t('—');
+    }
+
+    $url = Url::fromUri(
+      'https://www.ebay.com.au/itm/' . rawurlencode($ebayListingId),
+      ['attributes' => ['target' => '_blank', 'rel' => 'noopener noreferrer']]
+    );
+
+    return Link::fromTextAndUrl($this->t('View'), $url)->toString();
+  }
+
+  private function listingMatchesSearchQuery(BbAiListing $listing, string $searchQuery): bool {
+    $normalizedSearchQuery = $this->normalizeForSearch($searchQuery);
+    if ($normalizedSearchQuery === '') {
+      return TRUE;
+    }
+
+    $fullTitle = $this->getStringFieldValueIfExists($listing, 'field_full_title');
+    $title = $this->getStringFieldValueIfExists($listing, 'field_title');
+    $author = $this->getStringFieldValueIfExists($listing, 'field_author');
+    $description = $this->getStringFieldValueIfExists($listing, 'description');
+
+    $searchableText = trim($fullTitle . ' ' . $title . ' ' . $author . ' ' . $description);
+    $normalizedSearchableText = $this->normalizeForSearch($searchableText);
+    if ($normalizedSearchableText === '') {
+      return FALSE;
+    }
+
+    return str_contains($normalizedSearchableText, $normalizedSearchQuery);
+  }
+
+  private function getStringFieldValueIfExists(BbAiListing $listing, string $fieldName): string {
+    if (!$listing->hasField($fieldName)) {
+      return '';
+    }
+
+    return trim((string) ($listing->get($fieldName)->value ?? ''));
+  }
+
+  private function normalizeForSearch(string $value): string {
+    $trimmedValue = trim($value);
+    if ($trimmedValue === '') {
+      return '';
+    }
+
+    return mb_strtolower($trimmedValue);
   }
 
   private function buildSelectionKey(string $listingType, int $id): string {
@@ -678,4 +1039,5 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
 
     return $this->tempStoreFactory->get(self::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_COLLECTION);
   }
+
 }

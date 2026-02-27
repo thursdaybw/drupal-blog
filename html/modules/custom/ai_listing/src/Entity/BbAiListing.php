@@ -44,7 +44,6 @@ final class BbAiListing extends ContentEntityBase {
     'ready_for_review' => 'Ready for review',
     'ready_to_shelve' => 'Ready to shelve',
     'shelved' => 'Shelved',
-    'published' => 'Published',
     'failed' => 'Failed',
   ];
 
@@ -98,11 +97,6 @@ final class BbAiListing extends ContentEntityBase {
       ->setLabel('Bargain bin preset')
       ->setRequired(TRUE)
       ->setDefaultValue(FALSE);
-
-    $fields['published_sku'] = BaseFieldDefinition::create('string')
-      ->setLabel('Published SKU')
-      ->setDefaultValue('')
-      ->setSettings(['max_length' => 255]);
 
     $fields['metadata_json'] = BaseFieldDefinition::create('string_long')
       ->setLabel('Metadata JSON');

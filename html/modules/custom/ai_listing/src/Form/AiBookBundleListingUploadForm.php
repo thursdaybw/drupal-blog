@@ -20,8 +20,8 @@ final class AiBookBundleListingUploadForm extends FormBase {
   use DependencySerializationTrait;
 
   public function __construct(
-    private readonly FileSystemInterface $fileSystem,
-    private readonly EntityTypeManagerInterface $entityTypeManager,
+    private FileSystemInterface $fileSystem,
+    private EntityTypeManagerInterface $entityTypeManager,
   ) {}
 
   public static function create(ContainerInterface $container): self {

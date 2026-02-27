@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\ai_listing\Service;
 
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\AiListingInventorySku;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 
@@ -14,7 +14,7 @@ final class AiListingInventorySkuResolver {
     private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {}
 
-  public function getPrimarySku(AiBookListing $listing): ?string {
+  public function getPrimarySku(BbAiListing $listing): ?string {
     $skuRecord = $this->loadPrimarySkuRecord($listing);
     if (!$skuRecord instanceof AiListingInventorySku) {
       return null;
@@ -23,11 +23,11 @@ final class AiListingInventorySkuResolver {
     return (string) $skuRecord->get('sku')->value;
   }
 
-  public function getPrimarySkuRecord(AiBookListing $listing): ?AiListingInventorySku {
+  public function getPrimarySkuRecord(BbAiListing $listing): ?AiListingInventorySku {
     return $this->loadPrimarySkuRecord($listing);
   }
 
-  public function setPrimarySku(AiBookListing $listing, string $sku): AiListingInventorySku {
+  public function setPrimarySku(BbAiListing $listing, string $sku): AiListingInventorySku {
     $normalizedSku = trim($sku);
     if ($normalizedSku === '') {
       throw new \InvalidArgumentException('Primary SKU cannot be empty.');
@@ -55,7 +55,7 @@ final class AiListingInventorySkuResolver {
     return $skuRecord;
   }
 
-  public function retirePrimarySku(AiBookListing $listing): void {
+  public function retirePrimarySku(BbAiListing $listing): void {
     if (!$this->entityTypeManager->hasDefinition('ai_listing_inventory_sku')) {
       return;
     }
@@ -67,7 +67,7 @@ final class AiListingInventorySkuResolver {
     }
   }
 
-  private function loadPrimarySkuRecord(AiBookListing $listing): ?AiListingInventorySku {
+  private function loadPrimarySkuRecord(BbAiListing $listing): ?AiListingInventorySku {
     if (!$this->entityTypeManager->hasDefinition('ai_listing_inventory_sku')) {
       return null;
     }

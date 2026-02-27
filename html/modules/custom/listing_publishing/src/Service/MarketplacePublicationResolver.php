@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\listing_publishing\Service;
 
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\AiMarketplacePublication;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 
@@ -15,7 +15,7 @@ final class MarketplacePublicationResolver {
   ) {}
 
   public function getPublicationForListing(
-    AiBookListing $listing,
+    BbAiListing $listing,
     string $marketplaceKey,
     string $publicationType = '',
     ?string $status = null,
@@ -47,7 +47,7 @@ final class MarketplacePublicationResolver {
   }
 
   public function getPublishedPublicationForListing(
-    AiBookListing $listing,
+    BbAiListing $listing,
     string $marketplaceKey,
     string $publicationType = '',
   ): ?AiMarketplacePublication {

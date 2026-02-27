@@ -410,9 +410,36 @@ final class EbayOfferCommand extends DrushCommands {
    *
    * @command ebay-connector:list-inventory
    */
-  public function listInventory(int $limit = 25, int $offset = 0): void {
+  public function listInventory(string|int $queryOrLimit = 25, ?int $offset = 0): void {
+    $limit = 25;
+    $skuQuery = '';
+    $resolvedOffset = $offset ?? 0;
 
-    $data = $this->sellApiClient->listInventoryItems($limit, $offset);
+    if (is_int($queryOrLimit)) {
+      $limit = $queryOrLimit;
+    }
+    else {
+      $trimmed = trim($queryOrLimit);
+      if ($trimmed !== '' && ctype_digit($trimmed)) {
+        $limit = (int) $trimmed;
+      }
+      else {
+        $skuQuery = mb_strtolower($trimmed);
+      }
+    }
+
+    $data = $this->sellApiClient->listInventoryItems($limit, $resolvedOffset);
+    if ($skuQuery !== '' && isset($data['inventoryItems']) && is_array($data['inventoryItems'])) {
+      $filteredItems = [];
+      foreach ($data['inventoryItems'] as $item) {
+        $sku = mb_strtolower((string) ($item['sku'] ?? ''));
+        if ($sku !== '' && str_contains($sku, $skuQuery)) {
+          $filteredItems[] = $item;
+        }
+      }
+      $data['inventoryItems'] = $filteredItems;
+      $data['total'] = count($filteredItems);
+    }
 
     $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
   }

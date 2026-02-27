@@ -8,11 +8,12 @@ use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\UrlHelper;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class AiBookListingReviewForm extends FormBase implements ContainerInjectionInterface {
 
@@ -34,7 +35,8 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     return 'ai_book_listing_review_form';
   }
 
-  public function buildForm(array $form, FormStateInterface $form_state, AiBookListing $ai_book_listing = NULL): array {
+  public function buildForm(array $form, FormStateInterface $form_state, ?BbAiListing $ai_book_listing = NULL): array {
+    $ai_book_listing = $this->resolveReviewListing($ai_book_listing);
 
     $form_state->set('listing', $ai_book_listing);
 
@@ -91,26 +93,26 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $form['basic']['title'] = [
       '#type' => 'textfield',
       '#title' => 'Title',
-      '#default_value' => $ai_book_listing->get('title')->value,
+      '#default_value' => $ai_book_listing->get('field_title')->value,
       '#required' => TRUE,
     ];
 
     $form['basic']['subtitle'] = [
       '#type' => 'textfield',
       '#title' => 'Subtitle',
-      '#default_value' => $ai_book_listing->get('subtitle')->value,
+      '#default_value' => $ai_book_listing->get('field_subtitle')->value,
     ];
 
     $form['basic']['full_title'] = [
       '#type' => 'textfield',
       '#title' => 'Full title',
-      '#default_value' => $ai_book_listing->get('full_title')->value,
+      '#default_value' => $ai_book_listing->get('field_full_title')->value,
     ];
 
     $form['basic']['author'] = [
       '#type' => 'textfield',
       '#title' => 'Author',
-      '#default_value' => $ai_book_listing->get('author')->value,
+      '#default_value' => $ai_book_listing->get('field_author')->value,
     ];
 
     $form['basic']['price'] = [
@@ -178,7 +180,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
     // Issues (flat, no panel, no wrapper)
     $existingIssues = [];
-    foreach ($ai_book_listing->get('condition_issues') as $item) {
+    foreach ($ai_book_listing->get('field_condition_issues') as $item) {
       if (!empty($item->value)) {
         $existingIssues[] = (string) $item->value;
       }
@@ -216,25 +218,25 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $form['basic']['isbn'] = [
       '#type' => 'textfield',
       '#title' => 'ISBN',
-      '#default_value' => $ai_book_listing->get('isbn')->value,
+      '#default_value' => $ai_book_listing->get('field_isbn')->value,
     ];
 
     $form['basic']['publisher'] = [
       '#type' => 'textfield',
       '#title' => 'Publisher',
-      '#default_value' => $ai_book_listing->get('publisher')->value,
+      '#default_value' => $ai_book_listing->get('field_publisher')->value,
     ];
 
     $form['basic']['publication_year'] = [
       '#type' => 'textfield',
       '#title' => 'Publication year',
-      '#default_value' => $ai_book_listing->get('publication_year')->value,
+      '#default_value' => $ai_book_listing->get('field_publication_year')->value,
     ];
 
     $form['basic']['series'] = [
       '#type' => 'textfield',
       '#title' => 'Series',
-      '#default_value' => $ai_book_listing->get('series')->value,
+      '#default_value' => $ai_book_listing->get('field_series')->value,
     ];
 
     // ===== CLASSIFICATION =====
@@ -249,7 +251,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $form['classification']['format'] = [
       '#type' => 'textfield',
       '#title' => 'Format',
-      '#default_value' => (string) $ai_book_listing->get('format')->value,
+      '#default_value' => (string) $ai_book_listing->get('field_format')->value,
       '#attributes' => [
         'autocomplete' => 'off',
       ],
@@ -264,25 +266,25 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $form['classification']['language'] = [
       '#type' => 'textfield',
       '#title' => 'Language',
-      '#default_value' => $ai_book_listing->get('language')->value,
+      '#default_value' => $ai_book_listing->get('field_language')->value,
     ];
 
     $form['classification']['genre'] = [
       '#type' => 'textfield',
       '#title' => 'Genre',
-      '#default_value' => $ai_book_listing->get('genre')->value,
+      '#default_value' => $ai_book_listing->get('field_genre')->value,
     ];
 
     $form['classification']['narrative_type'] = [
       '#type' => 'textfield',
       '#title' => 'Narrative type',
-      '#default_value' => $ai_book_listing->get('narrative_type')->value,
+      '#default_value' => $ai_book_listing->get('field_narrative_type')->value,
     ];
 
     $form['classification']['country_printed'] = [
       '#type' => 'textfield',
       '#title' => 'Country printed',
-      '#default_value' => $ai_book_listing->get('country_printed')->value,
+      '#default_value' => $ai_book_listing->get('field_country_printed')->value,
     ];
 
     // ===== FEATURES =====
@@ -292,7 +294,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       '#title' => 'Features (one per line)',
       '#default_value' => implode("\n", array_filter(array_map(
         fn($item) => $item->value,
-        iterator_to_array($ai_book_listing->get('features'))
+        iterator_to_array($ai_book_listing->get('field_features'))
       ))),
       '#rows' => 5,
     ];
@@ -389,9 +391,9 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     return $form;
   }
 
-  private function buildEbaySearchLink(AiBookListing $listing): string {
-    $title = trim((string) $listing->get('title')->value);
-    $author = trim((string) $listing->get('author')->value);
+  private function buildEbaySearchLink(BbAiListing $listing): string {
+    $title = trim((string) $listing->get('field_title')->value);
+    $author = trim((string) $listing->get('field_author')->value);
     $query = trim($title . ' ' . $author);
     if ($query === '') {
       return '';
@@ -402,35 +404,57 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     return sprintf('<a href="%s" target="_blank" rel="noopener noreferrer" title="%s">Search eBay for %s</a>', $url, $titleAttr, Html::escape($query));
   }
 
-  public function getTitle(AiBookListing $ai_book_listing): string {
+  public function getTitle(?BbAiListing $ai_book_listing = NULL): string {
+    $ai_book_listing = $this->resolveReviewListing($ai_book_listing);
     return $ai_book_listing->label() ?: 'Review Listing';
+  }
+
+  private function resolveReviewListing(?BbAiListing $listing): BbAiListing {
+    if ($listing instanceof BbAiListing) {
+      return $listing;
+    }
+
+    $routeValue = $this->getRouteMatch()->getParameter('bb_ai_listing');
+    if ($routeValue instanceof BbAiListing) {
+      return $routeValue;
+    }
+
+    $routeId = (int) $routeValue;
+    if ($routeId > 0) {
+      $loaded = $this->entityTypeManager->getStorage('bb_ai_listing')->load($routeId);
+      if ($loaded instanceof BbAiListing) {
+        return $loaded;
+      }
+    }
+
+    throw new NotFoundHttpException('Listing not found.');
   }
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
 
-    /** @var AiBookListing $listing */
+    /** @var BbAiListing $listing */
     $listing = $form_state->get('listing');
 
-    $listing->set('title', $form_state->getValue(['basic', 'title']));
-    $listing->set('subtitle', $form_state->getValue(['basic', 'subtitle']));
-    $listing->set('full_title', $form_state->getValue(['basic', 'full_title']));
-    $listing->set('author', $form_state->getValue(['basic', 'author']));
+    $listing->set('field_title', $form_state->getValue(['basic', 'title']));
+    $listing->set('field_subtitle', $form_state->getValue(['basic', 'subtitle']));
+    $listing->set('field_full_title', $form_state->getValue(['basic', 'full_title']));
+    $listing->set('field_author', $form_state->getValue(['basic', 'author']));
     $listing->set('price', $form_state->getValue(['basic', 'price']));
     $listing->set('bargain_bin', (bool) $form_state->getValue(['basic', 'bargain_bin']));
-    $listing->set('isbn', $form_state->getValue(['basic', 'isbn']));
-    $listing->set('publisher', $form_state->getValue(['basic', 'publisher']));
-    $listing->set('publication_year', $form_state->getValue(['basic', 'publication_year']));
-    $listing->set('series', $form_state->getValue(['basic', 'series']));
+    $listing->set('field_isbn', $form_state->getValue(['basic', 'isbn']));
+    $listing->set('field_publisher', $form_state->getValue(['basic', 'publisher']));
+    $listing->set('field_publication_year', $form_state->getValue(['basic', 'publication_year']));
+    $listing->set('field_series', $form_state->getValue(['basic', 'series']));
 
-    $listing->set('format', (string) $form_state->getValue(['classification', 'format']));
-    $listing->set('language', $form_state->getValue(['classification', 'language']));
-    $listing->set('genre', $form_state->getValue(['classification', 'genre']));
-    $listing->set('narrative_type', $form_state->getValue(['classification', 'narrative_type']));
-    $listing->set('country_printed', $form_state->getValue(['classification', 'country_printed']));
+    $listing->set('field_format', (string) $form_state->getValue(['classification', 'format']));
+    $listing->set('field_language', $form_state->getValue(['classification', 'language']));
+    $listing->set('field_genre', $form_state->getValue(['classification', 'genre']));
+    $listing->set('field_narrative_type', $form_state->getValue(['classification', 'narrative_type']));
+    $listing->set('field_country_printed', $form_state->getValue(['classification', 'country_printed']));
 
     $featuresText = $form_state->getValue('features');
     $features = array_filter(array_map('trim', explode("\n", $featuresText)));
-    $listing->set('features', $features);
+    $listing->set('field_features', $features);
 
     $listing->set('ebay_title', $form_state->getValue(['ebay', 'ebay_title']));
     $desc = $form_state->getValue(['ebay', 'description']);
@@ -452,7 +476,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
     $listing->set('condition_grade', $grade);
 
-    $listing->set('condition_issues', $issues);
+    $listing->set('field_condition_issues', $issues);
 
     $conditionPayload = [
       'issues' => $issues,
@@ -483,7 +507,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $statusValue = (string) $form_state->getValue(['basic', 'status']);
     if (($trigger['#name'] ?? '') === 'ai_save_listing') {
       if ($statusValue === 'new') {
-        $form_state->setRedirect('entity.ai_book_listing.add_form');
+        $form_state->setRedirect('ai_listing.add');
         return;
       }
 
@@ -495,7 +519,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
   }
 
   private function getReadyForReviewIds(): array {
-    $ids = $this->entityTypeManager->getStorage('ai_book_listing')->getQuery()
+    $ids = $this->entityTypeManager->getStorage('bb_ai_listing')->getQuery()
       ->accessCheck(FALSE)
       ->condition('status', 'ready_for_review')
       ->sort('id', 'ASC')
@@ -507,7 +531,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
   /**
    * @param array<string,mixed> $listingImageItems
    */
-  private function saveListingImageMetadataSelections(AiBookListing $listing, array $listingImageItems): void {
+  private function saveListingImageMetadataSelections(BbAiListing $listing, array $listingImageItems): void {
     if ($listingImageItems === []) {
       return;
     }
@@ -550,7 +574,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
   private function redirectAfterReadyToShelve(FormStateInterface $form_state): void {
     $nextId = $this->getNextReadyForReviewId();
     if ($nextId !== null) {
-      $form_state->setRedirect('entity.ai_book_listing.canonical', ['ai_book_listing' => $nextId]);
+      $form_state->setRedirect('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $nextId]);
       return;
     }
 
@@ -561,12 +585,11 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     ]);
   }
 
-  private function buildPhotoItems(AiBookListing $ai_book_listing): array {
+  private function buildPhotoItems(BbAiListing $ai_book_listing): array {
     $photoItems = [
       '#type' => 'container',
     ];
 
-    $legacyItems = $this->buildLegacyPhotoLinks($ai_book_listing);
     $listingImageItems = $this->buildListingImagePhotoItems($ai_book_listing);
 
     $photoItems['listing_image_heading'] = [
@@ -578,19 +601,11 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
       ? $listingImageItems
       : ['#markup' => '<p><em>No ListingImage entities found.</em></p>'];
 
-    $photoItems['legacy_heading'] = [
-      '#type' => 'html_tag',
-      '#tag' => 'h4',
-      '#value' => 'Legacy ai_book_listing.images field',
-    ];
-    $photoItems['legacy_items'] = !empty($legacyItems)
-      ? $legacyItems
-      : ['#markup' => '<p><em>No legacy image field items found.</em></p>'];
 
     return $photoItems;
   }
 
-  private function buildLegacyPhotoLinks(AiBookListing $ai_book_listing): array {
+  private function buildLegacyPhotoLinks(BbAiListing $ai_book_listing): array {
     $fileStorage = $this->entityTypeManager->getStorage('file');
     $photoItems = [];
 
@@ -610,7 +625,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     return $photoItems;
   }
 
-  private function buildListingImagePhotoItems(AiBookListing $ai_book_listing): array {
+  private function buildListingImagePhotoItems(BbAiListing $ai_book_listing): array {
     $listingImages = $this->loadListingImagesForReview($ai_book_listing);
 
     if ($listingImages === []) {
@@ -651,7 +666,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
   /**
    * @return \Drupal\Core\Entity\EntityInterface[]
    */
-  private function loadListingImagesForReview(AiBookListing $ai_book_listing): array {
+  private function loadListingImagesForReview(BbAiListing $ai_book_listing): array {
     if (!$this->entityTypeManager->hasDefinition('listing_image')) {
       return [];
     }
@@ -659,7 +674,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
     $listingImageStorage = $this->entityTypeManager->getStorage('listing_image');
     $ids = $listingImageStorage->getQuery()
       ->accessCheck(FALSE)
-      ->condition('owner.target_type', 'ai_book_listing')
+      ->condition('owner.target_type', 'bb_ai_listing')
       ->condition('owner.target_id', (int) $ai_book_listing->id())
       ->sort('weight', 'ASC')
       ->sort('id', 'ASC')
@@ -699,7 +714,7 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
 
   public function submitAndPublish(array &$form, FormStateInterface $form_state): void {
     $this->submitForm($form, $form_state);
-    /** @var AiBookListing $listing */
+    /** @var BbAiListing $listing */
     $listing = $form_state->get('listing');
 
     try {
@@ -719,18 +734,18 @@ final class AiBookListingReviewForm extends FormBase implements ContainerInjecti
   }
 
   public function submitRedirectToDeleteForm(array &$form, FormStateInterface $form_state): void {
-    /** @var AiBookListing $listing */
+    /** @var BbAiListing $listing */
     $listing = $form_state->get('listing');
-    $form_state->setRedirect('entity.ai_book_listing.delete_form', ['ai_book_listing' => $listing->id()]);
+    $form_state->setRedirect('ai_listing.location_batch');
   }
 
-  private function handlePublishFailure(AiBookListing $listing, string $message): void {
+  private function handlePublishFailure(BbAiListing $listing, string $message): void {
     $this->messenger()->addError($message);
     $listing->set('status', 'failed');
     $listing->save();
   }
 
-  private function handlePublishSuccess(AiBookListing $listing, string $marketplaceId): void {
+  private function handlePublishSuccess(BbAiListing $listing, string $marketplaceId): void {
     $listing->set('status', 'shelved');
     $listing->save();
     $this->messenger()->addStatus(sprintf('Published listing %s for entity %d.', $marketplaceId, $listing->id()));

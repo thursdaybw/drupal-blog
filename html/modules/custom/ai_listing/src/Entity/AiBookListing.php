@@ -36,11 +36,11 @@ use Drupal\Core\Entity\EntityStorageInterface;
  *     "label" = "full_title"
  *   },
  *   links = {
- *     "canonical" = "/admin/ai-listings/{ai_book_listing}",
+ *     "canonical" = "/admin/ai-listings/legacy/{ai_book_listing}",
  *     "add-form" = "/admin/ai-listing/add",
- *     "edit-form" = "/admin/ai-listings/{ai_book_listing}/edit",
- *     "delete-form" = "/admin/ai-listings/{ai_book_listing}/delete",
- *     "collection" = "/admin/ai-listings"
+ *     "edit-form" = "/admin/ai-listings/legacy/{ai_book_listing}/edit",
+ *     "delete-form" = "/admin/ai-listings/legacy/{ai_book_listing}/delete",
+ *     "collection" = "/admin/ai-listings/legacy"
  *   }
  * )
  */

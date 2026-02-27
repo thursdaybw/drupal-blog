@@ -60,8 +60,8 @@ final class AiListingProcessCommand extends Command {
       finally {
         $duration = microtime(true) - $itemStart;
         $durations[] = $duration;
-        $title = (string) $listing->get('title')->value;
-        $edition = (string) $listing->get('edition')->value;
+        $title = (string) ($listing->get('field_title')->value ?? '');
+        $edition = (string) ($listing->get('field_edition')->value ?? '');
         $output->writeln(sprintf('  Title: %s', $title ?: '<unknown>'));
         $output->writeln(sprintf('  Edition: %s', $edition ?: '<n/a>'));
         $output->writeln(sprintf('  Took %0.2fs', $duration));

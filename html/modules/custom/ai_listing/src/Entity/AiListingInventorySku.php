@@ -32,9 +32,9 @@ final class AiListingInventorySku extends ContentEntityBase {
     $fields = parent::baseFieldDefinitions($entity_type);
 
     $fields['ai_book_listing'] = BaseFieldDefinition::create('entity_reference')
-      ->setLabel('AI Book Listing')
+      ->setLabel('BB AI Listing')
       ->setRequired(TRUE)
-      ->setSetting('target_type', 'ai_book_listing');
+      ->setSetting('target_type', 'bb_ai_listing');
 
     $fields['sku'] = BaseFieldDefinition::create('string')
       ->setLabel('SKU')

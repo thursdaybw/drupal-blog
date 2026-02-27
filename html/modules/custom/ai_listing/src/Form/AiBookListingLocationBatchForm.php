@@ -12,7 +12,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\Core\Url;
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -50,7 +50,15 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $form['filters']['status_filter'] = [
       '#type' => 'select',
       '#title' => $this->t('Status filter'),
-      '#options' => AiBookListing::getStatusOptions(),
+      '#options' => [
+        'new' => $this->t('New'),
+        'processing' => $this->t('Processing'),
+        'ready_for_review' => $this->t('Ready for review'),
+        'ready_to_shelve' => $this->t('Ready to shelve'),
+        'shelved' => $this->t('Shelved'),
+        'published' => $this->t('Published'),
+        'failed' => $this->t('Failed'),
+      ],
       '#default_value' => $statusFilter,
       '#ajax' => [
         'callback' => '::updateListingsCallback',
@@ -77,6 +85,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $form['listings_container']['listings'] = [
       '#type' => 'tableselect',
       '#header' => [
+        'type' => $this->t('Type'),
         'title' => $this->t('Title'),
         'author' => $this->t('Author'),
         'price' => $this->t('Price'),
@@ -128,9 +137,14 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   }
 
   public function validateForm(array &$form, FormStateInterface $form_state): void {
-    $selected = array_filter($form_state->getValue('listings') ?? []);
-    if (empty($selected)) {
+    $selection = $this->getSelectedListingRefs($form_state);
+    if ($selection === []) {
       $form_state->setErrorByName('listings', $this->t('Select at least one listing to update.'));
+      return;
+    }
+
+    if ($this->selectionContainsBundleListings($selection)) {
+      $form_state->setErrorByName('listings', $this->t('Publish/location batch actions currently support single-book listings only. Remove bundle listings from the selection.'));
       return;
     }
 
@@ -147,36 +161,42 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   }
 
   public function submitSetLocationAndPublish(array &$form, FormStateInterface $form_state): void {
-    $this->queueListingBatch($form_state, TRUE);
+    $this->queueListingBatch($form_state, TRUE, 'publish');
   }
 
   public function submitPublishOrUpdate(array &$form, FormStateInterface $form_state): void {
-    if ($this->redirectToPublishUpdateConfirmationIfNeeded($form_state)) {
+    $setLocation = $this->getRequestedLocation($form_state) !== '';
+    if ($this->redirectToPublishUpdateConfirmationIfNeeded($form_state, $setLocation)) {
       return;
     }
 
-    $this->queueListingBatch($form_state, FALSE);
+    $this->queueListingBatch($form_state, $setLocation, 'publish_update');
   }
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $this->queueListingBatch($form_state, TRUE);
+    $this->queueListingBatch($form_state, TRUE, 'publish');
   }
 
   public function submitDeleteSelected(array &$form, FormStateInterface $form_state): void {
-    $selected = array_filter($form_state->getValue('listings') ?? []);
-    if ($selected === []) {
+    $selection = $this->getSelectedListingRefs($form_state);
+    if ($selection === []) {
       $this->messenger()->addError($this->t('Select at least one listing to delete.'));
       $form_state->setRebuild();
       return;
     }
 
-    batch_set(self::buildDeleteBatchDefinition(array_map('intval', array_keys($selected))));
+    batch_set(self::buildDeleteBatchDefinition($selection));
   }
 
-  private function queueListingBatch(FormStateInterface $form_state, bool $setLocation): void {
-    $selected = array_filter($form_state->getValue('listings') ?? []);
-    if (empty($selected)) {
+  private function queueListingBatch(FormStateInterface $form_state, bool $setLocation, string $operationMode): void {
+    $selection = $this->getSelectedListingRefs($form_state);
+    if ($selection === []) {
       $this->messenger()->addError($this->t('Select at least one listing to update.'));
+      $form_state->setRebuild();
+      return;
+    }
+    if ($this->selectionContainsBundleListings($selection)) {
+      $this->messenger()->addError($this->t('Publish/location batch actions currently support single-book listings only. Remove bundle listings from the selection.'));
       $form_state->setRebuild();
       return;
     }
@@ -188,15 +208,30 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return;
     }
 
-    batch_set(self::buildListingBatchDefinition(array_map('intval', array_keys($selected)), $setLocation, $location));
+    batch_set(self::buildListingBatchDefinition($selection, $setLocation, $location, $operationMode));
   }
 
-  public static function buildListingBatchDefinition(array $listingIds, bool $setLocation, string $location): array {
+  /**
+   * @param array<int,array{entity_type:string,id:int}|int|string> $selection
+   */
+  public static function buildListingBatchDefinition(array $selection, bool $setLocation, string $location, string $operationMode = 'publish'): array {
     $operations = [];
-    foreach ($listingIds as $listingId) {
+    foreach ($selection as $item) {
+      if (is_int($item) || ctype_digit((string) $item)) {
+        $item = [
+          'listing_type' => 'book',
+          'id' => (int) $item,
+        ];
+      }
+      if (!is_array($item)) {
+        continue;
+      }
+      if (!isset($item['listing_type'], $item['id'])) {
+        continue;
+      }
       $operations[] = [
         [self::class, 'processBatchOperation'],
-        [(int) $listingId, $setLocation, $location],
+        [$item['listing_type'], (int) $item['id'], $setLocation, $location, $operationMode],
       ];
     }
 
@@ -216,10 +251,15 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     ];
   }
 
-  public static function processBatchOperation(int $listingId, bool $setLocation, string $location, array &$context): void {
+  public static function processBatchOperation(string $listingType, int $listingId, bool $setLocation, string $location, string $operationMode, array &$context): void {
+    if ($listingType !== 'book') {
+      $context['message'] = (string) \Drupal::translation()->translate('Skipping unsupported listing type @type:@id.', ['@type' => $listingType, '@id' => $listingId]);
+      return;
+    }
+
     $entityTypeManager = \Drupal::entityTypeManager();
-    $storage = $entityTypeManager->getStorage('ai_book_listing');
-    /** @var \Drupal\ai_listing\Entity\AiBookListing|null $listing */
+    $storage = $entityTypeManager->getStorage('bb_ai_listing');
+    /** @var \Drupal\ai_listing\Entity\BbAiListing|null $listing */
     $listing = $storage->load($listingId);
 
     if (!isset($context['results']['success'])) {
@@ -229,8 +269,9 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       $context['results']['errors'] = [];
     }
     $context['results']['set_location'] = $setLocation;
+    $context['results']['operation_mode'] = $operationMode;
 
-    if (!$listing instanceof AiBookListing) {
+    if (!$listing instanceof BbAiListing) {
       $context['message'] = (string) \Drupal::translation()->translate('Skipping missing listing @id.', ['@id' => $listingId]);
       return;
     }
@@ -243,9 +284,12 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $publisher = \Drupal::service('drupal.listing_publishing.publisher');
 
     try {
-      $result = $setLocation
-        ? $publisher->publish($listing)
-        : $publisher->publishOrUpdate($listing);
+      if ($operationMode === 'publish_update') {
+        $result = $publisher->publishOrUpdate($listing);
+      }
+      else {
+        $result = $publisher->publish($listing);
+      }
     }
     catch (\Throwable $e) {
       $listing->set('status', 'failed');
@@ -297,10 +341,17 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
 
     $processedCount = (int) ($results['success'] ?? 0);
     $setLocation = (bool) ($results['set_location'] ?? FALSE);
+    $operationMode = (string) ($results['operation_mode'] ?? 'publish');
 
     if ($processedCount > 0) {
-      $singular = $setLocation ? 'Shelved and published one listing.' : 'Published/updated one listing.';
-      $plural = $setLocation ? 'Shelved and published @count listings.' : 'Published/updated @count listings.';
+      if ($operationMode === 'publish_update') {
+        $singular = $setLocation ? 'Set location and published/updated one listing.' : 'Published/updated one listing.';
+        $plural = $setLocation ? 'Set location and published/updated @count listings.' : 'Published/updated @count listings.';
+      }
+      else {
+        $singular = $setLocation ? 'Shelved and published one listing.' : 'Published one listing.';
+        $plural = $setLocation ? 'Shelved and published @count listings.' : 'Published @count listings.';
+      }
       $messenger->addStatus($translation->formatPlural($processedCount, $singular, $plural));
     }
 
@@ -309,12 +360,15 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     }
   }
 
-  public static function buildDeleteBatchDefinition(array $listingIds): array {
+  /**
+   * @param array<int,array{listing_type:string,id:int}> $selection
+   */
+  public static function buildDeleteBatchDefinition(array $selection): array {
     $operations = [];
-    foreach ($listingIds as $listingId) {
+    foreach ($selection as $item) {
       $operations[] = [
         [self::class, 'processDeleteBatchOperation'],
-        [(int) $listingId],
+        [$item['listing_type'], (int) $item['id']],
       ];
     }
 
@@ -330,11 +384,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     ];
   }
 
-  public static function processDeleteBatchOperation(int $listingId, array &$context): void {
-    $storage = \Drupal::entityTypeManager()->getStorage('ai_book_listing');
-    /** @var \Drupal\ai_listing\Entity\AiBookListing|null $listing */
-    $listing = $storage->load($listingId);
-
+  public static function processDeleteBatchOperation(string $listingType, int $listingId, array &$context): void {
     if (!isset($context['results']['success'])) {
       $context['results']['success'] = 0;
     }
@@ -342,14 +392,17 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       $context['results']['errors'] = [];
     }
 
-    if (!$listing instanceof AiBookListing) {
-      $context['message'] = (string) \Drupal::translation()->translate('Skipping missing listing @id.', ['@id' => $listingId]);
+    $entityTypeManager = \Drupal::entityTypeManager();
+    $storage = $entityTypeManager->getStorage('bb_ai_listing');
+    $listing = $storage->load($listingId);
+    if ($listing === NULL) {
+      $context['message'] = (string) \Drupal::translation()->translate('Skipping missing listing @type:@id.', ['@type' => $listingType, '@id' => $listingId]);
       return;
     }
 
     $title = $listing->label() ?: 'Untitled';
 
-    if (self::listingHasInventoryAndMarketplaceData($listingId)) {
+    if ($listingType === 'book' && self::listingHasInventoryAndMarketplaceData($listingId)) {
       $context['results']['errors'][] = (string) \Drupal::translation()->translate(
         'Listing %title was not deleted because Drupal has inventory and marketplace publication records for it.',
         ['%title' => $title]
@@ -361,7 +414,8 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     try {
       $listing->delete();
       $context['results']['success']++;
-      $context['message'] = (string) \Drupal::translation()->translate('Deleted listing @id: @title', [
+      $context['message'] = (string) \Drupal::translation()->translate('Deleted listing @type:@id: @title', [
+        '@type' => $listingType,
         '@id' => $listingId,
         '@title' => $title,
       ]);
@@ -374,7 +428,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
           '%reason' => $e->getMessage(),
         ]
       );
-      $context['message'] = (string) \Drupal::translation()->translate('Failed delete for listing @id.', ['@id' => $listingId]);
+      $context['message'] = (string) \Drupal::translation()->translate('Failed delete for listing @type:@id.', ['@type' => $listingType, '@id' => $listingId]);
     }
   }
 
@@ -430,13 +484,24 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     return trim((string) $form_state->getValue('location'));
   }
 
-  private function redirectToPublishUpdateConfirmationIfNeeded(FormStateInterface $form_state): bool {
-    $selected = array_filter($form_state->getValue('listings') ?? []);
-    if ($selected === []) {
+  private function redirectToPublishUpdateConfirmationIfNeeded(FormStateInterface $form_state, bool $setLocation): bool {
+    $selection = $this->getSelectedListingRefs($form_state);
+    if ($selection === []) {
       return FALSE;
     }
 
-    $selectedIds = array_map('intval', array_keys($selected));
+    if ($this->selectionContainsBundleListings($selection)) {
+      return FALSE;
+    }
+
+    $selectedIds = [];
+    foreach ($selection as $item) {
+      $selectedIds[] = (int) $item['id'];
+    }
+    if ($setLocation) {
+      return FALSE;
+    }
+
     $missingLocationIds = $this->findListingsMissingStorageLocation($selectedIds);
     if ($missingLocationIds === []) {
       return FALSE;
@@ -444,8 +509,9 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
 
     $this->getConfirmTempStore()->set(self::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY, [
       'listing_ids' => $selectedIds,
-      'set_location' => FALSE,
-      'location' => '',
+      'set_location' => $setLocation,
+      'location' => $setLocation ? $this->getRequestedLocation($form_state) : '',
+      'operation_mode' => 'publish_update',
       'missing_location_ids' => $missingLocationIds,
       'selected_count' => count($selectedIds),
       'missing_location_count' => count($missingLocationIds),
@@ -461,13 +527,13 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return [];
     }
 
-    $storage = $this->getEntityTypeManager()->getStorage('ai_book_listing');
+    $storage = $this->getEntityTypeManager()->getStorage('bb_ai_listing');
     $listings = $storage->loadMultiple($listingIds);
     $missingIds = [];
 
     foreach ($listingIds as $listingId) {
       $listing = $listings[$listingId] ?? null;
-      if (!$listing instanceof AiBookListing) {
+      if (!$listing instanceof BbAiListing) {
         continue;
       }
 
@@ -481,31 +547,128 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   }
 
   private function buildReadyToShelveOptions(string $status, bool $onlyBargainBin): array {
-    $storage = $this->getEntityTypeManager()->getStorage('ai_book_listing');
+    $entityTypeManager = $this->getEntityTypeManager();
     $properties = ['status' => $status];
     if ($onlyBargainBin) {
       $properties['bargain_bin'] = 1;
     }
-    $items = $storage->loadByProperties($properties);
-    uasort($items, fn($a, $b) => $a->get('created')->value <=> $b->get('created')->value);
+    $rows = [];
+    $items = $entityTypeManager->getStorage('bb_ai_listing')->loadByProperties($properties);
+    foreach ($items as $listing) {
+      if (!$listing instanceof BbAiListing) {
+        continue;
+      }
+      $rows[] = [
+        'listing_type' => (string) $listing->bundle(),
+        'entity' => $listing,
+        'created' => (int) $listing->get('created')->value,
+      ];
+    }
+
+    usort($rows, static fn(array $a, array $b): int => $a['created'] <=> $b['created']);
 
     $options = [];
-    foreach ($items as $listing) {
-      $link = Link::fromTextAndUrl(
-        $listing->label() ?: $this->t('Untitled listing'),
-        Url::fromRoute('entity.ai_book_listing.canonical', ['ai_book_listing' => $listing->id()])
-      );
+    foreach ($rows as $row) {
+      $listingType = $row['listing_type'];
+      $listing = $row['entity'];
+      $created = $row['created'];
 
-      $options[$listing->id()] = [
-        'title' => $link->toString(),
-        'author' => $listing->get('author')->value ?: $this->t('Unknown'),
+      if (!$listing instanceof BbAiListing) {
+        continue;
+      }
+
+      if ($listingType === 'book') {
+        $label = (string) ($listing->get('field_full_title')->value ?: $listing->get('field_title')->value ?: $listing->label());
+        $link = Link::fromTextAndUrl(
+          $label ?: $this->t('Untitled listing'),
+          Url::fromRoute('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $listing->id()])
+        );
+
+        $options[$this->buildSelectionKey('book', (int) $listing->id())] = [
+          'type' => $this->t('Book'),
+          'title' => $link->toString(),
+          'author' => $listing->get('field_author')->value ?: $this->t('Unknown'),
+          'price' => $listing->get('price')->value ?? $this->t('—'),
+          'location' => $listing->get('storage_location')->value ?: $this->t('Unset yet'),
+          'created' => $this->getDateFormatter()->format($created),
+        ];
+        continue;
+      }
+
+      if ($listingType !== 'book_bundle') {
+        continue;
+      }
+
+      $options[$this->buildSelectionKey('book_bundle', (int) $listing->id())] = [
+        'type' => $this->t('Book bundle'),
+        'title' => (string) ($listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled bundle')),
+        'author' => $this->t('—'),
         'price' => $listing->get('price')->value ?? $this->t('—'),
         'location' => $listing->get('storage_location')->value ?: $this->t('Unset yet'),
-        'created' => $this->getDateFormatter()->format((int) $listing->get('created')->value),
+        'created' => $this->getDateFormatter()->format($created),
       ];
     }
 
     return $options;
+  }
+
+  private function buildSelectionKey(string $listingType, int $id): string {
+    return $listingType . ':' . $id;
+  }
+
+  /**
+   * @return array<int,array{listing_type:string,id:int}>
+   */
+  private function getSelectedListingRefs(FormStateInterface $form_state): array {
+    $selected = array_filter($form_state->getValue('listings') ?? []);
+    if ($selected === []) {
+      return [];
+    }
+
+    $selection = [];
+    foreach (array_keys($selected) as $key) {
+      $decoded = $this->parseSelectionKey((string) $key);
+      if ($decoded !== NULL) {
+        $selection[] = $decoded;
+      }
+    }
+
+    return $selection;
+  }
+
+  /**
+   * @return array{listing_type:string,id:int}|null
+   */
+  private function parseSelectionKey(string $key): ?array {
+    if (!str_contains($key, ':')) {
+      return NULL;
+    }
+
+    [$listingType, $id] = explode(':', $key, 2);
+    $listingType = trim($listingType);
+    $entityId = (int) $id;
+
+    if ($listingType === '' || $entityId <= 0) {
+      return NULL;
+    }
+
+    return [
+      'listing_type' => $listingType,
+      'id' => $entityId,
+    ];
+  }
+
+  /**
+   * @param array<int,array{listing_type:string,id:int}> $selection
+   */
+  private function selectionContainsBundleListings(array $selection): bool {
+    foreach ($selection as $item) {
+      if ($item['listing_type'] === 'book_bundle') {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
   }
 
   private function getEntityTypeManager(): EntityTypeManagerInterface {

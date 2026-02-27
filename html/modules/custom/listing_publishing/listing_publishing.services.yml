@@ -4,6 +4,7 @@ services:
     arguments:
       - '@file_url_generator'
       - '@listing_publishing.sku_generator'
+      - '@entity_type.manager'
 
   drupal.listing_publishing.publish_command:
     class: Drupal\listing_publishing\Command\PublishAiListingCommand

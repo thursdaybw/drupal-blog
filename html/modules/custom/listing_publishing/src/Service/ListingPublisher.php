@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\listing_publishing\Service;
 
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\AiMarketplacePublication;
 use Drupal\ai_listing\Service\AiListingInventorySkuResolver;
 use Drupal\listing_publishing\Contract\MarketplacePublisherInterface;
@@ -21,7 +21,7 @@ final class ListingPublisher {
     private readonly MarketplacePublicationLifecycleManager $marketplacePublicationLifecycleManager,
   ) {}
 
-  public function publish(AiBookListing $listing): MarketplacePublishResult {
+  public function publish(BbAiListing $listing): MarketplacePublishResult {
     $request = $this->assembler->assemble($listing);
     $newSku = $request->getSku();
     $previousSku = $this->skuResolver->getPrimarySku($listing) ?? '';
@@ -49,7 +49,7 @@ final class ListingPublisher {
     return $result;
   }
 
-  public function publishOrUpdate(AiBookListing $listing): MarketplacePublishResult {
+  public function publishOrUpdate(BbAiListing $listing): MarketplacePublishResult {
     $publication = $this->marketplacePublicationResolver->getPublishedPublicationForListing(
       $listing,
       $this->publisher->getMarketplaceKey(),
@@ -62,7 +62,7 @@ final class ListingPublisher {
     return $this->updatePublishedListing($listing, $publication);
   }
 
-  private function updatePublishedListing(AiBookListing $listing, AiMarketplacePublication $publication): MarketplacePublishResult {
+  private function updatePublishedListing(BbAiListing $listing, AiMarketplacePublication $publication): MarketplacePublishResult {
     $inventorySku = $this->skuResolver->getPrimarySkuRecord($listing);
     if ($inventorySku === null) {
       throw new \RuntimeException('Listing has no primary inventory SKU record for marketplace update.');

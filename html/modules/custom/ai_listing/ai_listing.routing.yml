@@ -6,6 +6,14 @@ ai_listing.add:
   requirements:
     _permission: 'administer ai listings'
 
+ai_listing.bundle_add:
+  path: '/admin/ai-listing/add-bundle'
+  defaults:
+    _form: '\Drupal\ai_listing\Form\AiBookBundleListingUploadForm'
+    _title: 'Add AI Book Bundle Listing'
+  requirements:
+    _permission: 'administer ai listings'
+
 ai_listing.location_batch:
   path: '/admin/ai-listings/ready-to-shelve/bulk-location'
   defaults:
@@ -22,10 +30,14 @@ ai_listing.location_batch.publish_update_confirm:
   requirements:
     _permission: 'administer ai listings'
 
-entity.ai_book_listing.canonical:
-  path: '/admin/ai-listings/{ai_book_listing}'
+entity.bb_ai_listing.canonical:
+  path: '/admin/ai-listings/{bb_ai_listing}'
   defaults:
     _form: '\Drupal\ai_listing\Form\AiBookListingReviewForm'
     _title_callback: '\Drupal\ai_listing\Form\AiBookListingReviewForm::getTitle'
   requirements:
     _permission: 'administer ai listings'
+  options:
+    parameters:
+      bb_ai_listing:
+        type: entity:bb_ai_listing

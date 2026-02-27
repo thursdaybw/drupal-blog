@@ -217,7 +217,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   public static function buildListingBatchDefinition(array $selection, bool $setLocation, string $location, string $operationMode = 'publish'): array {
     $operations = [];
     foreach ($selection as $item) {
-      if (is_int($item) || ctype_digit((string) $item)) {
+      if (is_int($item) || (is_string($item) && ctype_digit($item))) {
         $item = [
           'listing_type' => 'book',
           'id' => (int) $item,
@@ -456,7 +456,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $inventoryIds = $entityTypeManager->getStorage('ai_listing_inventory_sku')
       ->getQuery()
       ->accessCheck(FALSE)
-      ->condition('ai_book_listing', $listingId)
+      ->condition('listing', $listingId)
       ->range(0, 1)
       ->execute();
 
@@ -467,7 +467,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $publicationIds = $entityTypeManager->getStorage('ai_marketplace_publication')
       ->getQuery()
       ->accessCheck(FALSE)
-      ->condition('ai_book_listing', $listingId)
+      ->condition('listing', $listingId)
       ->range(0, 1)
       ->execute();
 

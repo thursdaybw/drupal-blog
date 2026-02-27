@@ -31,7 +31,7 @@ final class AiListingInventorySku extends ContentEntityBase {
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type): array {
     $fields = parent::baseFieldDefinitions($entity_type);
 
-    $fields['ai_book_listing'] = BaseFieldDefinition::create('entity_reference')
+    $fields['listing'] = BaseFieldDefinition::create('entity_reference')
       ->setLabel('BB AI Listing')
       ->setRequired(TRUE)
       ->setSetting('target_type', 'bb_ai_listing');

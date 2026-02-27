@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\ebay_infrastructure\Command;
 
-use Drupal\ai_listing\Entity\AiBookListing;
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Service\AiListingInventorySkuResolver;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\ebay_infrastructure\Service\SellApiClient;
@@ -356,12 +356,12 @@ final class EbayOfferCommand extends DrushCommands {
    * @command ebay-connector:reconcile-listing-publication
    */
   public function reconcileListingPublication(int $listingId): void {
-    $storage = $this->entityTypeManager->getStorage('ai_book_listing');
-    /** @var \Drupal\ai_listing\Entity\AiBookListing|null $listing */
+    $storage = $this->entityTypeManager->getStorage('bb_ai_listing');
+    /** @var \Drupal\ai_listing\Entity\BbAiListing|null $listing */
     $listing = $storage->load($listingId);
 
-    if (!$listing instanceof AiBookListing) {
-      $this->output()->writeln('<error>AI Book Listing not found.</error>');
+    if (!$listing instanceof BbAiListing || $listing->bundle() !== 'book') {
+      $this->output()->writeln('<error>Book listing not found.</error>');
       return;
     }
 
@@ -375,8 +375,11 @@ final class EbayOfferCommand extends DrushCommands {
    * @command ebay-connector:reconcile-published-listings
    */
   public function reconcilePublishedListings(): void {
-    $storage = $this->entityTypeManager->getStorage('ai_book_listing');
-    $listings = $storage->loadByProperties(['status' => 'published']);
+    $storage = $this->entityTypeManager->getStorage('bb_ai_listing');
+    $listings = $storage->loadByProperties([
+      'status' => 'published',
+      'listing_type' => 'book',
+    ]);
 
     $processed = 0;
     $errors = 0;
@@ -444,7 +447,7 @@ final class EbayOfferCommand extends DrushCommands {
     $this->output()->writeln(json_encode($data, JSON_PRETTY_PRINT));
   }
 
-  private function reconcilePublishedListingFromEbay(AiBookListing $listing): string {
+  private function reconcilePublishedListingFromEbay(BbAiListing $listing): string {
     $inventorySku = $this->inventorySkuResolver->getPrimarySkuRecord($listing);
     if ($inventorySku === null) {
       return sprintf('Listing %d skipped (no primary inventory SKU record).', $listing->id());

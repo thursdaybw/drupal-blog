@@ -21,7 +21,7 @@ final class MarketplacePublicationResolver {
     ?string $status = null,
   ): ?AiMarketplacePublication {
     $properties = [
-      'ai_book_listing' => $listing->id(),
+      'listing' => $listing->id(),
       'marketplace_key' => $marketplaceKey,
       'publication_type' => $publicationType,
     ];

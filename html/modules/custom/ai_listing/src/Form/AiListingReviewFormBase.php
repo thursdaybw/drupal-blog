@@ -50,9 +50,15 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#tree' => TRUE,
     ];
 
+    $links = array_filter([
+      $this->buildEbaySearchLink($listing),
+      $this->buildDuckDuckGoIsbnLink($listing),
+      $this->buildIsbnDbLink($listing),
+    ]);
+    $linkMarkup = implode(' | ', $links);
     $form['basic_search'] = [
       '#type' => 'markup',
-      '#markup' => $this->buildEbaySearchLink($listing),
+      '#markup' => $linkMarkup,
       '#prefix' => '<div class="ai-help">',
       '#suffix' => '</div>',
       '#weight' => -100,
@@ -581,6 +587,29 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     $url = 'https://www.ebay.com.au/sch/i.html?_nkw=' . UrlHelper::encodePath($query);
     $titleAttr = Html::escape($this->t('Search eBay for ~%query%~', ['%query%' => $query]));
     return sprintf('<a href="%s" target="_blank" rel="noopener noreferrer" title="%s">Search eBay for %s</a>', $url, $titleAttr, Html::escape($query));
+  }
+
+  protected function buildDuckDuckGoIsbnLink(BbAiListing $listing): string {
+    $isbn = trim($this->getStringFieldValue($listing, 'field_isbn'));
+    if ($isbn === '') {
+      return '';
+    }
+
+    $query = 'isbn ' . $isbn;
+    $url = 'https://duckduckgo.com/?q=' . UrlHelper::encodePath($query);
+    $titleAttr = Html::escape($this->t('Search DuckDuckGo for ISBN %isbn%', ['%isbn%' => $isbn]));
+    return sprintf('<a href="%s" target="_blank" rel="noopener noreferrer" title="%s">Search DuckDuckGo for ISBN %s</a>', $url, $titleAttr, Html::escape($isbn));
+  }
+
+  protected function buildIsbnDbLink(BbAiListing $listing): string {
+    $isbn = trim($this->getStringFieldValue($listing, 'field_isbn'));
+    if ($isbn === '') {
+      return '';
+    }
+
+    $url = 'https://isbndb.com/book/' . UrlHelper::encodePath($isbn);
+    $titleAttr = Html::escape($this->t('Open ISBNdb listing for %isbn%', ['%isbn%' => $isbn]));
+    return sprintf('<a href="%s" target="_blank" rel="noopener noreferrer" title="%s">View ISBNdb entry for %s</a>', $url, $titleAttr, Html::escape($isbn));
   }
 
   /**

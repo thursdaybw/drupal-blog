@@ -36,3 +36,10 @@ format_picker:
   dependencies:
     - core/drupal
     - core/once
+
+bundle_upload:
+  js:
+    js/bundle-upload.js: {}
+  dependencies:
+    - core/drupal
+    - core/once

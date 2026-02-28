@@ -1,0 +1,20 @@
+{#
+/**
+ * @file
+ * Simplified upload panel for bundle image uploads.
+ */
+#}
+{% set attributes = create_attribute(element['#attributes'] ?? {}) %}
+
+<section{{ attributes.addClass('ai-bundle-upload-panel') }}>
+  <div class="ai-bundle-upload-panel__header">
+    <h3 class="ai-bundle-upload-panel__title">{{ element['#title'] }}</h3>
+    {% if element['#description'] %}
+      <div class="ai-bundle-upload-panel__description">{{ element['#description'] }}</div>
+    {% endif %}
+  </div>
+  <div class="ai-bundle-upload-panel__body">
+    {{ element.file_input }}
+    {{ element.actions }}
+  </div>
+</section>

@@ -134,5 +134,9 @@ function ai_listing_theme($existing, $type, $theme, $path) {
       'template' => 'ai-format-field',
       'base hook' => 'input',
     ],
+    'ai_bundle_upload_panel' => [
+      'render element' => 'element',
+      'template' => 'ai-bundle-upload-panel',
+    ],
   ];
 }

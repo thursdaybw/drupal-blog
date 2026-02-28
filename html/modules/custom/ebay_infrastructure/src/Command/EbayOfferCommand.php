@@ -575,7 +575,6 @@ final class EbayOfferCommand extends DrushCommands {
     $publicationStorage = $this->entityTypeManager->getStorage('ai_marketplace_publication');
 
     $skuRows = $skuStorage->loadByProperties([
-      'is_primary' => 1,
       'status' => 'active',
     ]);
     if ($skuRows === []) {
@@ -650,7 +649,6 @@ final class EbayOfferCommand extends DrushCommands {
     $listingStorage = $this->entityTypeManager->getStorage('bb_ai_listing');
 
     $skuRows = $skuStorage->loadByProperties([
-      'is_primary' => 1,
       'status' => 'active',
     ]);
 
@@ -839,14 +837,14 @@ final class EbayOfferCommand extends DrushCommands {
   }
 
   private function reconcilePublishedListingFromEbay(BbAiListing $listing): string {
-    $inventorySku = $this->inventorySkuResolver->getPrimarySkuRecord($listing);
+    $inventorySku = $this->inventorySkuResolver->getSkuRecord($listing);
     if ($inventorySku === null) {
-      return sprintf('Listing %d skipped (no primary inventory SKU record).', $listing->id());
+      return sprintf('Listing %d skipped (no active inventory SKU record).', $listing->id());
     }
 
     $sku = (string) $inventorySku->get('sku')->value;
     if ($sku === '') {
-      return sprintf('Listing %d skipped (primary SKU is empty).', $listing->id());
+      return sprintf('Listing %d skipped (SKU is empty).', $listing->id());
     }
 
     try {

@@ -48,13 +48,7 @@ final class AiListingInventorySku extends ContentEntityBase {
       ->setDefaultValue('active')
       ->setSetting('allowed_values', [
         'active' => 'Active',
-        'retired' => 'Retired',
       ]);
-
-    $fields['is_primary'] = BaseFieldDefinition::create('boolean')
-      ->setLabel('Primary SKU')
-      ->setRequired(TRUE)
-      ->setDefaultValue(TRUE);
 
     $fields['created'] = BaseFieldDefinition::create('created')
       ->setLabel('Created');

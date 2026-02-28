@@ -1,0 +1,19 @@
+.ai-bundle-upload-panel {
+  border: 2px dashed #c7c9d1;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: #fff;
+  transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.ai-bundle-upload-panel__body {
+  display: grid;
+  gap: 12px;
+}
+
+.ai-bundle-upload-panel--dragover {
+  border-color: #0f62fe;
+  background: #eef4ff;
+  box-shadow: 0 0 0 3px rgba(15, 98, 254, 0.12);
+}

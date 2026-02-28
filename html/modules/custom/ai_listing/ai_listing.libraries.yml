@@ -38,6 +38,9 @@ format_picker:
     - core/once
 
 bundle_upload:
+  css:
+    theme:
+      css/bundle-upload.css: {}
   js:
     js/bundle-upload.js: {}
   dependencies:

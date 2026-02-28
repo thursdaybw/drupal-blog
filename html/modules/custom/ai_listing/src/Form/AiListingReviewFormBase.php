@@ -110,7 +110,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#type' => 'number',
       '#title' => 'Suggested price',
       '#description' => $this->t('Suggested listing price for eBay (AUD).'),
-      '#default_value' => $listing->get('price')->value ?: '29.95',
+      '#default_value' => $this->resolveDefaultPrice($listing),
       '#step' => '0.01',
       '#min' => '0',
       '#required' => TRUE,
@@ -574,6 +574,15 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     $text = preg_replace('/\s*---\s*/', "\n\n---\n\n", $text);
     $text = preg_replace('/\n{3,}/', "\n\n", $text);
     return trim((string) $text);
+  }
+
+  protected function resolveDefaultPrice(BbAiListing $listing): string {
+    $existingPrice = trim((string) ($listing->get('price')->value ?? ''));
+    if ($existingPrice !== '') {
+      return $existingPrice;
+    }
+
+    return '29.' . (string) random_int(50, 99);
   }
 
   protected function buildEbaySearchLink(BbAiListing $listing): string {

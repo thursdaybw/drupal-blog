@@ -214,7 +214,7 @@ final class EbayOfferCommand extends DrushCommands {
       ],
     ];
 
-    $data = $this->sellApiClient->replaceInventoryItem(
+    $data = $this->sellApiClient->createOrReplaceInventoryItem(
       $sku,
       $payload
     );

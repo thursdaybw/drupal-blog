@@ -74,8 +74,6 @@ final class BbAiListing extends ContentEntityBase {
 
     $fields['price'] = BaseFieldDefinition::create('decimal')
       ->setLabel('Price')
-      ->setRequired(TRUE)
-      ->setDefaultValue('29.95')
       ->setSetting('precision', 10)
       ->setSetting('scale', 2);
 

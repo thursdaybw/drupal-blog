@@ -174,7 +174,7 @@ final class SellApiClient {
     );
   }
 
-  public function replaceInventoryItem(string $sku, array $payload): array {
+  public function createOrReplaceInventoryItem(string $sku, array $payload): array {
 
     return $this->request(
       'PUT',
@@ -200,11 +200,20 @@ final class SellApiClient {
   }
 
   public function listOffersBySku(string $sku): array {
-    return $this->requestWithQuery(
-      'GET',
-      '/sell/inventory/v1/offer',
-      ['sku' => $sku]
-    );
+    try {
+      return $this->requestWithQuery(
+        'GET',
+        '/sell/inventory/v1/offer',
+        ['sku' => $sku]
+      );
+    }
+    catch (\RuntimeException $exception) {
+      if (str_contains($exception->getMessage(), '"errorId":25713')) {
+        return [];
+      }
+
+      throw $exception;
+    }
   }
 
   public function listLocations(): array {

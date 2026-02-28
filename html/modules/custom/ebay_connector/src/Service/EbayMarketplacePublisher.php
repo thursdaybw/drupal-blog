@@ -23,6 +23,7 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
   private const DEFAULT_RETURN_POLICY_ID = '240513136026';
   private const BARGAIN_BIN_FULFILLMENT_POLICY_ID = '244519897026';
   private const BARGAIN_BIN_STORE_CATEGORY_ID = '85529649013';
+  private const MAX_BOOK_TITLE_ASPECT_LENGTH = 65;
 
   private LoggerChannelInterface $logger;
 
@@ -86,20 +87,24 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     $payloadJson = $this->formatPayload($offerPayload);
     $this->dumpPayloadForCli($payloadJson, 'Initial offer payload');
 
-    try {
-      $offer = $this->sellApiClient->createOffer($offerPayload);
-    }
-    catch (\RuntimeException $exception) {
-      $payload = $this->formatPayload($offerPayload);
-      $this->logger->error('Offer creation failed: @message | payload: @payload', [
-        '@message' => $exception->getMessage(),
-        '@payload' => $payload,
-      ]);
-      $this->dumpPayloadForCli($payload, 'Offer creation failed', $exception->getMessage());
-      throw $exception;
+    $offerId = $this->resolveExistingOfferId($request->getSku());
+    if ($offerId === null) {
+      try {
+        $offer = $this->sellApiClient->createOffer($offerPayload);
+      }
+      catch (\RuntimeException $exception) {
+        $payload = $this->formatPayload($offerPayload);
+        $this->logger->error('Offer creation failed: @message | payload: @payload', [
+          '@message' => $exception->getMessage(),
+          '@payload' => $payload,
+        ]);
+        $this->dumpPayloadForCli($payload, 'Offer creation failed', $exception->getMessage());
+        throw $exception;
+      }
+
+      $offerId = (string) $offer['offerId'];
     }
 
-    $offerId = $offer['offerId'];
     $fulfillmentPolicyId = $this->resolveFulfillmentPolicyId($request);
 
     $offerUpdate = [
@@ -231,7 +236,8 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     $aspects = [];
 
     if (($attributes['product_type'] ?? null) === 'book') {
-      $aspects['Book Title'] = [$request->getTitle()];
+      $bookTitle = (string) ($attributes['book_title'] ?? $request->getTitle());
+      $aspects['Book Title'] = [$this->truncateBookTitleAspect($bookTitle)];
       $authorValues = $this->deriveAuthorAspectValues((string) ($attributes['author'] ?? $request->getAuthor()));
       if ($authorValues === []) {
         $authorValues = ['Various Authors'];
@@ -266,6 +272,27 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     }
 
     $aspects[$name] = [$normalized];
+  }
+
+  private function resolveExistingOfferId(string $sku): ?string {
+    $offers = $this->sellApiClient->listOffersBySku($sku);
+    if (empty($offers['offers']) || !is_array($offers['offers'])) {
+      return null;
+    }
+
+    foreach ($offers['offers'] as $offer) {
+      $offerId = isset($offer['offerId']) ? trim((string) $offer['offerId']) : '';
+      if ($offerId !== '') {
+        return $offerId;
+      }
+    }
+
+    return null;
+  }
+
+  private function truncateBookTitleAspect(string $value): string {
+    $normalized = preg_replace('/\s+/', ' ', trim($value));
+    return (string) mb_substr((string) $normalized, 0, self::MAX_BOOK_TITLE_ASPECT_LENGTH);
   }
 
   /**

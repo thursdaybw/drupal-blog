@@ -27,7 +27,8 @@ final class BookListingAssembler {
   ) {}
 
   public function assemble(BbAiListing $listing): ListingPublishRequest {
-    $title = $this->resolveTitle($listing);
+    $title = $this->resolveEbayListingTitle($listing);
+    $bookTitle = $this->resolveBookTitle($listing);
     $description = $this->resolveDescription($listing, $title);
     $author = $this->resolveAuthor($listing);
     $skuSuffix = 'ai-book-' . $listing->id();
@@ -39,6 +40,7 @@ final class BookListingAssembler {
     $price = $this->resolvePrice($listing);
     $attributes = [
       'product_type' => 'book',
+      'book_title' => $bookTitle,
       'author' => $author,
       'language' => $this->resolveStringField($listing, 'field_language') ?: 'English',
       'isbn' => $this->resolveStringField($listing, 'field_isbn'),
@@ -66,7 +68,31 @@ final class BookListingAssembler {
     );
   }
 
-  private function resolveTitle(BbAiListing $listing): string {
+  private function resolveEbayListingTitle(BbAiListing $listing): string {
+    $ebayTitle = trim((string) ($listing->get('ebay_title')->value ?? ''));
+    if ($ebayTitle !== '') {
+      return $this->truncateEbayTitle($ebayTitle);
+    }
+
+    $title = $this->resolveStringField($listing, 'field_title');
+    if ($title !== '') {
+      return $this->truncateEbayTitle($title);
+    }
+
+    $fullTitle = $this->resolveStringField($listing, 'field_full_title');
+    if ($fullTitle !== '') {
+      return $this->truncateEbayTitle($fullTitle);
+    }
+
+    return $this->truncateEbayTitle('Untitled AI Listing');
+  }
+
+  private function truncateEbayTitle(string $title): string {
+    $title = preg_replace('/\s+/', ' ', trim($title));
+    return (string) mb_substr($title, 0, 80);
+  }
+
+  private function resolveBookTitle(BbAiListing $listing): string {
     $title = $this->resolveStringField($listing, 'field_title');
     if ($title !== '') {
       return $title;

@@ -47,7 +47,7 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
     $aspects = $this->buildAspects($request);
 
-    $this->sellApiClient->replaceInventoryItem(
+    $this->sellApiClient->createOrReplaceInventoryItem(
       $request->getSku(),
       [
         'product' => [
@@ -145,7 +145,7 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     $request = $request->withImageUrls($imageUrls);
     $aspects = $this->buildAspects($request);
 
-    $this->sellApiClient->replaceInventoryItem(
+    $this->sellApiClient->createOrReplaceInventoryItem(
       $request->getSku(),
       [
         'product' => [

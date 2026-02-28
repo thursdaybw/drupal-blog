@@ -67,7 +67,7 @@ final class AiBookListingDataExtractionProcessor {
     $this->setListingFieldIfExists($listing, 'field_features', $this->normalizeStringList($metadata['features'] ?? null));
     $listing->set('ebay_title', (string) ($metadata['ebay_title'] ?? ''));
     $listing->set('description', [
-      'value' => (string) ($metadata['description'] ?? ''),
+      'value' => $this->buildListingDescription((string) ($metadata['description'] ?? '')),
       'format' => 'basic_html',
     ]);
 
@@ -158,7 +158,7 @@ final class AiBookListingDataExtractionProcessor {
     }
 
     $listing->set('description', [
-      'value' => $aggregate['description'],
+      'value' => $this->buildListingDescription($aggregate['description']),
       'format' => 'basic_html',
     ]);
     $listing->set('status', 'ready_for_review');
@@ -304,10 +304,6 @@ final class AiBookListingDataExtractionProcessor {
         $descriptionLineParts[] = 'ISBN: ' . htmlspecialchars($isbn, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
       }
 
-      if ($issues !== []) {
-        $descriptionLineParts[] = 'Condition: ' . htmlspecialchars(implode(', ', $issues), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-      }
-
       $descriptionBlocks[] = implode('<br>', $descriptionLineParts);
     }
 
@@ -390,6 +386,31 @@ final class AiBookListingDataExtractionProcessor {
     ];
 
     return $map[$value] ?? $value;
+  }
+
+  private function buildListingDescription(string $body): string {
+    $normalizedBody = trim($body);
+    $footer = $this->buildSellerFooter();
+
+    if ($normalizedBody === '') {
+      return $footer;
+    }
+
+    return $normalizedBody . "\n\n" . $footer;
+  }
+
+  private function buildSellerFooter(): string {
+    return trim("
+---
+
+Australian seller starting a new chapter from the Northern Rivers of NSW
+
+Sent via Australia Post within 2 business days of payment clearing
+
+All items are pre-loved and sold as-is.
+
+Explore my other listings, more books and treasures added regularly!
+");
   }
 
   /**

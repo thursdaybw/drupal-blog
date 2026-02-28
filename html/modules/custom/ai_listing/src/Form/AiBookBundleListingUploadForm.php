@@ -37,6 +37,7 @@ final class AiBookBundleListingUploadForm extends FormBase {
 
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $form['#tree'] = TRUE;
+    $form['#attached']['library'][] = 'ai_listing/bundle_upload';
 
     $bundleGroups = $this->getBundleGroups($form_state);
     $stagedImages = $this->getStagedImages($form_state);
@@ -53,41 +54,16 @@ final class AiBookBundleListingUploadForm extends FormBase {
       '#default_value' => (string) $form_state->getValue(['workspace', 'bundle_title'], ''),
     ];
 
-    $form['workspace']['upload'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Bundle item images'),
-      '#open' => TRUE,
-    ];
-
-    $form['workspace']['upload']['new_images'] = [
-      '#type' => 'file',
-      '#title' => $this->t('Add images'),
-      '#multiple' => TRUE,
-      '#attributes' => ['accept' => 'image/*'],
-      '#description' => $this->t('Select images for one book, then upload. Each upload creates the next book in the bundle.'),
-    ];
-
-    $form['workspace']['upload']['actions'] = ['#type' => 'actions'];
-    $form['workspace']['upload']['actions']['upload_images'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Upload selected images'),
-      '#name' => 'upload_images',
-      '#limit_validation_errors' => [],
-      '#submit' => ['::submitUploadImages'],
-      '#ajax' => [
-        'callback' => '::ajaxRefreshWorkspace',
-        'wrapper' => 'ai-book-bundle-upload-workspace',
+    $form['workspace']['bundle_upload'] = [
+      '#theme' => 'ai_bundle_upload_panel',
+      '#title' => $this->t('Bundle-level listing images'),
+      '#description' => $this->t('Upload photos of the physically bundled lot (all covers/spines/outer views).'),
+      '#attributes' => [
+        'id' => 'ai-bundle-upload-panel-listing-images',
       ],
     ];
 
-    $form['workspace']['bundle_upload'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Bundle-level listing images'),
-      '#open' => TRUE,
-      '#description' => $this->t('Upload photos of the physically bundled lot (all covers/spines/outer views).'),
-    ];
-
-    $form['workspace']['bundle_upload']['listing_images'] = [
+    $form['workspace']['bundle_upload']['file_input'] = [
       '#type' => 'file',
       '#title' => $this->t('Add bundle-level images'),
       '#multiple' => TRUE,
@@ -102,6 +78,35 @@ final class AiBookBundleListingUploadForm extends FormBase {
       '#name' => 'upload_listing_images',
       '#limit_validation_errors' => [],
       '#submit' => ['::submitUploadBundleListingImages'],
+      '#ajax' => [
+        'callback' => '::ajaxRefreshWorkspace',
+        'wrapper' => 'ai-book-bundle-upload-workspace',
+      ],
+    ];
+
+    $form['workspace']['upload'] = [
+      '#theme' => 'ai_bundle_upload_panel',
+      '#title' => $this->t('Bundle item images'),
+      '#description' => $this->t('Select images for one book, then upload. Each upload creates the next book in the bundle.'),
+      '#attributes' => [
+        'id' => 'ai-bundle-upload-panel-item-images',
+      ],
+    ];
+
+    $form['workspace']['upload']['file_input'] = [
+      '#type' => 'file',
+      '#title' => $this->t('Add images'),
+      '#multiple' => TRUE,
+      '#attributes' => ['accept' => 'image/*'],
+    ];
+
+    $form['workspace']['upload']['actions'] = ['#type' => 'actions'];
+    $form['workspace']['upload']['actions']['upload_images'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Upload selected images'),
+      '#name' => 'upload_images',
+      '#limit_validation_errors' => [],
+      '#submit' => ['::submitUploadImages'],
       '#ajax' => [
         'callback' => '::ajaxRefreshWorkspace',
         'wrapper' => 'ai-book-bundle-upload-workspace',

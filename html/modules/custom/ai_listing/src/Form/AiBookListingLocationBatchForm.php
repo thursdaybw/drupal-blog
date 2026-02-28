@@ -830,7 +830,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $skuStorage = $entityTypeManager->getStorage('ai_listing_inventory_sku');
     $skuRows = $skuStorage->loadByProperties([
       'listing' => $listingIds,
-      'is_primary' => 1,
       'status' => 'active',
     ]);
     if ($skuRows === []) {

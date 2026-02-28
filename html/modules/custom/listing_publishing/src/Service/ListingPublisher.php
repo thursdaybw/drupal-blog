@@ -24,7 +24,7 @@ final class ListingPublisher {
   public function publish(BbAiListing $listing): MarketplacePublishResult {
     $request = $this->assembler->assemble($listing);
     $newSku = $request->getSku();
-    $previousSku = $this->skuResolver->getPrimarySku($listing) ?? '';
+    $previousSku = $this->skuResolver->getSku($listing) ?? '';
 
     if ($previousSku !== '' && $previousSku !== $newSku) {
       $this->publisher->deleteSku($previousSku);
@@ -32,12 +32,12 @@ final class ListingPublisher {
         $this->publisher->getMarketplaceKey(),
         $previousSku
       );
-      $this->skuResolver->retirePrimarySku($listing);
+      $this->skuResolver->deleteSku($listing);
     }
 
     $result = $this->publisher->publish($request);
     if ($result->isSuccess()) {
-      $inventorySku = $this->skuResolver->setPrimarySku($listing, $newSku);
+      $inventorySku = $this->skuResolver->setSku($listing, $newSku);
       $this->marketplacePublicationRecorder->recordSuccessfulPublish(
         $listing,
         $inventorySku,
@@ -63,9 +63,9 @@ final class ListingPublisher {
   }
 
   private function updatePublishedListing(BbAiListing $listing, AiMarketplacePublication $publication): MarketplacePublishResult {
-    $inventorySku = $this->skuResolver->getPrimarySkuRecord($listing);
+    $inventorySku = $this->skuResolver->getSkuRecord($listing);
     if ($inventorySku === null) {
-      throw new \RuntimeException('Listing has no primary inventory SKU record for marketplace update.');
+      throw new \RuntimeException('Listing has no active inventory SKU record for marketplace update.');
     }
 
     $publicationId = trim((string) ($publication->get('marketplace_publication_id')->value ?? ''));

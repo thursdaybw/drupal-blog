@@ -14,8 +14,8 @@ final class AiListingInventorySkuResolver {
     private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {}
 
-  public function getPrimarySku(BbAiListing $listing): ?string {
-    $skuRecord = $this->loadPrimarySkuRecord($listing);
+  public function getSku(BbAiListing $listing): ?string {
+    $skuRecord = $this->loadCurrentSkuRecord($listing);
     if (!$skuRecord instanceof AiListingInventorySku) {
       return null;
     }
@@ -23,28 +23,27 @@ final class AiListingInventorySkuResolver {
     return (string) $skuRecord->get('sku')->value;
   }
 
-  public function getPrimarySkuRecord(BbAiListing $listing): ?AiListingInventorySku {
-    return $this->loadPrimarySkuRecord($listing);
+  public function getSkuRecord(BbAiListing $listing): ?AiListingInventorySku {
+    return $this->loadCurrentSkuRecord($listing);
   }
 
-  public function setPrimarySku(BbAiListing $listing, string $sku): AiListingInventorySku {
+  public function setSku(BbAiListing $listing, string $sku): AiListingInventorySku {
     $normalizedSku = trim($sku);
     if ($normalizedSku === '') {
-      throw new \InvalidArgumentException('Primary SKU cannot be empty.');
+      throw new \InvalidArgumentException('SKU cannot be empty.');
     }
 
     if (!$this->entityTypeManager->hasDefinition('ai_listing_inventory_sku')) {
       throw new \RuntimeException('Inventory SKU entity type is not installed.');
     }
 
-    $skuRecord = $this->loadPrimarySkuRecord($listing);
+    $skuRecord = $this->loadCurrentSkuRecord($listing);
 
     if (!$skuRecord instanceof AiListingInventorySku) {
       $skuRecord = $this->entityTypeManager
         ->getStorage('ai_listing_inventory_sku')
         ->create([
         'listing' => $listing->id(),
-        'is_primary' => TRUE,
       ]);
     }
 
@@ -55,37 +54,36 @@ final class AiListingInventorySkuResolver {
     return $skuRecord;
   }
 
-  public function retirePrimarySku(BbAiListing $listing): void {
+  public function deleteSku(BbAiListing $listing): void {
     if (!$this->entityTypeManager->hasDefinition('ai_listing_inventory_sku')) {
       return;
     }
 
-    $skuRecord = $this->loadPrimarySkuRecord($listing);
+    $skuRecord = $this->loadCurrentSkuRecord($listing);
     if ($skuRecord instanceof AiListingInventorySku) {
-      $skuRecord->set('status', 'retired');
-      $skuRecord->save();
+      $skuRecord->delete();
     }
   }
 
-  private function loadPrimarySkuRecord(BbAiListing $listing): ?AiListingInventorySku {
+  private function loadCurrentSkuRecord(BbAiListing $listing): ?AiListingInventorySku {
     if (!$this->entityTypeManager->hasDefinition('ai_listing_inventory_sku')) {
       return null;
     }
 
     $storage = $this->entityTypeManager->getStorage('ai_listing_inventory_sku');
-    $records = $storage->loadByProperties([
-      'listing' => $listing->id(),
-      'is_primary' => 1,
-      'status' => 'active',
-    ]);
-
-    if ($records === []) {
+    $ids = $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('listing', (int) $listing->id())
+      ->condition('status', 'active')
+      ->sort('id', 'DESC')
+      ->range(0, 1)
+      ->execute();
+    if ($ids === []) {
       return null;
     }
-
-    /** @var \Drupal\ai_listing\Entity\AiListingInventorySku $record */
-    $record = reset($records);
-    return $record;
+    $id = (int) reset($ids);
+    $record = $storage->load($id);
+    return $record instanceof AiListingInventorySku ? $record : null;
   }
 
 }

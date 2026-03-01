@@ -44,6 +44,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $bargainFilterMode = $this->resolveFilterValue($form_state, 'bargain_bin_filter', 'any');
     $publishedToEbayFilterMode = $this->resolveFilterValue($form_state, 'published_to_ebay_filter', 'any');
     $searchQuery = trim($this->resolveFilterValue($form_state, 'search_query', ''));
+    $itemsPerPage = $this->resolveItemsPerPage($form_state);
 
     $form['filters'] = [
       '#type' => 'container',
@@ -113,6 +114,22 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       ],
     ];
 
+    $form['filters']['items_per_page'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Items per page'),
+      '#options' => [
+        '25' => '25',
+        '50' => '50',
+        '100' => '100',
+        '250' => '250',
+      ],
+      '#default_value' => (string) $itemsPerPage,
+      '#ajax' => [
+        'callback' => '::updateListingsCallback',
+        'wrapper' => 'ai-batch-listings',
+      ],
+    ];
+
     $form['filters']['apply_filters'] = [
       '#type' => 'submit',
       '#name' => 'apply_filters',
@@ -148,7 +165,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
         'published_to_ebay' => $this->t('Published to eBay'),
         'created' => $this->t('Created'),
       ],
-      '#options' => $this->buildReadyToShelveOptions($statusFilter, $bargainFilterMode, $publishedToEbayFilterMode, $searchQuery),
+      '#options' => $this->buildReadyToShelveOptions($statusFilter, $bargainFilterMode, $publishedToEbayFilterMode, $searchQuery, $itemsPerPage),
       '#empty' => $this->t('No listings match the selected filters.'),
       '#multiple' => TRUE,
       '#default_value' => [],
@@ -646,6 +663,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     string $bargainBinFilterMode,
     string $publishedToEbayFilterMode,
     string $searchQuery,
+    int $itemsPerPage,
   ): array {
     $entityTypeManager = $this->getEntityTypeManager();
     $properties = [];
@@ -749,7 +767,22 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       ];
     }
 
+    if ($itemsPerPage > 0) {
+      return array_slice($options, 0, $itemsPerPage, TRUE);
+    }
+
     return $options;
+  }
+
+  private function resolveItemsPerPage(FormStateInterface $form_state): int {
+    $value = $this->resolveFilterValue($form_state, 'items_per_page', '50');
+    $itemsPerPage = (int) $value;
+
+    if (!in_array($itemsPerPage, [25, 50, 100, 250], TRUE)) {
+      return 50;
+    }
+
+    return $itemsPerPage;
   }
 
   /**

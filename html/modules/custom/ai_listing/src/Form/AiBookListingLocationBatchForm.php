@@ -10,6 +10,8 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
+use Drupal\Core\Pager\PagerManagerInterface;
+use Drupal\Core\Pager\PagerParametersInterface;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\Core\Url;
 use Drupal\Component\Render\MarkupInterface;
@@ -25,6 +27,8 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   private ?ListingPublisher $listingPublisher = null;
   private ?DateFormatterInterface $dateFormatter = null;
   private ?PrivateTempStoreFactory $tempStoreFactory = null;
+  private ?PagerManagerInterface $pagerManager = null;
+  private ?PagerParametersInterface $pagerParameters = null;
 
   public static function create(ContainerInterface $container): self {
     $form = new self();
@@ -32,6 +36,8 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $form->listingPublisher = $container->get('drupal.listing_publishing.publisher');
     $form->dateFormatter = $container->get('date.formatter');
     $form->tempStoreFactory = $container->get('tempstore.private');
+    $form->pagerManager = $container->get('pager.manager');
+    $form->pagerParameters = $container->get('pager.parameters');
     return $form;
   }
 
@@ -45,6 +51,14 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $publishedToEbayFilterMode = $this->resolveFilterValue($form_state, 'published_to_ebay_filter', 'any');
     $searchQuery = trim($this->resolveFilterValue($form_state, 'search_query', ''));
     $itemsPerPage = $this->resolveItemsPerPage($form_state);
+    $totalListingOptions = $this->buildReadyToShelveOptions('any', 'any', 'any', '');
+    $listingOptions = $this->buildReadyToShelveOptions($statusFilter, $bargainFilterMode, $publishedToEbayFilterMode, $searchQuery);
+    $totalCount = count($totalListingOptions);
+    $filteredTotal = count($listingOptions);
+    $currentPage = $this->resolveCurrentPage($filteredTotal, $itemsPerPage);
+    $offset = $currentPage * $itemsPerPage;
+    $pagedOptions = array_slice($listingOptions, $offset, $itemsPerPage, TRUE);
+    $this->getPagerManager()->createPager($filteredTotal, $itemsPerPage);
 
     $form['filters'] = [
       '#type' => 'container',
@@ -150,6 +164,19 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       '#attributes' => ['id' => 'ai-batch-listings'],
     ];
 
+    $form['listings_container']['summary'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-batch-listing-summary']],
+    ];
+    $form['listings_container']['summary']['total'] = [
+      '#type' => 'markup',
+      '#markup' => '<div><strong>' . $this->t('Total listings:') . '</strong> ' . $totalCount . '</div>',
+    ];
+    $form['listings_container']['summary']['filtered'] = [
+      '#type' => 'markup',
+      '#markup' => '<div><strong>' . $this->t('Matching current filters:') . '</strong> ' . $filteredTotal . '</div>',
+    ];
+
     $form['listings_container']['listings'] = [
       '#type' => 'tableselect',
       '#header' => [
@@ -165,10 +192,21 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
         'published_to_ebay' => $this->t('Published to eBay'),
         'created' => $this->t('Created'),
       ],
-      '#options' => $this->buildReadyToShelveOptions($statusFilter, $bargainFilterMode, $publishedToEbayFilterMode, $searchQuery, $itemsPerPage),
+      '#options' => $pagedOptions,
       '#empty' => $this->t('No listings match the selected filters.'),
       '#multiple' => TRUE,
       '#default_value' => [],
+    ];
+
+    $form['listings_container']['pager'] = [
+      '#type' => 'pager',
+      '#parameters' => [
+        'status_filter' => $statusFilter,
+        'bargain_bin_filter' => $bargainFilterMode,
+        'published_to_ebay_filter' => $publishedToEbayFilterMode,
+        'search_query' => $searchQuery,
+        'items_per_page' => (string) $itemsPerPage,
+      ],
     ];
 
     $form['location'] = [
@@ -663,7 +701,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     string $bargainBinFilterMode,
     string $publishedToEbayFilterMode,
     string $searchQuery,
-    int $itemsPerPage,
   ): array {
     $entityTypeManager = $this->getEntityTypeManager();
     $properties = [];
@@ -767,10 +804,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       ];
     }
 
-    if ($itemsPerPage > 0) {
-      return array_slice($options, 0, $itemsPerPage, TRUE);
-    }
-
     return $options;
   }
 
@@ -783,6 +816,28 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     }
 
     return $itemsPerPage;
+  }
+
+  private function getCurrentPage(): int {
+    return $this->getPagerParameters()->findPage();
+  }
+
+  private function resolveCurrentPage(int $filteredTotal, int $itemsPerPage): int {
+    $currentPage = $this->getCurrentPage();
+    if ($currentPage <= 0) {
+      return 0;
+    }
+
+    if ($filteredTotal <= 0 || $itemsPerPage <= 0) {
+      return 0;
+    }
+
+    $offset = $currentPage * $itemsPerPage;
+    if ($offset < $filteredTotal) {
+      return $currentPage;
+    }
+
+    return 0;
   }
 
   /**
@@ -1070,6 +1125,22 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     }
 
     return $this->tempStoreFactory->get(self::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_COLLECTION);
+  }
+
+  private function getPagerManager(): PagerManagerInterface {
+    if ($this->pagerManager === null) {
+      $this->pagerManager = \Drupal::service('pager.manager');
+    }
+
+    return $this->pagerManager;
+  }
+
+  private function getPagerParameters(): PagerParametersInterface {
+    if ($this->pagerParameters === null) {
+      $this->pagerParameters = \Drupal::service('pager.parameters');
+    }
+
+    return $this->pagerParameters;
   }
 
 }

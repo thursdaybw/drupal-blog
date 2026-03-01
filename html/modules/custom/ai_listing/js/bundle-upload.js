@@ -6,6 +6,7 @@
     'edit-workspace-upload-file-input': '[data-drupal-selector="edit-workspace-upload-actions-upload-images"]'
   };
   var panelInputSelectors = {
+    'ai-book-upload-panel-images': '[data-drupal-selector="edit-workspace-file-input"], [data-drupal-selector="edit-workspace-upload-file-input"]',
     'ai-bundle-upload-panel-listing-images': '[data-drupal-selector="edit-workspace-bundle-upload-file-input"]',
     'ai-bundle-upload-panel-item-images': '[data-drupal-selector="edit-workspace-upload-file-input"]'
   };

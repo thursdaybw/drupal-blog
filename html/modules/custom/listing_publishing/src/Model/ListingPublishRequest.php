@@ -17,6 +17,7 @@ final class ListingPublishRequest {
     private readonly array $imageUrls,
     private readonly int $quantity,
     private readonly string $condition,
+    private readonly string $conditionDescription,
     private readonly array $attributes,
   ) {}
 
@@ -62,6 +63,7 @@ final class ListingPublishRequest {
       $imageUrls,
       $this->quantity,
       $this->condition,
+      $this->conditionDescription,
       $this->attributes
     );
   }
@@ -77,6 +79,7 @@ final class ListingPublishRequest {
       $this->imageUrls,
       $this->quantity,
       $this->condition,
+      $this->conditionDescription,
       $this->attributes
     );
   }
@@ -87,6 +90,10 @@ final class ListingPublishRequest {
 
   public function getCondition(): string {
     return $this->condition;
+  }
+
+  public function getConditionDescription(): string {
+    return $this->conditionDescription;
   }
 
   public function getAttributes(): array {
@@ -104,6 +111,7 @@ final class ListingPublishRequest {
       'imageUrls' => $this->imageUrls,
       'quantity' => $this->quantity,
       'condition' => $this->condition,
+      'conditionDescription' => $this->conditionDescription,
       'attributes' => $this->attributes,
     ];
   }

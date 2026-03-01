@@ -38,51 +38,16 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
   }
 
   public function publish(ListingPublishRequest $request): MarketplacePublishResult {
-    $imageUrls = $this->imageUploader->upload($request->getImageSources())->getRemoteUrls();
-    if ([] === $imageUrls) {
-      $imageUrls = $request->getImageUrls();
-    }
-
-    $request = $request->withImageUrls($imageUrls);
-
-    $aspects = $this->buildAspects($request);
+    $request = $this->prepareRequest($request);
 
     $this->sellApiClient->createOrReplaceInventoryItem(
       $request->getSku(),
-      [
-        'product' => [
-          'title' => $request->getTitle(),
-          'description' => $request->getDescription(),
-          'aspects' => $aspects,
-          'imageUrls' => $request->getImageUrls(),
-        ],
-        'condition' => $this->conditionMapper->toEbayCondition($request->getCondition()),
-        'conditionDescription' => 'Used book in good condition. Light shelf wear.',
-        'availability' => [
-          'shipToLocationAvailability' => [
-            'quantity' => $request->getQuantity(),
-          ],
-        ],
-      ]
+      $this->buildInventoryPayload($request)
     );
 
     $this->ensureMerchantLocation();
 
-    $offerPayload = [
-      'sku' => $request->getSku(),
-      'marketplaceId' => 'EBAY_AU',
-      'format' => 'FIXED_PRICE',
-      'availableQuantity' => $request->getQuantity(),
-      'pricingSummary' => [
-        'price' => [
-          'value' => $request->getPrice(),
-          'currency' => 'AUD',
-        ],
-      ],
-      'categoryId' => $this->resolveCategoryId($request),
-      'storeCategoryNames' => $this->resolveStoreCategoryNames($request),
-      'merchantLocationKey' => self::DEFAULT_MERCHANT_LOCATION_KEY,
-    ];
+    $offerPayload = $this->buildOfferPayload($request, 'FIXED_PRICE', FALSE);
 
     $payloadJson = $this->formatPayload($offerPayload);
     $this->dumpPayloadForCli($payloadJson, 'Initial offer payload');
@@ -105,21 +70,10 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
       $offerId = (string) $offer['offerId'];
     }
 
-    $fulfillmentPolicyId = $this->resolveFulfillmentPolicyId($request);
-
-    $offerUpdate = [
-      'listingPolicies' => [
-        'paymentPolicyId' => self::DEFAULT_PAYMENT_POLICY_ID,
-        'fulfillmentPolicyId' => $fulfillmentPolicyId,
-        'returnPolicyId' => self::DEFAULT_RETURN_POLICY_ID,
-      ],
-    ];
-
-    if (!empty($offerPayload['storeCategoryNames'])) {
-      $offerUpdate['storeCategoryNames'] = $offerPayload['storeCategoryNames'];
-    }
-
-    $this->sellApiClient->updateOffer($offerId, $offerUpdate);
+    $this->sellApiClient->updateOffer(
+      $offerId,
+      $this->buildOfferPayload($request, 'FIXED_PRICE', TRUE)
+    );
 
     $publish = $this->sellApiClient->publishOffer($offerId);
 
@@ -137,57 +91,19 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     ListingPublishRequest $request,
     ?string $publicationType = null,
   ): MarketplacePublishResult {
-    $imageUrls = $this->imageUploader->upload($request->getImageSources())->getRemoteUrls();
-    if ([] === $imageUrls) {
-      $imageUrls = $request->getImageUrls();
-    }
-
-    $request = $request->withImageUrls($imageUrls);
-    $aspects = $this->buildAspects($request);
+    $request = $this->prepareRequest($request);
 
     $this->sellApiClient->createOrReplaceInventoryItem(
       $request->getSku(),
-      [
-        'product' => [
-          'title' => $request->getTitle(),
-          'description' => $request->getDescription(),
-          'aspects' => $aspects,
-          'imageUrls' => $request->getImageUrls(),
-        ],
-        'condition' => $this->conditionMapper->toEbayCondition($request->getCondition()),
-        'conditionDescription' => 'Used book in good condition. Light shelf wear.',
-        'availability' => [
-          'shipToLocationAvailability' => [
-            'quantity' => $request->getQuantity(),
-          ],
-        ],
-      ]
+      $this->buildInventoryPayload($request)
     );
 
     $this->ensureMerchantLocation();
 
-    $offerUpdate = [
-      'sku' => $request->getSku(),
-      'marketplaceId' => 'EBAY_AU',
-      'format' => $publicationType ?: 'FIXED_PRICE',
-      'availableQuantity' => $request->getQuantity(),
-      'pricingSummary' => [
-        'price' => [
-          'value' => $request->getPrice(),
-          'currency' => 'AUD',
-        ],
-      ],
-      'categoryId' => $this->resolveCategoryId($request),
-      'storeCategoryNames' => $this->resolveStoreCategoryNames($request),
-      'merchantLocationKey' => self::DEFAULT_MERCHANT_LOCATION_KEY,
-      'listingPolicies' => [
-        'paymentPolicyId' => self::DEFAULT_PAYMENT_POLICY_ID,
-        'fulfillmentPolicyId' => $this->resolveFulfillmentPolicyId($request),
-        'returnPolicyId' => self::DEFAULT_RETURN_POLICY_ID,
-      ],
-    ];
-
-    $updatedOffer = $this->sellApiClient->updateOffer($marketplacePublicationId, $offerUpdate);
+    $updatedOffer = $this->sellApiClient->updateOffer(
+      $marketplacePublicationId,
+      $this->buildOfferPayload($request, $publicationType ?: 'FIXED_PRICE', TRUE)
+    );
     $listingId = isset($updatedOffer['listing']['listingId']) ? (string) $updatedOffer['listing']['listingId'] : null;
 
     return new MarketplacePublishResult(
@@ -229,6 +145,70 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
   public function getMarketplaceKey(): string {
     return 'ebay';
+  }
+
+  private function prepareRequest(ListingPublishRequest $request): ListingPublishRequest {
+    $imageUrls = $this->imageUploader->upload($request->getImageSources())->getRemoteUrls();
+    if ([] === $imageUrls) {
+      $imageUrls = $request->getImageUrls();
+    }
+
+    return $request->withImageUrls($imageUrls);
+  }
+
+  private function buildInventoryPayload(ListingPublishRequest $request): array {
+    return [
+      'product' => [
+        'title' => $request->getTitle(),
+        'description' => $request->getDescription(),
+        'aspects' => $this->buildAspects($request),
+        'imageUrls' => $request->getImageUrls(),
+      ],
+      'condition' => $this->conditionMapper->toEbayCondition($request->getCondition()),
+      'conditionDescription' => $request->getConditionDescription(),
+      'availability' => [
+        'shipToLocationAvailability' => [
+          'quantity' => $request->getQuantity(),
+        ],
+      ],
+    ];
+  }
+
+  private function buildOfferPayload(
+    ListingPublishRequest $request,
+    string $format,
+    bool $includePolicies,
+  ): array {
+    $payload = [
+      'sku' => $request->getSku(),
+      'marketplaceId' => 'EBAY_AU',
+      'format' => $format,
+      'availableQuantity' => $request->getQuantity(),
+      'listingDescription' => $request->getDescription(),
+      'pricingSummary' => [
+        'price' => [
+          'value' => $request->getPrice(),
+          'currency' => 'AUD',
+        ],
+      ],
+      'categoryId' => $this->resolveCategoryId($request),
+      'merchantLocationKey' => self::DEFAULT_MERCHANT_LOCATION_KEY,
+    ];
+
+    $storeCategoryNames = $this->resolveStoreCategoryNames($request);
+    if ($storeCategoryNames !== []) {
+      $payload['storeCategoryNames'] = $storeCategoryNames;
+    }
+
+    if ($includePolicies) {
+      $payload['listingPolicies'] = [
+        'paymentPolicyId' => self::DEFAULT_PAYMENT_POLICY_ID,
+        'fulfillmentPolicyId' => $this->resolveFulfillmentPolicyId($request),
+        'returnPolicyId' => self::DEFAULT_RETURN_POLICY_ID,
+      ];
+    }
+
+    return $payload;
   }
 
   private function buildAspects(ListingPublishRequest $request): array {

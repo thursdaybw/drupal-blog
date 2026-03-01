@@ -18,6 +18,7 @@ final class AiBookListingDataExtractionProcessor {
     private readonly BookExtractionService $bookExtraction,
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly FileSystemInterface $fileSystem,
+    private readonly BundleEbayTitleBuilder $bundleEbayTitleBuilder,
   ) {}
 
   public function process(BbAiListing $listing): void {
@@ -321,6 +322,10 @@ final class AiBookListingDataExtractionProcessor {
     $description .= '<p>' . implode('</p><p>', $descriptionBlocks) . '</p>';
     $description .= '<p>Please refer to photos for full details.</p>';
 
+    $bundleEbayTitle = $this->bundleEbayTitleBuilder->deriveTitle(
+      $this->buildBundleEbayTitleItems($processedItems),
+    );
+
     return [
       'field_title' => $firstTitle,
       'field_subtitle' => $firstSubtitle,
@@ -338,9 +343,28 @@ final class AiBookListingDataExtractionProcessor {
       'field_genre' => $topGenre,
       'condition_issues' => $allIssues,
       'condition_grade' => $worstGrade,
-      'ebay_title' => 'Book Bundle - ' . $firstTitle,
+      'ebay_title' => $bundleEbayTitle,
       'description' => $description,
     ];
+  }
+
+  /**
+   * @param array<int,array{id:int,metadata:array<string,mixed>,condition:array<string,mixed>}> $processedItems
+   * @return array<int,array{title:string,author:string,genre:string}>
+   */
+  private function buildBundleEbayTitleItems(array $processedItems): array {
+    $items = [];
+
+    foreach ($processedItems as $itemData) {
+      $metadata = $itemData['metadata'];
+      $items[] = [
+        'title' => trim((string) ($metadata['full_title'] ?? $metadata['title'] ?? '')),
+        'author' => trim((string) ($metadata['author'] ?? '')),
+        'genre' => trim((string) ($metadata['genre'] ?? '')),
+      ];
+    }
+
+    return $items;
   }
 
   /**
@@ -383,6 +407,7 @@ final class AiBookListingDataExtractionProcessor {
       'U.K.' => 'United Kingdom',
       'England' => 'United Kingdom',
       'Scotland' => 'United Kingdom',
+      'Great Britain' => 'United Kingdom',
     ];
 
     return $map[$value] ?? $value;

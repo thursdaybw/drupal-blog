@@ -5,6 +5,7 @@ services:
       - '@ai_listing_inference.book_extraction'
       - '@entity_type.manager'
       - '@file_system'
+      - '@ai_listing.bundle_ebay_title_builder'
 
   ai_listing.batch_data_extraction_processor:
     class: Drupal\ai_listing\Service\AiBookListingBatchDataExtractionProcessor
@@ -20,3 +21,12 @@ services:
     class: Drupal\ai_listing\Service\AiListingInventorySkuResolver
     arguments:
       - '@entity_type.manager'
+
+  ai_listing.bundle_ebay_title_builder:
+    class: Drupal\ai_listing\Service\BundleEbayTitleBuilder
+
+  ai_listing.bundle_ebay_title_refresh:
+    class: Drupal\ai_listing\Service\BundleEbayTitleRefreshService
+    arguments:
+      - '@entity_type.manager'
+      - '@ai_listing.bundle_ebay_title_builder'

@@ -7,6 +7,7 @@ namespace Drupal\ai_listing\Form;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\UrlHelper;
+use Drupal\Core\Render\Markup;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
@@ -75,6 +76,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#type' => 'textfield',
       '#title' => 'eBay Title',
       '#default_value' => (string) ($listing->get('ebay_title')->value ?? ''),
+      '#field_suffix' => Markup::create('<button type="button" class="button button--small ai-ebay-title-free-post-toggle" data-ebay-title-toggle="free-post">Toggle Free Post</button>'),
     ];
 
     $form['ebay']['description'] = [
@@ -89,7 +91,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#type' => 'textfield',
       '#title' => 'Title',
       '#default_value' => $this->getStringFieldValue($listing, 'field_title'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
     $form['basic']['subtitle'] = [
       '#type' => 'textfield',

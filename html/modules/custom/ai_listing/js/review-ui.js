@@ -1,5 +1,31 @@
 (function () {
 
+  function toggleFreePostInEbayTitle(button) {
+    const titleInput = document.querySelector('input[name="ebay[ebay_title]"]');
+    if (!titleInput) {
+      return;
+    }
+
+    const currentTitle = normalizeWhitespace(titleInput.value);
+    const suffixPattern = /\s+Free Post$/i;
+
+    if (suffixPattern.test(currentTitle)) {
+      titleInput.value = currentTitle.replace(suffixPattern, '');
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+      titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+
+    const nextTitle = currentTitle === '' ? 'Free Post' : currentTitle + ' Free Post';
+    titleInput.value = nextTitle;
+    titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function normalizeWhitespace(value) {
+    return value.replace(/\s+/g, ' ').trim();
+  }
+
   function humanize(key) {
     const map = {
       'ex_library': 'ex-library markings',
@@ -56,6 +82,15 @@
     if (e.target.matches('[data-issue]')) {
       updateNote();
     }
+  });
+
+  document.addEventListener('click', function (e) {
+    const button = e.target.closest('[data-ebay-title-toggle="free-post"]');
+    if (!button) {
+      return;
+    }
+
+    toggleFreePostInEbayTitle(button);
   });
 
 })();

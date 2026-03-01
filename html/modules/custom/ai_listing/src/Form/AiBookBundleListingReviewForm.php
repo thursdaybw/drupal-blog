@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\ai_listing\Form;
 
 use Drupal\ai_listing\Entity\BbAiListing;
+use Drupal\Component\Utility\Html;
+use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -145,6 +147,17 @@ final class AiBookBundleListingReviewForm extends AiListingReviewFormBase {
         '#open' => TRUE,
       ];
 
+      $bundleItemAuthor = trim((string) ($bundleItem->get('author')->value ?? ''));
+      $ebaySearchLink = $this->buildBundleItemEbaySearchLink($bundleItemTitle, $bundleItemAuthor);
+      if ($ebaySearchLink !== '') {
+        $container['items'][$bundleItemKey]['search_link'] = [
+          '#type' => 'markup',
+          '#markup' => $ebaySearchLink,
+          '#prefix' => '<div class="ai-help">',
+          '#suffix' => '</div>',
+        ];
+      }
+
       $itemImages = $this->loadListingImages('ai_book_bundle_item', $bundleItemId);
       if ($itemImages === []) {
         $container['items'][$bundleItemKey]['empty'] = [
@@ -195,6 +208,23 @@ final class AiBookBundleListingReviewForm extends AiListingReviewFormBase {
         '#default_value' => $isMetadataSource,
       ],
     ];
+  }
+
+  private function buildBundleItemEbaySearchLink(string $title, string $author): string {
+    $query = trim($title . ' ' . $author);
+    if ($query === '') {
+      return '';
+    }
+
+    $url = 'https://www.ebay.com.au/sch/i.html?_nkw=' . UrlHelper::encodePath($query);
+    $titleAttr = Html::escape($this->t('Search eBay for ~%query%~', ['%query%' => $query]));
+
+    return sprintf(
+      '<a href="%s" target="_blank" rel="noopener noreferrer" title="%s">Search eBay for %s</a>',
+      $url,
+      $titleAttr,
+      Html::escape($query)
+    );
   }
 
   /**

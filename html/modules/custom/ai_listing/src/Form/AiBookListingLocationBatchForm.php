@@ -22,6 +22,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 final class AiBookListingLocationBatchForm extends FormBase implements ContainerInjectionInterface {
   public const PUBLISH_UPDATE_CONFIRM_TEMPSTORE_COLLECTION = 'ai_listing.location_batch';
   public const PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY = 'publish_update_confirmation';
+  public const SELECTED_LISTING_KEYS_FIELD = 'selected_listing_keys';
 
   private ?EntityTypeManagerInterface $entityTypeManager = null;
   private ?ListingPublisher $listingPublisher = null;
@@ -175,6 +176,25 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $form['listings_container']['summary']['filtered'] = [
       '#type' => 'markup',
       '#markup' => '<div><strong>' . $this->t('Matching current filters:') . '</strong> ' . $filteredTotal . '</div>',
+    ];
+    $form['listings_container']['summary']['selected'] = [
+      '#type' => 'markup',
+      '#markup' => '<div><strong>' . $this->t('Selected:') . '</strong> <span id="ai-batch-selected-count">0</span></div>',
+    ];
+    $form['listings_container']['summary']['clear_selection'] = [
+      '#type' => 'button',
+      '#value' => $this->t('Clear selection'),
+      '#attributes' => [
+        'id' => 'ai-batch-clear-selection',
+      ],
+    ];
+
+    $form['listings_container'][self::SELECTED_LISTING_KEYS_FIELD] = [
+      '#type' => 'hidden',
+      '#default_value' => $this->buildSelectedListingKeysPayload($form_state),
+      '#attributes' => [
+        'id' => 'ai-batch-selected-listing-keys',
+      ],
     ];
 
     $form['listings_container']['listings'] = [
@@ -1060,13 +1080,8 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
    * @return array<int,array{listing_type:string,id:int}>
    */
   private function getSelectedListingRefs(FormStateInterface $form_state): array {
-    $selected = array_filter($form_state->getValue('listings') ?? []);
-    if ($selected === []) {
-      return [];
-    }
-
     $selection = [];
-    foreach (array_keys($selected) as $key) {
+    foreach ($this->getSubmittedSelectedListingKeys($form_state) as $key) {
       $decoded = $this->parseSelectionKey((string) $key);
       if ($decoded !== NULL) {
         $selection[] = $decoded;
@@ -1074,6 +1089,47 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     }
 
     return $selection;
+  }
+
+  /**
+   * @return string[]
+   */
+  private function getSubmittedSelectedListingKeys(FormStateInterface $form_state): array {
+    $submittedValue = $form_state->getValue(self::SELECTED_LISTING_KEYS_FIELD);
+    if (!is_string($submittedValue) || trim($submittedValue) === '') {
+      $selected = array_filter($form_state->getValue('listings') ?? []);
+      return array_values(array_map('strval', array_keys($selected)));
+    }
+
+    $decoded = json_decode($submittedValue, TRUE);
+    if (!is_array($decoded)) {
+      return [];
+    }
+
+    $keys = [];
+    foreach ($decoded as $value) {
+      if (!is_string($value) || trim($value) === '') {
+        continue;
+      }
+
+      $keys[] = trim($value);
+    }
+
+    return array_values(array_unique($keys));
+  }
+
+  private function buildSelectedListingKeysPayload(FormStateInterface $form_state): string {
+    $keys = $this->getSubmittedSelectedListingKeys($form_state);
+    if ($keys === []) {
+      return '[]';
+    }
+
+    $encoded = json_encode(array_values($keys));
+    if (!is_string($encoded)) {
+      return '[]';
+    }
+
+    return $encoded;
   }
 
   /**

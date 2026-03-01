@@ -39,6 +39,7 @@ final class AiBookListingUploadForm extends FormBase {
 
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $form['#tree'] = TRUE;
+    $form['#attached']['library'][] = 'ai_listing/bundle_upload';
 
     $stagedFileIds = $this->getStagedFileIds($form_state);
 
@@ -50,25 +51,27 @@ final class AiBookListingUploadForm extends FormBase {
     ];
 
     $form['workspace']['upload'] = [
-      '#type' => 'details',
+      '#theme' => 'ai_bundle_upload_panel',
       '#title' => 'Book Images',
-      '#open' => TRUE,
+      '#description' => 'Select one or more images and drop them anywhere on this panel.',
+      '#attributes' => [
+        'id' => 'ai-book-upload-panel-images',
+      ],
     ];
 
-    $form['workspace']['upload']['new_images'] = [
+    $form['workspace']['upload']['file_input'] = [
       '#type' => 'file',
       '#title' => 'Add images',
       '#multiple' => TRUE,
       '#attributes' => [
         'accept' => 'image/*',
       ],
-      '#description' => 'Select one or more images, then click Upload selected images.',
     ];
 
-    $form['workspace']['upload']['upload_actions'] = [
+    $form['workspace']['upload']['actions'] = [
       '#type' => 'actions',
     ];
-    $form['workspace']['upload']['upload_actions']['upload_images'] = [
+    $form['workspace']['upload']['actions']['upload_images'] = [
       '#type' => 'submit',
       '#value' => 'Upload selected images',
       '#name' => 'upload_images',
@@ -128,6 +131,23 @@ final class AiBookListingUploadForm extends FormBase {
 
   public function ajaxRefreshWorkspace(array &$form, FormStateInterface $form_state): array {
     return $form['workspace'];
+  }
+
+  public function validateForm(array &$form, FormStateInterface $form_state): void {
+    $fileIds = $this->getStagedFileIds($form_state);
+    if ($fileIds === []) {
+      return;
+    }
+
+    $metadataSelections = (array) $form_state->getValue(['workspace', 'staged_images', 'items'], []);
+    if ($this->hasMetadataSourceSelection($fileIds, $metadataSelections)) {
+      return;
+    }
+
+    $form_state->setErrorByName(
+      'workspace][staged_images',
+      'Select at least one image to use for metadata before saving.',
+    );
   }
 
   public function submitUploadImages(array &$form, FormStateInterface $form_state): void {
@@ -230,6 +250,21 @@ final class AiBookListingUploadForm extends FormBase {
 
     $this->messenger()->addStatus('Listing created.');
     $form_state->setRedirect('ai_listing.add');
+  }
+
+  /**
+   * @param int[] $fileIds
+   * @param array<string,mixed> $metadataSelections
+   */
+  private function hasMetadataSourceSelection(array $fileIds, array $metadataSelections): bool {
+    foreach ($fileIds as $fid) {
+      $itemKey = 'file_' . $fid;
+      if (!empty($metadataSelections[$itemKey]['is_metadata_source'])) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
   }
 
   /**

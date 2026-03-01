@@ -37,6 +37,7 @@ final class BookListingAssembler {
     $imageSources = $this->collectImageSources($files);
     $imageUrls = $this->collectImageUrls($files);
     $condition = (string) ($listing->get('condition_grade')->value ?? self::DEFAULT_CONDITION);
+    $conditionDescription = $this->resolveConditionDescription($listing);
     $price = $this->resolvePrice($listing);
     $attributes = [
       'product_type' => 'book',
@@ -64,6 +65,7 @@ final class BookListingAssembler {
         $imageUrls,
         self::DEFAULT_QUANTITY,
         $condition,
+        $conditionDescription,
       $attributes
     );
   }
@@ -172,6 +174,15 @@ final class BookListingAssembler {
     $value = $listing->get('price')->value ?? '';
     $resolved = is_numeric($value) ? (string) $value : '';
     return $resolved !== '' ? $resolved : self::DEFAULT_PRICE;
+  }
+
+  private function resolveConditionDescription(BbAiListing $listing): string {
+    $conditionNote = trim((string) ($listing->get('condition_note')->value ?? ''));
+    if ($conditionNote !== '') {
+      return $conditionNote;
+    }
+
+    throw new \RuntimeException('Listing is missing a condition note.');
   }
 
   /**

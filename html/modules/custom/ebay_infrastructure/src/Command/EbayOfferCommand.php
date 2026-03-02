@@ -295,7 +295,7 @@ final class EbayOfferCommand extends DrushCommands {
     return array_values(array_unique($skus));
   }
 
-  private function deleteInventoryForSku(string $sku, bool $markLocalPublicationsEnded): int {
+  private function deleteInventoryForSku(string $sku, bool $deleteLocalPublicationRecords): int {
     $offers = [];
     try {
       $offers = $this->sellApiClient->listOffersBySku($sku);
@@ -330,9 +330,9 @@ final class EbayOfferCommand extends DrushCommands {
     }
 
     $this->sellApiClient->deleteInventoryItem($sku);
-    if ($markLocalPublicationsEnded) {
+    if ($deleteLocalPublicationRecords) {
       $this->marketplacePublicationLifecycleManager
-        ->markMarketplacePublicationsEndedBySku('ebay', $sku);
+        ->deleteMarketplacePublicationsBySku('ebay', $sku);
     }
 
     return $deletedOffers;
@@ -853,8 +853,8 @@ final class EbayOfferCommand extends DrushCommands {
     catch (\RuntimeException $exception) {
       if (OfferExceptionHelper::isOfferUnavailable($exception)) {
         $this->marketplacePublicationLifecycleManager
-          ->markMarketplacePublicationsEndedBySku('ebay', $sku);
-        return sprintf('Listing %d SKU %s: no eBay offers found, local publications marked ended.', $listing->id(), $sku);
+          ->deleteMarketplacePublicationsBySku('ebay', $sku);
+        return sprintf('Listing %d SKU %s: no eBay offers found, local publication records deleted.', $listing->id(), $sku);
       }
 
       throw $exception;
@@ -863,8 +863,8 @@ final class EbayOfferCommand extends DrushCommands {
     $offers = $response['offers'] ?? [];
     if ($offers === []) {
       $this->marketplacePublicationLifecycleManager
-        ->markMarketplacePublicationsEndedBySku('ebay', $sku);
-      return sprintf('Listing %d SKU %s: eBay returned no offers, local publications marked ended.', $listing->id(), $sku);
+        ->deleteMarketplacePublicationsBySku('ebay', $sku);
+      return sprintf('Listing %d SKU %s: eBay returned no offers, local publication records deleted.', $listing->id(), $sku);
     }
 
     $synced = 0;
@@ -878,6 +878,12 @@ final class EbayOfferCommand extends DrushCommands {
       $publicationType = isset($offer['format']) ? (string) $offer['format'] : '';
       $publicationStatus = $this->mapEbayOfferStatusToPublicationStatus($offer['status'] ?? null);
       $listingId = isset($offer['listing']['listingId']) ? (string) $offer['listing']['listingId'] : null;
+
+      if ($publicationStatus === null) {
+        $this->marketplacePublicationLifecycleManager
+          ->deleteMarketplacePublicationsBySku('ebay', $sku);
+        continue;
+      }
 
       $this->marketplacePublicationRecorder->recordPublicationSnapshot(
         $listing,
@@ -900,13 +906,13 @@ final class EbayOfferCommand extends DrushCommands {
     );
   }
 
-  private function mapEbayOfferStatusToPublicationStatus(mixed $ebayStatus): string {
+  private function mapEbayOfferStatusToPublicationStatus(mixed $ebayStatus): ?string {
     $normalized = is_string($ebayStatus) ? strtoupper(trim($ebayStatus)) : '';
 
     return match ($normalized) {
       'PUBLISHED' => 'published',
       'UNPUBLISHED' => 'draft',
-      'ENDED' => 'ended',
+      'ENDED' => null,
       default => 'draft',
     };
   }

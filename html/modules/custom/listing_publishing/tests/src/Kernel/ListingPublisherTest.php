@@ -18,7 +18,6 @@ use Drupal\listing_publishing\Model\ListingPublishRequest;
 use Drupal\listing_publishing\Model\MarketplacePublishResult;
 use Drupal\listing_publishing\Service\BookListingAssembler;
 use Drupal\listing_publishing\Service\ListingPublisher;
-use Drupal\listing_publishing\Service\MarketplacePublicationLifecycleManager;
 use Drupal\listing_publishing\Service\MarketplacePublicationRecorder;
 use Drupal\listing_publishing\Service\MarketplacePublicationResolver;
 
@@ -46,7 +45,7 @@ use Drupal\listing_publishing\Service\MarketplacePublicationResolver;
  * - which SKU was used
  * - which marketplace publication ID came back
  * - which marketplace listing ID came back
- * - whether Drupal thinks that publication is published, ended, or failed
+ * - whether Drupal thinks that publication is published or failed
  *
  * Two helper services appear a lot in this file:
  * - `MarketplacePublicationRecorder` writes those local publication rows
@@ -140,7 +139,6 @@ final class ListingPublisherTest extends KernelTestBase {
       $this->skuResolver,
       $this->publicationRecorder,
       $this->publicationResolver,
-      new MarketplacePublicationLifecycleManager($entityTypeManager),
     );
   }
 

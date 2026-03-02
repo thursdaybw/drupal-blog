@@ -91,7 +91,6 @@ The goal is simple:
 - [x] Test first publish records a marketplace publication
 - [x] Test publish/update reuses the saved SKU when updating a published listing
 - [x] Test SKU change deletes the old SKU through the marketplace boundary
-- [ ] Test SKU change ends old marketplace publications
 - [x] Test missing marketplace publication ID fails clearly on update
 
 ## Phase 6: eBay Adapter Payload Safety
@@ -128,4 +127,6 @@ The goal is simple:
 - Generic publishing tests should stay separate from eBay adapter tests.
 - That split matters because more marketplaces are planned.
 - `ddev test-listing-kernel` is now the main command for the listing stack.
+- Publication rows now represent current state only. We are not keeping local
+  `ended` publication history in this table.
 - Testing also exposed a real config schema gap in `ai_listing` for `bb_ai_listing_type.*`, which is now fixed.

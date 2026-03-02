@@ -1,5 +1,11 @@
 ## Status Report - Image Model / Inference / Upload Form Pivot
 
+Historical note:
+- This file is a point-in-time report from `2026-02-27`.
+- It is kept as project history.
+- It is not the current source of truth for the codebase.
+- Current inference and testing work has moved on since this snapshot.
+
 Date context: 2026-02-27
 Current repo HEAD before uncommitted work: `ca6acc4` (`Add listing image entity and review-form preview`)
 
@@ -106,4 +112,3 @@ These are temporary diagnostics and should not be relied on long-term.
   - inference split changes
 - Rework or replace:
   - create-form `managed_file` AJAX preview implementation
-

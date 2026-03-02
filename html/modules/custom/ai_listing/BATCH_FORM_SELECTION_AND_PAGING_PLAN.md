@@ -1,6 +1,10 @@
 # AiBookListingLocationBatchForm Plan
 
-This file tracks the remaining work for paging, counts, and persistent selection in `AiBookListingLocationBatchForm`.
+This file tracks the batch form work around paging, counts, and cross-page selection in `AiBookListingLocationBatchForm`.
+
+This is now partly a history file and partly a next-steps file.
+The basic paging and selection work is done.
+The next risky piece is bringing back `Show selected only` in a tested way.
 
 ## Done
 
@@ -9,16 +13,22 @@ This file tracks the remaining work for paging, counts, and persistent selection
 - [x] Add `Total listings`
 - [x] Add `Matching current filters`
 - [x] Clamp stale pager page to page `0` when filtered results shrink
-
-## Next
-
-- [ ] Extract batch-form dataset and selection logic into a dedicated service or other testable seam
-- [ ] Add tests for:
+- [x] Extract batch dataset logic into a dedicated service
+- [x] Extract selection logic into a dedicated service
+- [x] Add tests for:
   - filtered counts
   - page slicing
   - persistent selection resolution
   - selected-count calculation
-- [ ] Revisit `Show selected only` after the extraction and tests are in place
+  - selected-key normalization
+- [x] Add `Selected` count to the UI
+- [x] Add `Clear selection`
+
+## Next
+
+- [ ] Revisit `Show selected only` on top of the new dataset and selection seams
+- [ ] Add tests for selected-only filtering before bringing that feature back
+- [ ] Decide whether selected-only mode should combine with the current filters or replace them
 
 ## Likely After That
 
@@ -30,14 +40,15 @@ This file tracks the remaining work for paging, counts, and persistent selection
 ## Deferred
 
 - [ ] `Show selected only`
-  Deferred for now. A first pass was attempted and then backed out because the feature crossed too many moving parts without test coverage:
+  Deferred for now. A first pass was attempted and then backed out because the feature crossed too many moving parts at once:
   - server-side filtering
   - pager state
   - hidden field synchronization
   - browser-stored selection state
   - tempstore mirroring
 
-  Revisit this only after extracting the batch-form dataset/selection logic into a testable seam and covering it with tests.
+  We now have the test seams and some coverage.
+  The next pass should start with selected-only rules and tests, then bring the UI feature back.
 
 ## UX Rules
 
@@ -51,20 +62,21 @@ This file tracks the remaining work for paging, counts, and persistent selection
 
 - Keep filters and pager state in query parameters.
 - Keep persistent selection outside plain form state.
-- `PrivateTempStore` is the current intended backing store.
+- `sessionStorage` is part of the current working solution because pager links do not submit form state.
+- `PrivateTempStore` is still used as the server-side mirror for confirmation and batch action flows.
 - Current-page checkbox values should not be treated as the full truth once persistent selection exists.
 - Pager/filter behavior can stay full-page for now. AJAX can be revisited after persistent selection is stable.
-- Browser-side selection persistence is currently part of the working solution because pager links do not submit form state.
 
 ## Test Prerequisite
 
-- [ ] Extract batch-form dataset and selection logic into a dedicated service or other testable seam
-- [ ] Add tests for:
+- [x] Extract batch-form dataset logic into a dedicated service
+- [x] Extract batch-form selection logic into a dedicated service
+- [x] Add tests for:
   - filtered counts
   - page slicing
   - persistent selection resolution
   - selected-count calculation
-  - future selected-only filtering
+- [ ] Add tests for selected-only filtering before reintroducing `Show selected only`
 
 ## Open Design Questions
 

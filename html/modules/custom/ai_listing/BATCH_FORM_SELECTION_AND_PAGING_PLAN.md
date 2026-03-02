@@ -12,21 +12,32 @@ This file tracks the remaining work for paging, counts, and persistent selection
 
 ## Next
 
-- [ ] Persist row selection across page changes
-- [ ] Persist row selection across filter changes
-- [ ] Store selection in `PrivateTempStore`
-- [ ] Pre-check rows already selected in tempstore when rendering a page
-- [ ] Merge current-page checkbox state back into tempstore on submit
-- [ ] Show `Selected: X` in the summary area
-- [ ] Add `Clear selection`
+- [ ] Extract batch-form dataset and selection logic into a dedicated service or other testable seam
+- [ ] Add tests for:
+  - filtered counts
+  - page slicing
+  - persistent selection resolution
+  - selected-count calculation
+- [ ] Revisit `Show selected only` after the extraction and tests are in place
 
 ## Likely After That
 
-- [ ] Add `Show selected only`
 - [ ] Add Gmail-style bulk select UX
 - [ ] First step: select current page
 - [ ] Second step: offer `Select all matching current filters`
 - [ ] Support deselecting individual rows after `select all matching`
+
+## Deferred
+
+- [ ] `Show selected only`
+  Deferred for now. A first pass was attempted and then backed out because the feature crossed too many moving parts without test coverage:
+  - server-side filtering
+  - pager state
+  - hidden field synchronization
+  - browser-stored selection state
+  - tempstore mirroring
+
+  Revisit this only after extracting the batch-form dataset/selection logic into a testable seam and covering it with tests.
 
 ## UX Rules
 
@@ -43,6 +54,17 @@ This file tracks the remaining work for paging, counts, and persistent selection
 - `PrivateTempStore` is the current intended backing store.
 - Current-page checkbox values should not be treated as the full truth once persistent selection exists.
 - Pager/filter behavior can stay full-page for now. AJAX can be revisited after persistent selection is stable.
+- Browser-side selection persistence is currently part of the working solution because pager links do not submit form state.
+
+## Test Prerequisite
+
+- [ ] Extract batch-form dataset and selection logic into a dedicated service or other testable seam
+- [ ] Add tests for:
+  - filtered counts
+  - page slicing
+  - persistent selection resolution
+  - selected-count calculation
+  - future selected-only filtering
 
 ## Open Design Questions
 

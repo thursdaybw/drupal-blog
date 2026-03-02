@@ -50,10 +50,12 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $statusFilter = $this->resolveFilterValue($form_state, 'status_filter', 'any');
     $bargainFilterMode = $this->resolveFilterValue($form_state, 'bargain_bin_filter', 'any');
     $publishedToEbayFilterMode = $this->resolveFilterValue($form_state, 'published_to_ebay_filter', 'any');
+    $storageLocationFilter = trim($this->resolveFilterValue($form_state, 'storage_location_filter', ''));
     $searchQuery = trim($this->resolveFilterValue($form_state, 'search_query', ''));
     $itemsPerPage = $this->resolveItemsPerPage($form_state);
-    $totalListingOptions = $this->buildReadyToShelveOptions('any', 'any', 'any', '');
-    $listingOptions = $this->buildReadyToShelveOptions($statusFilter, $bargainFilterMode, $publishedToEbayFilterMode, $searchQuery);
+    $storageLocationOptions = $this->buildStorageLocationFilterOptions();
+    $totalListingOptions = $this->buildReadyToShelveOptions('any', 'any', 'any', '', '');
+    $listingOptions = $this->buildReadyToShelveOptions($statusFilter, $bargainFilterMode, $publishedToEbayFilterMode, $searchQuery, $storageLocationFilter);
     $totalCount = count($totalListingOptions);
     $filteredTotal = count($listingOptions);
     $currentPage = $this->resolveCurrentPage($filteredTotal, $itemsPerPage);
@@ -121,11 +123,23 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       '#type' => 'textfield',
       '#title' => $this->t('Search'),
       '#default_value' => $searchQuery,
-      '#description' => $this->t('Match title, author, or description.'),
+      '#description' => $this->t('Match title, author, description, storage location, or SKU.'),
       '#attributes' => [
         'id' => 'ai-listing-search-query',
         'autocomplete' => 'off',
-        'placeholder' => 'title, author, description',
+        'placeholder' => 'title, author, description, SKU, location',
+      ],
+    ];
+
+    $form['filters']['storage_location_filter'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Storage location'),
+      '#options' => $storageLocationOptions,
+      '#default_value' => $storageLocationFilter,
+      '#description' => $this->t('Filter by storage location.'),
+      '#ajax' => [
+        'callback' => '::updateListingsCallback',
+        'wrapper' => 'ai-batch-listings',
       ],
     ];
 
@@ -224,6 +238,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
         'status_filter' => $statusFilter,
         'bargain_bin_filter' => $bargainFilterMode,
         'published_to_ebay_filter' => $publishedToEbayFilterMode,
+        'storage_location_filter' => $storageLocationFilter,
         'search_query' => $searchQuery,
         'items_per_page' => (string) $itemsPerPage,
       ],
@@ -721,6 +736,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     string $bargainBinFilterMode,
     string $publishedToEbayFilterMode,
     string $searchQuery,
+    string $storageLocationFilter,
   ): array {
     $entityTypeManager = $this->getEntityTypeManager();
     $properties = [];
@@ -773,6 +789,9 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       }
 
       if (!$this->listingMatchesSearchQuery($listing, $searchQuery)) {
+        continue;
+      }
+      if (!$this->listingMatchesStorageLocationFilter($listing, $storageLocationFilter)) {
         continue;
       }
 
@@ -836,6 +855,44 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     }
 
     return $itemsPerPage;
+  }
+
+  /**
+   * @return array<string,string>
+   */
+  private function buildStorageLocationFilterOptions(): array {
+    $storage = $this->getEntityTypeManager()->getStorage('bb_ai_listing');
+    $listingIds = $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->exists('storage_location')
+      ->condition('storage_location', '', '<>')
+      ->sort('storage_location', 'ASC')
+      ->execute();
+
+    $options = ['' => (string) $this->t('Any')];
+    if ($listingIds === []) {
+      return $options;
+    }
+
+    $listings = $storage->loadMultiple($listingIds);
+    $locations = [];
+
+    foreach ($listings as $listing) {
+      if (!$listing instanceof BbAiListing) {
+        continue;
+      }
+
+      $location = trim((string) ($listing->get('storage_location')->value ?? ''));
+      if ($location === '') {
+        continue;
+      }
+
+      $locations[$location] = $location;
+    }
+
+    ksort($locations);
+
+    return $options + $locations;
   }
 
   private function getCurrentPage(): int {
@@ -1045,14 +1102,41 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $title = $this->getStringFieldValueIfExists($listing, 'field_title');
     $author = $this->getStringFieldValueIfExists($listing, 'field_author');
     $description = $this->getStringFieldValueIfExists($listing, 'description');
+    $storageLocation = trim((string) ($listing->get('storage_location')->value ?? ''));
+    $sku = $this->resolveListingSkuForSearch($listing);
 
-    $searchableText = trim($fullTitle . ' ' . $title . ' ' . $author . ' ' . $description);
+    $searchableText = trim($fullTitle . ' ' . $title . ' ' . $author . ' ' . $description . ' ' . $storageLocation . ' ' . $sku);
     $normalizedSearchableText = $this->normalizeForSearch($searchableText);
     if ($normalizedSearchableText === '') {
       return FALSE;
     }
 
     return str_contains($normalizedSearchableText, $normalizedSearchQuery);
+  }
+
+  private function listingMatchesStorageLocationFilter(BbAiListing $listing, string $storageLocationFilter): bool {
+    $normalizedFilter = $this->normalizeForSearch($storageLocationFilter);
+    if ($normalizedFilter === '') {
+      return TRUE;
+    }
+
+    $storageLocation = trim((string) ($listing->get('storage_location')->value ?? ''));
+    $normalizedStorageLocation = $this->normalizeForSearch($storageLocation);
+    if ($normalizedStorageLocation === '') {
+      return FALSE;
+    }
+
+    return str_contains($normalizedStorageLocation, $normalizedFilter);
+  }
+
+  private function resolveListingSkuForSearch(BbAiListing $listing): string {
+    $listingId = (int) $listing->id();
+    if ($listingId <= 0) {
+      return '';
+    }
+
+    $skuLookup = $this->buildPrimaryActiveSkuLookup([$listingId]);
+    return trim((string) ($skuLookup[$listingId] ?? ''));
   }
 
   private function getStringFieldValueIfExists(BbAiListing $listing, string $fieldName): string {

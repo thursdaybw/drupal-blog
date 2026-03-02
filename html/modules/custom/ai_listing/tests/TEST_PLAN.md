@@ -110,16 +110,38 @@ The goal is simple:
 - [x] Extract persistent selection logic into a testable seam
 - [x] Add tests for selected-count calculation
 - [x] Add tests for selected-key normalization
+- [x] Add kernel tests for the location action flow
+- [x] Prove the workbench stores selected IDs before redirecting to the location confirm screen
+- [x] Prove the location confirm screen queues the generic `publish_update` batch with the new location
+- [x] Prove the location review screen shows the selected listings
+- [x] Prove `Publish/Update` also goes through a review screen
+- [x] Prove the publish/update review screen shows the selected listings
 - [ ] Revisit `Show selected only` only after the above tests exist
+
+## Phase 8: Thin Browser Smoke Tests
+
+- [ ] Add one thin browser smoke test for batch-form selection across pages
+- [ ] Add one thin browser smoke test for `Clear selection`
+- [ ] After `Show selected only` is back, add one thin browser smoke test for that flow
+- [ ] Add one thin browser smoke test for the upload panel behavior
+- [ ] Keep browser coverage small and focused on browser-only risk
 
 ## Later
 
-- [ ] Add one thin browser smoke test for the batch form if still needed
-- [ ] Add one thin browser smoke test for upload widget behavior if still needed
+- [ ] Add more browser tests only if real bugs justify them
 
 ## Notes
 
 - Browser tests are not the first line of defense here.
+- Unit and kernel tests should prove the rules first.
+- Browser tests should only prove that the browser wiring actually drives those
+  rules correctly.
+- Browser tests earn their keep when:
+  - JavaScript owns meaningful behavior
+  - the bug only shows up in the browser
+  - Drupal DOM wiring is the risky part
+- `Show selected only` is exactly the sort of feature that may need one thin
+  browser smoke test after the server-side rules are covered.
 - The first serious target is the batch form because it already carries filtering, paging, counts, and selection logic.
 - Keep testable logic out of large form classes wherever possible.
 - `ai_listing` now boots and tests cleanly without pulling in inference or compute infrastructure.
@@ -141,4 +163,11 @@ The goal is simple:
   - decoding the hidden JSON field
   - normalizing selected keys
   - turning selected keys back into listing refs
+- The location action flow is now covered at the server-side form layer:
+  - workbench selection handoff
+  - tempstore payload
+  - redirect to confirm
+  - confirm form queuing the generic publish/update batch
+- Both action review screens now show the selected listings before the batch
+  runs.
 - Testing also exposed a real config schema gap in `ai_listing` for `bb_ai_listing_type.*`, which is now fixed.

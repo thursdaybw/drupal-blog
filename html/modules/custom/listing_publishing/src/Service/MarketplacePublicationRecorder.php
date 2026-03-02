@@ -74,11 +74,6 @@ final class MarketplacePublicationRecorder {
 
     if ($status === 'published') {
       $publication->set('published_at', time());
-      $publication->set('ended_at', null);
-    }
-
-    if ($status === 'ended') {
-      $publication->set('ended_at', time());
     }
 
     $publication->save();

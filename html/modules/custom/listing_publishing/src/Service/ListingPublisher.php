@@ -18,7 +18,6 @@ final class ListingPublisher {
     private readonly AiListingInventorySkuResolver $skuResolver,
     private readonly MarketplacePublicationRecorder $marketplacePublicationRecorder,
     private readonly MarketplacePublicationResolver $marketplacePublicationResolver,
-    private readonly MarketplacePublicationLifecycleManager $marketplacePublicationLifecycleManager,
   ) {}
 
   public function publish(BbAiListing $listing): MarketplacePublishResult {
@@ -28,10 +27,6 @@ final class ListingPublisher {
 
     if ($previousSku !== '' && $previousSku !== $newSku) {
       $this->publisher->deleteSku($previousSku);
-      $this->marketplacePublicationLifecycleManager->markMarketplacePublicationsEndedBySku(
-        $this->publisher->getMarketplaceKey(),
-        $previousSku
-      );
       $this->skuResolver->deleteSku($listing);
     }
 

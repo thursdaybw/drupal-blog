@@ -12,7 +12,7 @@ final class MarketplacePublicationLifecycleManager {
     private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {}
 
-  public function markMarketplacePublicationsEndedBySku(string $marketplaceKey, string $sku): void {
+  public function deleteMarketplacePublicationsBySku(string $marketplaceKey, string $sku): void {
     $normalizedSku = trim($sku);
     if ($normalizedSku === '') {
       return;
@@ -24,12 +24,8 @@ final class MarketplacePublicationLifecycleManager {
       'inventory_sku_value' => $normalizedSku,
     ]);
 
-    $now = time();
-
     foreach ($records as $record) {
-      $record->set('status', 'ended');
-      $record->set('ended_at', $now);
-      $record->save();
+      $record->delete();
     }
   }
 

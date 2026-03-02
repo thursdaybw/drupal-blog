@@ -62,7 +62,6 @@ final class AiMarketplacePublication extends ContentEntityBase {
         'publishing' => 'Publishing',
         'published' => 'Published',
         'failed' => 'Failed',
-        'ended' => 'Ended',
       ]);
 
     $fields['publication_type'] = BaseFieldDefinition::create('string')
@@ -88,10 +87,6 @@ final class AiMarketplacePublication extends ContentEntityBase {
 
     $fields['published_at'] = BaseFieldDefinition::create('timestamp')
       ->setLabel('Published At')
-      ->setRequired(FALSE);
-
-    $fields['ended_at'] = BaseFieldDefinition::create('timestamp')
-      ->setLabel('Ended At')
       ->setRequired(FALSE);
 
     $fields['created'] = BaseFieldDefinition::create('created')

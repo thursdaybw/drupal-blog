@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Drupal\ai_listing\Form;
 
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\ConfirmFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Link;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\Core\Url;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -14,10 +17,12 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implements ContainerInjectionInterface {
 
   private ?PrivateTempStoreFactory $tempStoreFactory = null;
+  private ?EntityTypeManagerInterface $entityTypeManager = null;
 
   public static function create(ContainerInterface $container): self {
     $form = new self();
     $form->tempStoreFactory = $container->get('tempstore.private');
+    $form->entityTypeManager = $container->get('entity_type.manager');
     return $form;
   }
 
@@ -29,6 +34,15 @@ final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implem
     $payload = $this->getPayload();
     $missingCount = (int) ($payload['missing_location_count'] ?? 0);
     $selectedCount = (int) ($payload['selected_count'] ?? 0);
+
+    if ($missingCount === 0) {
+      return (string) $this->t(
+        'Publish/update @selected selected listings?',
+        [
+          '@selected' => $selectedCount,
+        ]
+      );
+    }
 
     return (string) $this->t(
       'Publish/update @selected listings when @missing of them have no storage location?',
@@ -43,6 +57,10 @@ final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implem
     $payload = $this->getPayload();
     $missingCount = (int) ($payload['missing_location_count'] ?? 0);
 
+    if ($missingCount === 0) {
+      return (string) $this->t('Review the selected listings, then continue the publish/update batch.');
+    }
+
     return (string) $this->t(
       'These listings can be published, but the SKU will not include a storage location until you set one and republish. Continue only if that is intentional. (@count missing location)',
       ['@count' => $missingCount]
@@ -54,7 +72,33 @@ final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implem
   }
 
   public function getCancelUrl(): Url {
-    return Url::fromRoute('ai_listing.location_batch');
+    return Url::fromRoute('ai_listing.workbench');
+  }
+
+  public function buildForm(array $form, FormStateInterface $form_state): array {
+    $form = parent::buildForm($form, $form_state);
+
+    $listingRows = $this->buildSelectedListingRows();
+    if ($listingRows !== []) {
+      $form['selected_listings'] = [
+        '#type' => 'details',
+        '#title' => $this->t('Selected listings'),
+        '#open' => TRUE,
+      ];
+      $form['selected_listings']['table'] = [
+        '#theme' => 'table',
+        '#header' => [
+          $this->t('Type'),
+          $this->t('Entity ID'),
+          $this->t('Title'),
+          $this->t('Current location'),
+        ],
+        '#rows' => $listingRows,
+        '#empty' => $this->t('No selected listings found.'),
+      ];
+    }
+
+    return $form;
   }
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
@@ -64,7 +108,7 @@ final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implem
     $location = (string) ($payload['location'] ?? '');
     $operationMode = (string) ($payload['operation_mode'] ?? 'publish_update');
 
-    $this->getConfirmTempStore()->delete(AiBookListingLocationBatchForm::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY);
+    $this->getConfirmTempStore()->delete(AiListingWorkbenchForm::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY);
 
     if ($listingIds === []) {
       $this->messenger()->addError($this->t('The publish/update confirmation expired. Please select the listings again.'));
@@ -72,12 +116,53 @@ final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implem
       return;
     }
 
-    batch_set(AiBookListingLocationBatchForm::buildListingBatchDefinition($listingIds, $setLocation, $location, $operationMode));
+    batch_set(AiListingWorkbenchForm::buildListingBatchDefinition($listingIds, $setLocation, $location, $operationMode));
   }
 
   private function getPayload(): array {
-    $payload = $this->getConfirmTempStore()->get(AiBookListingLocationBatchForm::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY);
+    $payload = $this->getConfirmTempStore()->get(AiListingWorkbenchForm::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY);
     return is_array($payload) ? $payload : [];
+  }
+
+  /**
+   * @return array<int,array<int,string|\Drupal\Component\Render\MarkupInterface>>
+   */
+  private function buildSelectedListingRows(): array {
+    $payload = $this->getPayload();
+    $listingIds = array_map('intval', $payload['listing_ids'] ?? []);
+    if ($listingIds === []) {
+      return [];
+    }
+
+    $listings = $this->getEntityTypeManager()->getStorage('bb_ai_listing')->loadMultiple($listingIds);
+    $rows = [];
+
+    foreach ($listingIds as $listingId) {
+      $listing = $listings[$listingId] ?? null;
+      if (!$listing instanceof BbAiListing) {
+        continue;
+      }
+
+      $rows[] = [
+        $listing->bundle() === 'book_bundle' ? (string) $this->t('Book bundle') : (string) $this->t('Book'),
+        (string) $listingId,
+        Link::fromTextAndUrl(
+          $this->buildListingLabel($listing),
+          Url::fromRoute('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $listingId])
+        )->toString(),
+        trim((string) ($listing->get('storage_location')->value ?? '')) ?: (string) $this->t('Unset yet'),
+      ];
+    }
+
+    return $rows;
+  }
+
+  private function buildListingLabel(BbAiListing $listing): string {
+    if ($listing->bundle() === 'book_bundle') {
+      return (string) ($listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled bundle'));
+    }
+
+    return (string) ($listing->get('field_full_title')->value ?: $listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled listing'));
   }
 
   private function getConfirmTempStore(): \Drupal\Core\TempStore\PrivateTempStore {
@@ -85,7 +170,15 @@ final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implem
       $this->tempStoreFactory = \Drupal::service('tempstore.private');
     }
 
-    return $this->tempStoreFactory->get(AiBookListingLocationBatchForm::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_COLLECTION);
+    return $this->tempStoreFactory->get(AiListingWorkbenchForm::WORKBENCH_TEMPSTORE_COLLECTION);
+  }
+
+  private function getEntityTypeManager(): EntityTypeManagerInterface {
+    if ($this->entityTypeManager === null) {
+      $this->entityTypeManager = \Drupal::entityTypeManager();
+    }
+
+    return $this->entityTypeManager;
   }
 
 }

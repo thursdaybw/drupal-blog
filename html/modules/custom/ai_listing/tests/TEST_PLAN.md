@@ -86,13 +86,13 @@ The goal is simple:
 
 ## Phase 5: Generic Publishing Rules
 
-- [ ] Add tests for `ListingPublisher`
-- [ ] Test first publish writes the current SKU
-- [ ] Test first publish records a marketplace publication
-- [ ] Test publish/update reuses the saved SKU when updating a published listing
-- [ ] Test SKU change deletes the old SKU through the marketplace boundary
+- [x] Add tests for `ListingPublisher`
+- [x] Test first publish writes the current SKU
+- [x] Test first publish records a marketplace publication
+- [x] Test publish/update reuses the saved SKU when updating a published listing
+- [x] Test SKU change deletes the old SKU through the marketplace boundary
 - [ ] Test SKU change ends old marketplace publications
-- [ ] Test missing marketplace publication ID fails clearly on update
+- [x] Test missing marketplace publication ID fails clearly on update
 
 ## Phase 6: eBay Adapter Payload Safety
 
@@ -127,4 +127,5 @@ The goal is simple:
 - `listing_publishing` now boots and tests cleanly without pulling in eBay modules.
 - Generic publishing tests should stay separate from eBay adapter tests.
 - That split matters because more marketplaces are planned.
+- `ddev test-listing-kernel` is now the main command for the listing stack.
 - Testing also exposed a real config schema gap in `ai_listing` for `bb_ai_listing_type.*`, which is now fixed.

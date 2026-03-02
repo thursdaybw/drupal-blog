@@ -46,6 +46,8 @@ final class VllmInstancePoolCommand extends DrushCommands {
       'port' => $instance['port'],
       'url' => $instance['url'],
       'contract_id' => $instance['contract_id'],
+      'image' => $instance['image'],
+      'model' => $instance['model'],
       'set_at' => $instance['set_at'],
       'exported_at' => time(),
     ];
@@ -78,6 +80,8 @@ final class VllmInstancePoolCommand extends DrushCommands {
     $port = trim((string) ($instance['port'] ?? ''));
     $url = trim((string) ($instance['url'] ?? ''));
     $contractId = trim((string) ($instance['contract_id'] ?? ''));
+    $image = trim((string) ($instance['image'] ?? ''));
+    $model = trim((string) ($instance['model'] ?? ''));
     $setAt = (int) ($instance['set_at'] ?? time());
 
     if ($host === '' || $port === '' || $url === '') {
@@ -89,6 +93,8 @@ final class VllmInstancePoolCommand extends DrushCommands {
     $this->state->set('compute.vllm_port', $port);
     $this->state->set('compute.vllm_url', $url);
     $this->state->set('compute.vllm_contract_id', $contractId);
+    $this->state->set('compute.vllm_image', $image);
+    $this->state->set('compute.vllm_model', $model);
     $this->state->set('compute.vllm_set_at', $setAt);
 
     $this->output()->writeln(sprintf('Loaded vLLM instance %s from %s into Drupal state.', $instanceId, $file));
@@ -119,18 +125,21 @@ final class VllmInstancePoolCommand extends DrushCommands {
       $host = (string) ($instance['host'] ?? '');
       $port = (string) ($instance['port'] ?? '');
       $contractId = (string) ($instance['contract_id'] ?? '');
-      $this->output()->writeln(sprintf('%s: %s:%s contract=%s', $name, $host, $port, $contractId));
+      $model = (string) ($instance['model'] ?? '');
+      $this->output()->writeln(sprintf('%s: %s:%s contract=%s model=%s', $name, $host, $port, $contractId, $model));
     }
   }
 
   /**
-   * @return array{host:string,port:string,url:string,contract_id:string,set_at:int}|null
+   * @return array{host:string,port:string,url:string,contract_id:string,image:string,model:string,set_at:int}|null
    */
   private function loadCurrentInstanceState(): ?array {
     $host = trim((string) $this->state->get('compute.vllm_host', ''));
     $port = trim((string) $this->state->get('compute.vllm_port', ''));
     $url = trim((string) $this->state->get('compute.vllm_url', ''));
     $contractId = trim((string) $this->state->get('compute.vllm_contract_id', ''));
+    $image = trim((string) $this->state->get('compute.vllm_image', ''));
+    $model = trim((string) $this->state->get('compute.vllm_model', ''));
     $setAt = (int) $this->state->get('compute.vllm_set_at', 0);
 
     if ($host === '' || $port === '' || $url === '') {
@@ -142,6 +151,8 @@ final class VllmInstancePoolCommand extends DrushCommands {
       'port' => $port,
       'url' => $url,
       'contract_id' => $contractId,
+      'image' => $image,
+      'model' => $model,
       'set_at' => $setAt,
     ];
   }
@@ -181,7 +192,7 @@ final class VllmInstancePoolCommand extends DrushCommands {
   }
 
   /**
-   * @param array{host:string,port:string,url:string,contract_id:string,set_at:int} $instance
+   * @param array{host:string,port:string,url:string,contract_id:string,image:string,model:string,set_at:int} $instance
    */
   private function resolveInstanceId(?string $instanceId, array $instance): string {
     $normalizedInstanceId = trim((string) $instanceId);

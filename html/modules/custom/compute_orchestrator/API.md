@@ -19,7 +19,9 @@ Full method signatures are defined in `VastRestClientInterface` (`src/Service/Va
 ## Commands
 ### `compute:test-vast`
 - Uses `VastRestClient` to provision a test instance.
-- Accepts no arguments. Logs details and destroys the instance on success.
+- Supports `--workload` and `--image` overrides.
+- `--workload=qwen-vl` defaults to `thursdaybw/vllm-qwen-stable:dev`.
+- Logs details and destroys the instance on success unless `--preserve` is set.
 
 ### `compute:bad-hosts [--clear]`
 - Lists or clears the persistent bad host list.

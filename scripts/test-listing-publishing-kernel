@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DRUPAL_ROOT="$PROJECT_ROOT/html"
+PHPUNIT_CONFIG="$PROJECT_ROOT/phpunit.browser.xml"
+TEST_PATH="$DRUPAL_ROOT/modules/custom/listing_publishing/tests/src/Kernel"
+
+cd "$DRUPAL_ROOT"
+
+../vendor/bin/phpunit -c "$PHPUNIT_CONFIG" "$TEST_PATH"

@@ -25,5 +25,6 @@ services:
     class: Drupal\compute_orchestrator\Command\VllmInstancePoolCommand
     arguments:
       - '@state'
+      - '@compute_orchestrator.vast_rest_client'
     tags:
       - { name: drush.command }

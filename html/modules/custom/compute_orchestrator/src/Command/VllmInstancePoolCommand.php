@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\compute_orchestrator\Command;
 
 use Drupal\Core\State\StateInterface;
+use Drupal\compute_orchestrator\Service\VastRestClientInterface;
 use Drush\Commands\DrushCommands;
 
 final class VllmInstancePoolCommand extends DrushCommands {
@@ -13,6 +14,7 @@ final class VllmInstancePoolCommand extends DrushCommands {
 
   public function __construct(
     private readonly StateInterface $state,
+    private readonly VastRestClientInterface $vastClient,
   ) {
     parent::__construct();
   }
@@ -83,6 +85,13 @@ final class VllmInstancePoolCommand extends DrushCommands {
     $image = trim((string) ($instance['image'] ?? ''));
     $model = trim((string) ($instance['model'] ?? ''));
     $setAt = (int) ($instance['set_at'] ?? time());
+
+    $liveEndpoint = $this->loadLiveEndpoint($contractId);
+    if ($liveEndpoint !== NULL) {
+      $host = $liveEndpoint['host'];
+      $port = $liveEndpoint['port'];
+      $url = $liveEndpoint['url'];
+    }
 
     if ($host === '' || $port === '' || $url === '') {
       $this->output()->writeln(sprintf('<error>Instance ID %s in %s is missing host, port, or url.</error>', $instanceId, $file));
@@ -189,6 +198,64 @@ final class VllmInstancePoolCommand extends DrushCommands {
     }
 
     return self::DEFAULT_POOL_FILE;
+  }
+
+  /**
+   * @return array{host:string,port:string,url:string}|null
+   */
+  private function loadLiveEndpoint(string $contractId): ?array {
+    if ($contractId === '') {
+      return NULL;
+    }
+
+    try {
+      $info = $this->vastClient->showInstance($contractId);
+    }
+    catch (\Throwable $exception) {
+      $this->output()->writeln(sprintf(
+        '<comment>Unable to refresh live endpoint for contract %s: %s</comment>',
+        $contractId,
+        $exception->getMessage()
+      ));
+      return NULL;
+    }
+
+    $host = trim((string) ($info['public_ipaddr'] ?? ''));
+    $port = $this->extractPublicPort($info);
+    if ($host === '' || $port === '') {
+      $this->output()->writeln(sprintf(
+        '<comment>Contract %s has no current public vLLM endpoint. Using saved pool values.</comment>',
+        $contractId
+      ));
+      return NULL;
+    }
+
+    return [
+      'host' => $host,
+      'port' => $port,
+      'url' => 'http://' . $host . ':' . $port,
+    ];
+  }
+
+  private function extractPublicPort(array $instanceInfo): string {
+    $ports = $instanceInfo['ports'] ?? [];
+    if (!is_array($ports)) {
+      return '';
+    }
+
+    foreach ($ports as $key => $value) {
+      if (!str_contains((string) $key, '8000')) {
+        continue;
+      }
+
+      if (!is_array($value) || !isset($value[0]['HostPort'])) {
+        continue;
+      }
+
+      return trim((string) $value[0]['HostPort']);
+    }
+
+    return '';
   }
 
   /**

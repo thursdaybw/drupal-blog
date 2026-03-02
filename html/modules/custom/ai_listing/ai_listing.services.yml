@@ -16,6 +16,9 @@ services:
     arguments:
       - '@entity_type.manager'
 
+  ai_listing.batch_selection_manager:
+    class: Drupal\ai_listing\Service\AiListingBatchSelectionManager
+
   ai_listing.bundle_ebay_title_refresh:
     class: Drupal\ai_listing\Service\BundleEbayTitleRefreshService
     arguments:

@@ -107,9 +107,9 @@ The goal is simple:
 
 ## Phase 7: Selection Follow-Up
 
-- [ ] Extract persistent selection logic into a testable seam
-- [ ] Add tests for selected-count calculation
-- [ ] Add tests for selected-key normalization
+- [x] Extract persistent selection logic into a testable seam
+- [x] Add tests for selected-count calculation
+- [x] Add tests for selected-key normalization
 - [ ] Revisit `Show selected only` only after the above tests exist
 
 ## Later
@@ -136,4 +136,9 @@ The goal is simple:
   `updatePublication()`, not shared between product types.
 - The current eBay adapter tests capture the real outbound HTTP payloads by
   running the real adapter over a fake HTTP client.
+- The batch form now has a small selection helper for:
+  - building selection keys
+  - decoding the hidden JSON field
+  - normalizing selected keys
+  - turning selected keys back into listing refs
 - Testing also exposed a real config schema gap in `ai_listing` for `bb_ai_listing_type.*`, which is now fixed.

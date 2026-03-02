@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Drupal\ai_listing\Service;
+namespace Drupal\ai_listing_inference\Service;
 
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\ai_listing\Entity\BbAiListing;
-use Drupal\ai_listing\Service\AiBookListingDataExtractionProcessor;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 
 final class AiBookListingBatchDataExtractionProcessor {
 
@@ -45,7 +44,7 @@ final class AiBookListingBatchDataExtractionProcessor {
   }
 
   public function loadListing(string|int $id): ?BbAiListing {
-    /** @var BbAiListing|null $listing */
+    /** @var \Drupal\ai_listing\Entity\BbAiListing|null $listing */
     return $this->entityTypeManager->getStorage('bb_ai_listing')->load((int) $id);
   }
 
@@ -62,4 +61,5 @@ final class AiBookListingBatchDataExtractionProcessor {
       throw $e;
     }
   }
+
 }

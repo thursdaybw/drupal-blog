@@ -3,3 +3,17 @@ services:
     class: Drupal\ai_listing_inference\Service\BookExtractionService
     arguments:
       - '@compute_orchestrator.vlm_client'
+
+  ai_listing_inference.data_extraction_processor:
+    class: Drupal\ai_listing_inference\Service\AiBookListingDataExtractionProcessor
+    arguments:
+      - '@?ai_listing_inference.book_extraction'
+      - '@entity_type.manager'
+      - '@file_system'
+      - '@ai_listing.bundle_ebay_title_builder'
+
+  ai_listing_inference.batch_data_extraction_processor:
+    class: Drupal\ai_listing_inference\Service\AiBookListingBatchDataExtractionProcessor
+    arguments:
+      - '@entity_type.manager'
+      - '@ai_listing_inference.data_extraction_processor'

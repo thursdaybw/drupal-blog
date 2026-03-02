@@ -6,7 +6,7 @@ This file tracks the first pass of meaningful test coverage for `ai_listing` and
 
 - [x] PHPUnit smoke test path works
 - [x] `ddev test-ai-listing-smoke` runs successfully
-- [ ] Real behavioral coverage is in place
+- [x] First real behavioral coverage is in place
 
 ## Approach
 
@@ -25,20 +25,28 @@ This file tracks the first pass of meaningful test coverage for `ai_listing` and
 
 ## Phase 2: Batch Form Seam
 
-- [ ] Extract batch listing dataset logic from `AiBookListingLocationBatchForm`
-- [ ] Move filtering into a dedicated service
-- [ ] Move count calculation into the same seam
-- [ ] Move page slicing into the same seam
-- [ ] Keep form code focused on wiring and rendering
+- [x] Extract batch listing dataset logic from `AiBookListingLocationBatchForm`
+- [x] Move filtering into a dedicated service
+- [x] Move count calculation into the same seam
+- [x] Move page slicing into the same seam
+- [x] Keep form code focused on wiring and rendering
 
 ## Phase 3: Batch Form Tests
 
-- [ ] Add kernel test for unfiltered listing count
-- [ ] Add kernel test for status filtering
-- [ ] Add kernel test for storage location filtering
-- [ ] Add kernel test for free-text search matching
+- [x] Add kernel test for unfiltered listing count
+- [x] Add kernel test for status filtering
+- [x] Add kernel test for storage location filtering
+- [x] Add kernel test for free-text search matching
 - [ ] Add kernel test for filtered count vs paged rows
-- [ ] Add kernel test for page slicing by items-per-page
+- [x] Add kernel test for page slicing by items-per-page
+
+## Architecture Cleanup
+
+- [x] Remove hard module dependency from `ai_listing` to `ai_listing_inference`
+- [x] Define the inference boundary inside `ai_listing`
+- [x] Make `ai_listing_inference` implement the boundary
+- [x] Move image-processing orchestration out of `ai_listing`
+- [x] Prove `ai_listing` kernel tests run without `ai_listing_inference`
 
 ## Phase 4: Publishing and Title Logic
 
@@ -75,3 +83,4 @@ This file tracks the first pass of meaningful test coverage for `ai_listing` and
 - Browser tests are not the first line of defense here.
 - The first serious target is the batch form because it is already carrying filtering, paging, counts, and selection complexity.
 - Keep testable logic out of large form classes wherever possible.
+- `ai_listing` now boots and tests cleanly without pulling in inference or compute infrastructure.

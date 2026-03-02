@@ -4,4 +4,5 @@ description: Inference adapter services consumed by the AI listings UI module.
 core_version_requirement: ^10
 package: Custom
 dependencies:
+  - ai_listing
   - compute_orchestrator

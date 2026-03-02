@@ -1,5 +1,10 @@
 # BB AI Listing Migration Status (2026-02-27)
 
+Historical note:
+- This file is a migration snapshot from `2026-02-27`.
+- It is kept so we do not lose the migration story.
+- It is not the current source of truth for today's architecture or testing state.
+
 ## Completed
 
 - Legacy content tables removed:

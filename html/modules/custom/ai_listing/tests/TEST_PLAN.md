@@ -1,17 +1,26 @@
 # AI Listing Test Plan
 
-This file tracks the first useful tests for `ai_listing`.
+This file tracks the first useful tests around the listing system.
+
+That now includes three connected parts:
+- `ai_listing`
+- `listing_publishing`
+- `ebay_connector`
 
 The goal is simple:
 - make the code safer to change
 - make the rules easier to understand
 - rebuild confidence in the moving parts
+- keep the marketplace boundary clean
 
 ## Current State
 
 - [x] PHPUnit smoke test path works
 - [x] `ddev test-ai-listing-smoke` runs successfully
 - [x] First real behavioral coverage is in place
+- [x] `ai_listing` has real kernel tests
+- [x] `listing_publishing` now has real kernel tests
+- [x] `listing_publishing` no longer needs eBay just to boot
 
 ## Approach
 
@@ -19,14 +28,16 @@ The goal is simple:
 2. Pull logic out of busy form classes before testing it.
 3. Test the risky, fast-changing parts first.
 4. Leave browser tests until later.
+5. Keep generic publishing tests separate from eBay adapter tests.
 
 ## Phase 1: Testing Foundation
 
 - [x] Add a smoke test under `ai_listing/tests/src/Unit`
 - [x] Add a repo script for the smoke test
 - [x] Add a thin DDEV wrapper command
+- [x] Add a kernel suite command for `ai_listing`
 - [ ] Add a dedicated non-browser PHPUnit config if needed
-- [ ] Document the standard test commands for this module
+- [ ] Document the standard test commands for this part of the system
 
 ## Phase 2: Batch Form Seam
 
@@ -57,8 +68,12 @@ The goal is simple:
 - [x] Make `ai_listing_inference` implement the boundary
 - [x] Move image-processing orchestration out of `ai_listing`
 - [x] Prove `ai_listing` kernel tests run without `ai_listing_inference`
+- [x] Remove hidden eBay requirement from `listing_publishing`
+- [x] Give `listing_publishing` safe null adapters
+- [x] Make `ebay_connector` an outer adapter instead of a hidden prerequisite
+- [x] Prove `listing_publishing` kernel tests run without eBay modules
 
-## Phase 4: eBay Title and Publishing Logic
+## Phase 4: eBay Title and Generic Publishing Logic
 
 - [x] Add unit test for `BundleEbayTitleBuilder`
 - [x] Test same-author bundle title generation
@@ -67,16 +82,31 @@ The goal is simple:
 - [x] Add test for `BookListingAssembler` using `ebay_title`
 - [x] Add test for `BookListingAssembler` rejecting missing `condition_note`
 - [x] Add test for plain book title mapping to the `Book Title` aspect
+- [x] Add test proving `listing_publishing` boots with null adapters
 
-## Phase 5: eBay Payload Safety
+## Phase 5: Generic Publishing Rules
+
+- [ ] Add tests for `ListingPublisher`
+- [ ] Test first publish writes the current SKU
+- [ ] Test first publish records a marketplace publication
+- [ ] Test publish/update reuses the saved SKU when updating a published listing
+- [ ] Test SKU change deletes the old SKU through the marketplace boundary
+- [ ] Test SKU change ends old marketplace publications
+- [ ] Test missing marketplace publication ID fails clearly on update
+
+## Phase 6: eBay Adapter Payload Safety
 
 - [ ] Add tests around shared payload building in `EbayMarketplacePublisher`
 - [ ] Prove publish and update use the same inventory payload builder
 - [ ] Prove publish and update use the same offer payload builder
 - [ ] Prove `listingDescription` is included in offer payloads
 - [ ] Prove `conditionDescription` is included in payloads
+- [ ] Prove plain book title goes to the `Book Title` aspect
+- [ ] Prove `ebay_title` goes to the listing title
+- [ ] Prove no fake condition note is generated
+- [ ] Prove existing-offer update and first-offer create follow the right path
 
-## Phase 6: Selection Follow-Up
+## Phase 7: Selection Follow-Up
 
 - [ ] Extract persistent selection logic into a testable seam
 - [ ] Add tests for selected-count calculation
@@ -94,4 +124,7 @@ The goal is simple:
 - The first serious target is the batch form because it already carries filtering, paging, counts, and selection logic.
 - Keep testable logic out of large form classes wherever possible.
 - `ai_listing` now boots and tests cleanly without pulling in inference or compute infrastructure.
+- `listing_publishing` now boots and tests cleanly without pulling in eBay modules.
+- Generic publishing tests should stay separate from eBay adapter tests.
+- That split matters because more marketplaces are planned.
 - Testing also exposed a real config schema gap in `ai_listing` for `bb_ai_listing_type.*`, which is now fixed.

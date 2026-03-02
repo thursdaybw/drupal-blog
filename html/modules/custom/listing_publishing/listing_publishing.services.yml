@@ -1,4 +1,16 @@
 services:
+  listing_publishing.marketplace_publisher:
+    class: Drupal\listing_publishing\Service\NullMarketplacePublisher
+
+  'Drupal\listing_publishing\Contract\MarketplacePublisherInterface':
+    alias: listing_publishing.marketplace_publisher
+
+  listing_publishing.image_uploader:
+    class: Drupal\listing_publishing\Service\NullListingImageUploader
+
+  'Drupal\listing_publishing\Contract\ListingImageUploaderInterface':
+    alias: listing_publishing.image_uploader
+
   drupal.listing_publishing.book_assembler:
     class: Drupal\listing_publishing\Service\BookListingAssembler
     arguments:
@@ -12,12 +24,6 @@ services:
       - '@entity_type.manager'
       - '@drupal.listing_publishing.book_assembler'
       - '@listing_publishing.marketplace_publisher'
-
-  listing_publishing.marketplace_publisher:
-    alias: drupal.ebay_connector.marketplace_publisher
-
-  'Drupal\listing_publishing\Contract\ListingImageUploaderInterface':
-    alias: drupal.ebay_infrastructure.media_image_uploader
 
   drupal.listing_publishing.publisher:
     class: Drupal\listing_publishing\Service\ListingPublisher

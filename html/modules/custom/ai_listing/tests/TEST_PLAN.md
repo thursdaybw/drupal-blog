@@ -58,15 +58,15 @@ The goal is simple:
 - [x] Move image-processing orchestration out of `ai_listing`
 - [x] Prove `ai_listing` kernel tests run without `ai_listing_inference`
 
-## Phase 4: Publishing and Title Logic
+## Phase 4: eBay Title and Publishing Logic
 
-- [ ] Add unit test for `BundleEbayTitleBuilder`
-- [ ] Test same-author bundle title generation
-- [ ] Test mixed-author bundle title generation
-- [ ] Test title truncation to 80 characters
-- [ ] Add test for `BookListingAssembler` using `ebay_title`
-- [ ] Add test for `BookListingAssembler` rejecting missing `condition_note`
-- [ ] Add test for plain book title mapping to the `Book Title` aspect
+- [x] Add unit test for `BundleEbayTitleBuilder`
+- [x] Test same-author bundle title generation
+- [x] Test mixed-author bundle title generation
+- [x] Test title truncation to 80 characters
+- [x] Add test for `BookListingAssembler` using `ebay_title`
+- [x] Add test for `BookListingAssembler` rejecting missing `condition_note`
+- [x] Add test for plain book title mapping to the `Book Title` aspect
 
 ## Phase 5: eBay Payload Safety
 
@@ -94,3 +94,4 @@ The goal is simple:
 - The first serious target is the batch form because it already carries filtering, paging, counts, and selection logic.
 - Keep testable logic out of large form classes wherever possible.
 - `ai_listing` now boots and tests cleanly without pulling in inference or compute infrastructure.
+- Testing also exposed a real config schema gap in `ai_listing` for `bb_ai_listing_type.*`, which is now fixed.

@@ -12,3 +12,16 @@ bb_ai_listing_type.*:
       type: text
       label: 'Description'
 
+ai_listing.bb_ai_listing_type.*:
+  type: config_entity
+  label: 'BB AI Listing type'
+  mapping:
+    id:
+      type: string
+      label: 'ID'
+    label:
+      type: label
+      label: 'Label'
+    description:
+      type: text
+      label: 'Description'

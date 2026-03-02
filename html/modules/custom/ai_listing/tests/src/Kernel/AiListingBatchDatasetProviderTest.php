@@ -153,6 +153,67 @@ final class AiListingBatchDatasetProviderTest extends KernelTestBase {
   }
 
   /**
+   * Checks that filtered count and current-page rows are not the same thing.
+   *
+   * The filtered count should tell us how many rows match overall.
+   * The paged rows should only contain the rows for the current page.
+   */
+  public function testFilteredCountDiffersFromCurrentPageRowCount(): void {
+    $this->createBookListing('Shelved one', 'shelved', 'BDMAA01', 100);
+    $this->createBookListing('Shelved two', 'shelved', 'BDMAA02', 200);
+    $this->createBookListing('Shelved three', 'shelved', 'BDMAA03', 300);
+
+    $filter = new AiListingBatchFilter(
+      status: 'shelved',
+      bargainBinFilterMode: 'any',
+      publishedToEbayFilterMode: 'any',
+      searchQuery: '',
+      storageLocationFilter: '',
+      itemsPerPage: 2,
+      currentPage: 0,
+    );
+
+    $dataset = $this->datasetProvider->buildDataset($filter);
+
+    $this->assertSame(3, $dataset->filteredCount);
+    $this->assertCount(2, $dataset->pagedRows);
+  }
+
+  /**
+   * Checks that an out-of-range page falls back to page 1.
+   *
+   * If filters reduce the result set, an old page number can point past the
+   * end of the matching rows. In that case the dataset should clamp back to
+   * page 0 so the table still shows real rows.
+   */
+  public function testOutOfRangePageClampsBackToFirstPage(): void {
+    $firstListing = $this->createBookListing('Shelved one', 'shelved', 'BDMAA01', 100);
+    $this->createBookListing('Shelved two', 'shelved', 'BDMAA02', 200);
+    $this->createBookListing('Failed one', 'failed', 'BGNBIN008', 300);
+
+    $filter = new AiListingBatchFilter(
+      status: 'failed',
+      bargainBinFilterMode: 'any',
+      publishedToEbayFilterMode: 'any',
+      searchQuery: '',
+      storageLocationFilter: '',
+      itemsPerPage: 25,
+      currentPage: 4,
+    );
+
+    $dataset = $this->datasetProvider->buildDataset($filter);
+
+    $this->assertSame(0, $dataset->currentPage);
+    $this->assertSame(1, $dataset->filteredCount);
+    $this->assertCount(1, $dataset->pagedRows);
+
+    $pagedRows = $dataset->pagedRows;
+    $row = reset($pagedRows);
+    $this->assertIsArray($row);
+    $this->assertNotSame((int) $firstListing->id(), $row['listing_id']);
+  }
+
+  /**
    * Creates a small real book listing for the test dataset.
    *
    * We keep this helper small so the test setup stays easy to read.

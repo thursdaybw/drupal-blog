@@ -18,6 +18,7 @@ use Drupal\Component\Render\MarkupInterface;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Model\AiListingBatchFilter;
 use Drupal\ai_listing\Service\AiListingBatchDatasetProvider;
+use Drupal\ai_listing\Service\AiListingBatchSelectionManager;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -33,6 +34,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   private ?PagerManagerInterface $pagerManager = null;
   private ?PagerParametersInterface $pagerParameters = null;
   private ?AiListingBatchDatasetProvider $batchDatasetProvider = null;
+  private ?AiListingBatchSelectionManager $batchSelectionManager = null;
 
   public static function create(ContainerInterface $container): self {
     $form = new self();
@@ -43,6 +45,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     $form->pagerManager = $container->get('pager.manager');
     $form->pagerParameters = $container->get('pager.parameters');
     $form->batchDatasetProvider = $container->get('ai_listing.batch_dataset_provider');
+    $form->batchSelectionManager = $container->get('ai_listing.batch_selection_manager');
     return $form;
   }
 
@@ -816,22 +819,15 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   }
 
   private function buildSelectionKey(string $listingType, int $id): string {
-    return $listingType . ':' . $id;
+    return $this->getBatchSelectionManager()->buildSelectionKey($listingType, $id);
   }
 
   /**
    * @return array<int,array{listing_type:string,id:int}>
    */
   private function getSelectedListingRefs(FormStateInterface $form_state): array {
-    $selection = [];
-    foreach ($this->getSubmittedSelectedListingKeys($form_state) as $key) {
-      $decoded = $this->parseSelectionKey((string) $key);
-      if ($decoded !== NULL) {
-        $selection[] = $decoded;
-      }
-    }
-
-    return $selection;
+    return $this->getBatchSelectionManager()
+      ->buildSelectionRefs($this->getSubmittedSelectedListingKeys($form_state));
   }
 
   /**
@@ -839,62 +835,17 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
    */
   private function getSubmittedSelectedListingKeys(FormStateInterface $form_state): array {
     $submittedValue = $form_state->getValue(self::SELECTED_LISTING_KEYS_FIELD);
-    if (!is_string($submittedValue) || trim($submittedValue) === '') {
-      $selected = array_filter($form_state->getValue('listings') ?? []);
-      return array_values(array_map('strval', array_keys($selected)));
-    }
+    $currentPageSelection = is_array($form_state->getValue('listings'))
+      ? $form_state->getValue('listings')
+      : [];
 
-    $decoded = json_decode($submittedValue, TRUE);
-    if (!is_array($decoded)) {
-      return [];
-    }
-
-    $keys = [];
-    foreach ($decoded as $value) {
-      if (!is_string($value) || trim($value) === '') {
-        continue;
-      }
-
-      $keys[] = trim($value);
-    }
-
-    return array_values(array_unique($keys));
+    return $this->getBatchSelectionManager()
+      ->extractSelectionKeys($submittedValue, $currentPageSelection);
   }
 
   private function buildSelectedListingKeysPayload(FormStateInterface $form_state): string {
-    $keys = $this->getSubmittedSelectedListingKeys($form_state);
-    if ($keys === []) {
-      return '[]';
-    }
-
-    $encoded = json_encode(array_values($keys));
-    if (!is_string($encoded)) {
-      return '[]';
-    }
-
-    return $encoded;
-  }
-
-  /**
-   * @return array{listing_type:string,id:int}|null
-   */
-  private function parseSelectionKey(string $key): ?array {
-    if (!str_contains($key, ':')) {
-      return NULL;
-    }
-
-    [$listingType, $id] = explode(':', $key, 2);
-    $listingType = trim($listingType);
-    $entityId = (int) $id;
-
-    if ($listingType === '' || $entityId <= 0) {
-      return NULL;
-    }
-
-    return [
-      'listing_type' => $listingType,
-      'id' => $entityId,
-    ];
+    return $this->getBatchSelectionManager()
+      ->encodeSelectionKeys($this->getSubmittedSelectedListingKeys($form_state));
   }
 
   private function getEntityTypeManager(): EntityTypeManagerInterface {
@@ -948,6 +899,14 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     }
 
     return $this->batchDatasetProvider;
+  }
+
+  private function getBatchSelectionManager(): AiListingBatchSelectionManager {
+    if ($this->batchSelectionManager === null) {
+      $this->batchSelectionManager = \Drupal::service('ai_listing.batch_selection_manager');
+    }
+
+    return $this->batchSelectionManager;
   }
 
 }

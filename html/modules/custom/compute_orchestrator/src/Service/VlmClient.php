@@ -24,6 +24,7 @@ final class VlmClient {
     $vllmUrl = (string) \Drupal::state()->get('compute.vllm_url', '');
     $vllmHost = (string) \Drupal::state()->get('compute.vllm_host', '');
     $vllmPort = (string) \Drupal::state()->get('compute.vllm_port', '');
+    $vllmModel = trim((string) \Drupal::state()->get('compute.vllm_model', 'Qwen/Qwen2-VL-7B-Instruct'));
 
     if ($vllmUrl === '') {
       if ($vllmHost === '' || $vllmPort === '') {
@@ -65,7 +66,7 @@ final class VlmClient {
     }
 
     $payload = [
-      'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+      'model' => $vllmModel,
       'messages' => [
         [
           'role' => 'user',

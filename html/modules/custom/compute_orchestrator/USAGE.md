@@ -10,8 +10,12 @@ ddev drush cr
 # inside ddev ssh or direct drush run if env vars are set:
 export VAST_SSH_KEY_PATH=/home/bevan/.ssh/id_rsa_vastai
 drush compute:test-vast
+drush compute:test-vast --workload=qwen-vl
+drush compute:test-vast --workload=qwen-vl --image=thursdaybw/vllm-qwen-stable:dev
 ```
 - This command provision a temporary instance, waits for SSH/vLLM readiness, then destroys the instance on success.
+- `qwen-vl` now defaults to `thursdaybw/vllm-qwen-stable:dev`.
+- `--image` can override the workload default without changing code.
 
 ## Strictness levels
 The command reads `compute_orchestrator.strictness` (default `strict`) from Drupal state.
@@ -30,5 +34,7 @@ ddev drush compute:bad-hosts --clear  # reset list
 The module also tracks host stats in `compute_orchestrator.host_stats` and infrastructure fatal hosts in `compute_orchestrator.global_bad_hosts`.
 
 ## Notes
-- The command uses TinyLlama for infrastructure validation, but the `createOptions` block can be updated later to point to heavier models once infrastructure proves stable.
+- The command still defaults to `tinyllama` for lightweight infrastructure validation.
+- The `qwen-vl` workload uses `Qwen/Qwen2-VL-7B-Instruct` with the custom image `thursdaybw/vllm-qwen-stable:dev`.
+- When provisioning succeeds, the active vLLM model is stored in Drupal state so inference requests target the same model after pool export/import.
 - Logs are timestamped and include SSH/vLLM diagnostics to help identify GPU/CUDA startup issues.

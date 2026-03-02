@@ -18,6 +18,9 @@ use Symfony\Component\Console\Input\InputOption;
 )]
 final class VastTestCommand extends Command {
 
+  private const DEFAULT_QWEN_VL_IMAGE = 'thursdaybw/vllm-qwen-stable:dev';
+  private const DEFAULT_TINYLLAMA_IMAGE = 'vllm/vllm-openai:v0.12.0';
+
   private VastRestClientInterface $vastClient;
 
   public function __construct(VastRestClientInterface $vastClient) {
@@ -40,6 +43,13 @@ final class VastTestCommand extends Command {
       'Workload to run (tinyllama | qwen-vl).',
       'tinyllama'
     );
+
+    $this->addOption(
+      'image',
+      null,
+      InputOption::VALUE_REQUIRED,
+      'Docker image override. Defaults to the image mapped to the selected workload.'
+    );
   }
 
   protected function execute(InputInterface $input, OutputInterface $output): int {
@@ -49,36 +59,14 @@ final class VastTestCommand extends Command {
     $strictness = (string) \Drupal::state()->get('compute_orchestrator.strictness', 'strict');
     $preserve = (bool) $input->getOption('preserve');
 
-    $workload = (string) $input->getOption('workload');
-
-    $image = 'vllm/vllm-openai:v0.12.0';
-    $model = '';
-    $gpuRamGte = 8;
-
-    $workloadMap = [
-      'tinyllama' => [
-        'model' => 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
-        'gpu_ram_gte' => 8,
-        'max_model_len' => 2048,
-      ],
-      'qwen-vl' => [
-        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
-        'gpu_ram_gte' => 20,
-        'max_model_len' => 16384,
-      ],
-    ];
-
-    if (isset($workloadMap[$workload])) {
-      $selected = $workloadMap[$workload];
-    }
-    else {
-      $selected = $workloadMap['tinyllama'];
-    }
-
-    $model = $selected['model'];
-    $gpuRamGteGb = $selected['gpu_ram_gte'];
+    $requestedWorkload = trim((string) $input->getOption('workload'));
+    $selectedWorkload = $this->resolveWorkloadDefinition($requestedWorkload);
+    $workload = $selectedWorkload['workload'];
+    $image = $this->resolveImageOverride((string) $input->getOption('image'), $selectedWorkload);
+    $model = $selectedWorkload['model'];
+    $gpuRamGteGb = $selectedWorkload['gpu_ram_gte'];
     $gpuRamGte = $gpuRamGteGb * 1024;
-    $maxModelLen = $selected['max_model_len'];
+    $maxModelLen = $selectedWorkload['max_model_len'];
 
     $policy = $this->resolveStrictnessPolicy($strictness);
 
@@ -148,6 +136,9 @@ final class VastTestCommand extends Command {
       }
 
       $output->writeln('Provisioned contract: ' . $contractId);
+      $output->writeln('Workload: ' . $workload);
+      $output->writeln('Image: ' . $image);
+      $output->writeln('Model: ' . $model);
       $output->writeln('State: ' . ($info['cur_state'] ?? 'unknown'));
       $output->writeln('SSH Host: ' . ($info['ssh_host'] ?? ''));
       $output->writeln('SSH Port: ' . (string) ($info['ssh_port'] ?? ''));
@@ -157,6 +148,8 @@ final class VastTestCommand extends Command {
         \Drupal::state()->set('compute.vllm_host', $publicHost);
         \Drupal::state()->set('compute.vllm_port', $publicPort);
         \Drupal::state()->set('compute.vllm_contract_id', $contractId);
+        \Drupal::state()->set('compute.vllm_image', $image);
+        \Drupal::state()->set('compute.vllm_model', $model);
 
         \Drupal::state()->set('compute.vllm_url', 'http://' . $publicHost . ':' . $publicPort);
         \Drupal::state()->set('compute.vllm_set_at', time());
@@ -212,6 +205,40 @@ final class VastTestCommand extends Command {
       'min_price' => 0.20,
     ];
     }
+  }
+
+  private function resolveWorkloadDefinition(string $requestedWorkload): array {
+    $workloadMap = [
+      'tinyllama' => [
+        'workload' => 'tinyllama',
+        'image' => self::DEFAULT_TINYLLAMA_IMAGE,
+        'model' => 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
+        'gpu_ram_gte' => 8,
+        'max_model_len' => 2048,
+      ],
+      'qwen-vl' => [
+        'workload' => 'qwen-vl',
+        'image' => self::DEFAULT_QWEN_VL_IMAGE,
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ],
+    ];
+
+    if (isset($workloadMap[$requestedWorkload])) {
+      return $workloadMap[$requestedWorkload];
+    }
+
+    return $workloadMap['tinyllama'];
+  }
+
+  private function resolveImageOverride(string $requestedImage, array $selectedWorkload): string {
+    $normalizedImage = trim($requestedImage);
+    if ($normalizedImage !== '') {
+      return $normalizedImage;
+    }
+
+    return (string) $selectedWorkload['image'];
   }
 
 }

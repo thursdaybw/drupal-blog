@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Drupal\ai_listing\Service;
+namespace Drupal\ai_listing_inference\Service;
 
 use Drupal\ai_listing\Entity\BbAiListing;
-use Drupal\ai_listing_inference\Service\BookExtractionService;
+use Drupal\ai_listing\Service\BookExtractionInterface;
+use Drupal\ai_listing\Service\BundleEbayTitleBuilder;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileSystemInterface;
 
@@ -15,7 +16,7 @@ use Drupal\Core\File\FileSystemInterface;
 final class AiBookListingDataExtractionProcessor {
 
   public function __construct(
-    private readonly BookExtractionService $bookExtraction,
+    private readonly ?BookExtractionInterface $bookExtraction,
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly FileSystemInterface $fileSystem,
     private readonly BundleEbayTitleBuilder $bundleEbayTitleBuilder,
@@ -31,6 +32,7 @@ final class AiBookListingDataExtractionProcessor {
   }
 
   private function processSingleBookListing(BbAiListing $listing): void {
+    $bookExtraction = $this->requireBookExtraction();
     $imagePaths = $this->loadOwnerImagePaths('bb_ai_listing', (int) $listing->id(), FALSE);
 
     if (empty($imagePaths)) {
@@ -43,7 +45,7 @@ final class AiBookListingDataExtractionProcessor {
       throw new \RuntimeException('No metadata source images selected.');
     }
 
-    $result = $this->bookExtraction->extract($imagePaths, $metadataImagePaths);
+    $result = $bookExtraction->extract($imagePaths, $metadataImagePaths);
 
     $metadata = $result['metadata'] ?? [];
     $condition = $result['condition'] ?? ['issues' => []];
@@ -65,14 +67,14 @@ final class AiBookListingDataExtractionProcessor {
     $this->setListingFieldIfExists($listing, 'field_country_printed', $this->normalizeCountry((string) ($metadata['country_printed'] ?? '')));
     $this->setListingFieldIfExists($listing, 'field_edition', (string) ($metadata['edition'] ?? ''));
     $this->setListingFieldIfExists($listing, 'field_series', (string) ($metadata['series'] ?? ''));
-    $this->setListingFieldIfExists($listing, 'field_features', $this->normalizeStringList($metadata['features'] ?? null));
+    $this->setListingFieldIfExists($listing, 'field_features', $this->normalizeStringList($metadata['features'] ?? NULL));
     $listing->set('ebay_title', (string) ($metadata['ebay_title'] ?? ''));
     $listing->set('description', [
       'value' => $this->buildListingDescription((string) ($metadata['description'] ?? '')),
       'format' => 'basic_html',
     ]);
 
-    $this->setListingFieldIfExists($listing, 'field_condition_issues', $this->normalizeStringList($condition['issues'] ?? null));
+    $this->setListingFieldIfExists($listing, 'field_condition_issues', $this->normalizeStringList($condition['issues'] ?? NULL));
     $listing->set('condition_grade', (string) ($condition['grade'] ?? 'good'));
 
     $listing->set('status', 'ready_for_review');
@@ -81,6 +83,7 @@ final class AiBookListingDataExtractionProcessor {
   }
 
   private function processBookBundleListing(BbAiListing $listing): void {
+    $bookExtraction = $this->requireBookExtraction();
     $bundleItems = $this->loadBundleItemsForInference($listing);
     if ($bundleItems === []) {
       throw new \RuntimeException('No bundle items found.');
@@ -100,10 +103,10 @@ final class AiBookListingDataExtractionProcessor {
         throw new \RuntimeException(sprintf('Bundle item %d has no metadata source images selected.', $bundleItemId));
       }
 
-      $result = $this->bookExtraction->extract($allImagePaths, $metadataImagePaths);
-      $metadata = is_array($result['metadata'] ?? null) ? $result['metadata'] : [];
-      $condition = is_array($result['condition'] ?? null) ? $result['condition'] : ['issues' => []];
-      $conditionIssues = $this->normalizeStringList($condition['issues'] ?? null);
+      $result = $bookExtraction->extract($allImagePaths, $metadataImagePaths);
+      $metadata = is_array($result['metadata'] ?? NULL) ? $result['metadata'] : [];
+      $condition = is_array($result['condition'] ?? NULL) ? $result['condition'] : ['issues' => []];
+      $conditionIssues = $this->normalizeStringList($condition['issues'] ?? NULL);
       $conditionGrade = (string) ($condition['grade'] ?? 'good');
       $conditionNote = (string) ($condition['note'] ?? '');
 
@@ -237,7 +240,7 @@ final class AiBookListingDataExtractionProcessor {
       $title = trim((string) ($metadata['full_title'] ?? $metadata['title'] ?? ''));
       $author = trim((string) ($metadata['author'] ?? ''));
       $genre = trim((string) ($metadata['genre'] ?? ''));
-      $issues = $this->normalizeStringList($condition['issues'] ?? null);
+      $issues = $this->normalizeStringList($condition['issues'] ?? NULL);
       $grade = trim((string) ($condition['grade'] ?? 'good'));
 
       if ($firstTitle === '' && $title !== '') {
@@ -517,4 +520,13 @@ Explore my other listings, more books and treasures added regularly!
 
     return $realPath;
   }
+
+  private function requireBookExtraction(): BookExtractionInterface {
+    if ($this->bookExtraction !== NULL) {
+      return $this->bookExtraction;
+    }
+
+    throw new \RuntimeException('Book extraction service is not available. Enable ai_listing_inference to process listing images.');
+  }
+
 }

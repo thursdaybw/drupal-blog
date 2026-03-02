@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\ai_listing_inference\Service;
 
+use Drupal\ai_listing\Service\BookExtractionInterface;
 use Drupal\compute_orchestrator\Service\VlmClient;
 
-final class BookExtractionService {
+final class BookExtractionService implements BookExtractionInterface {
 
   public function __construct(
     private readonly VlmClient $vlmClient,

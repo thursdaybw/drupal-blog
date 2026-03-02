@@ -2,14 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Drupal\ai_listing\Command;
+namespace Drupal\ai_listing_inference\Command;
 
-use Drupal\ai_listing\Service\AiBookListingBatchDataExtractionProcessor;
+use Drupal\ai_listing_inference\Service\AiBookListingBatchDataExtractionProcessor;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-
 
 #[AsCommand(
   name: 'ai:process-new',
@@ -24,7 +23,6 @@ final class AiListingProcessCommand extends Command {
   }
 
   protected function execute(InputInterface $input, OutputInterface $output): int {
-
     $ids = $this->batchProcessor->getNewListingIds();
     $total = count($ids);
 
@@ -34,7 +32,7 @@ final class AiListingProcessCommand extends Command {
     }
 
     $output->writeln(sprintf('Processing %d new listing(s)...', $total));
-    $startTime = microtime(true);
+    $startTime = microtime(TRUE);
     $processed = 0;
     $failed = 0;
     $durations = [];
@@ -48,7 +46,7 @@ final class AiListingProcessCommand extends Command {
 
       $listingLabel = $listing->bundle() === 'book_bundle' ? 'Bundle' : 'Book';
       $output->writeln(sprintf('%s %d/%d (ID %d): processing...', $listingLabel, $index + 1, $total, $id));
-      $itemStart = microtime(true);
+      $itemStart = microtime(TRUE);
 
       try {
         $this->batchProcessor->processListing($listing);
@@ -59,7 +57,7 @@ final class AiListingProcessCommand extends Command {
         $output->writeln(sprintf('  Failed: %s', $e->getMessage()));
       }
       finally {
-        $duration = microtime(true) - $itemStart;
+        $duration = microtime(TRUE) - $itemStart;
         $durations[] = $duration;
         $title = $listing->hasField('field_title') ? (string) ($listing->get('field_title')->value ?? '') : '';
         $edition = $listing->hasField('field_edition') ? (string) ($listing->get('field_edition')->value ?? '') : '';
@@ -69,7 +67,7 @@ final class AiListingProcessCommand extends Command {
       }
     }
 
-    $totalTime = microtime(true) - $startTime;
+    $totalTime = microtime(TRUE) - $startTime;
     $output->writeln('Summary:');
     $output->writeln(sprintf('  Success: %d', $processed));
     $output->writeln(sprintf('  Failed: %d', $failed));
@@ -81,4 +79,5 @@ final class AiListingProcessCommand extends Command {
 
     return self::SUCCESS;
   }
+
 }

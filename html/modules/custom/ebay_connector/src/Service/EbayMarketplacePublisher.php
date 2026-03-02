@@ -49,9 +49,6 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
     $offerPayload = $this->buildOfferPayload($request, 'FIXED_PRICE', FALSE);
 
-    $payloadJson = $this->formatPayload($offerPayload);
-    $this->dumpPayloadForCli($payloadJson, 'Initial offer payload');
-
     $offerId = $this->resolveExistingOfferId($request->getSku());
     if ($offerId === null) {
       try {
@@ -63,7 +60,6 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
           '@message' => $exception->getMessage(),
           '@payload' => $payload,
         ]);
-        $this->dumpPayloadForCli($payload, 'Offer creation failed', $exception->getMessage());
         throw $exception;
       }
 
@@ -409,21 +405,4 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
     return [$path];
   }
-
-  private function formatPayload(array $payload): string {
-    return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-  }
-
-  private function dumpPayloadForCli(string $payload, string $context, string $exceptionMessage = ''): void {
-    if (PHP_SAPI !== 'cli') {
-      return;
-    }
-
-    fwrite(STDOUT, "== $context ==\n");
-    fwrite(STDOUT, $payload . "\n");
-    if ($exceptionMessage !== '') {
-      fwrite(STDOUT, "EXCEPTION: $exceptionMessage\n");
-    }
-  }
-
 }

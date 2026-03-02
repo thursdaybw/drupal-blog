@@ -95,15 +95,15 @@ The goal is simple:
 
 ## Phase 6: eBay Adapter Payload Safety
 
-- [ ] Add tests around shared payload building in `EbayMarketplacePublisher`
-- [ ] Prove publish and update use the same inventory payload builder
-- [ ] Prove publish and update use the same offer payload builder
-- [ ] Prove `listingDescription` is included in offer payloads
-- [ ] Prove `conditionDescription` is included in payloads
-- [ ] Prove plain book title goes to the `Book Title` aspect
-- [ ] Prove `ebay_title` goes to the listing title
-- [ ] Prove no fake condition note is generated
-- [ ] Prove existing-offer update and first-offer create follow the right path
+- [x] Add tests around eBay payload building in `EbayMarketplacePublisher`
+- [x] Prove eBay publish and eBay update use the same inventory payload builder
+- [x] Prove eBay publish and eBay update use the same offer payload builder
+- [x] Prove `listingDescription` is included in eBay offer payloads
+- [x] Prove `conditionDescription` is included in eBay inventory payloads
+- [x] Prove plain book title goes to the `Book Title` aspect
+- [x] Prove `ebay_title` goes to the listing title
+- [x] Prove no fake condition note is generated
+- [x] Prove existing-offer update and first-offer create follow the right path
 
 ## Phase 7: Selection Follow-Up
 
@@ -129,4 +129,11 @@ The goal is simple:
 - `ddev test-listing-kernel` is now the main command for the listing stack.
 - Publication rows now represent current state only. We are not keeping local
   `ended` publication history in this table.
+- Phase 6 is eBay-specific on purpose.
+- The ideas of an eBay "inventory payload" and an eBay "offer payload" belong
+  to the eBay adapter, not to generic publishing.
+- In Phase 6, "shared" means shared between eBay `publish()` and eBay
+  `updatePublication()`, not shared between product types.
+- The current eBay adapter tests capture the real outbound HTTP payloads by
+  running the real adapter over a fake HTTP client.
 - Testing also exposed a real config schema gap in `ai_listing` for `bb_ai_listing_type.*`, which is now fixed.

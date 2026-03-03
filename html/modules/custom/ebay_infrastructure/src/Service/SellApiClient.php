@@ -194,6 +194,33 @@ final class SellApiClient {
     );
   }
 
+  /**
+   * Migrate old-style eBay listings into the Sell Inventory model.
+   *
+   * @param string[] $listingIds
+   */
+  public function bulkMigrateListingsForAccount(?EbayAccount $account, array $listingIds): array {
+    $requests = [];
+
+    foreach ($listingIds as $listingId) {
+      $normalizedListingId = trim((string) $listingId);
+      if ($normalizedListingId === '') {
+        continue;
+      }
+
+      $requests[] = [
+        'listingId' => $normalizedListingId,
+      ];
+    }
+
+    return $this->request(
+      'POST',
+      '/sell/inventory/v1/bulk_migrate_listing',
+      ['requests' => $requests],
+      $account
+    );
+  }
+
   public function deleteInventoryItem(string $sku): array {
 
     return $this->request(

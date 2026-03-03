@@ -1,0 +1,8 @@
+services:
+  bb_ebay_legacy_migration.migration_service:
+    class: Drupal\bb_ebay_legacy_migration\Service\EbayLegacyMigrationService
+    arguments:
+      - '@drupal.ebay_infrastructure.sell_api'
+      - '@drupal.ebay_infrastructure.account_manager'
+      - '@bb_ebay_mirror.inventory_sync_service'
+      - '@bb_ebay_mirror.offer_sync_service'

@@ -79,7 +79,69 @@ Questions this pilot should answer
 - Do migrated bundles appear in the mirror in a usable shape?
 - Does the unusual DVD SKU survive the migration as-is?
 
-Next implementation step
-- Add a command that accepts one or more eBay Item IDs and calls `bulkMigrateListing` in chunks of five.
-- After each chunk, resync `bb_ebay_mirror` inventory and offers.
-- Report successes and failures clearly.
+## First command
+
+Migrate one or more legacy eBay Item IDs into the Sell Inventory model:
+
+```bash
+ddev drush bb-ebay-legacy-migration:migrate-listings "176577811710,176582430935,176604590528,176604596280,176779515895"
+```
+
+How it works
+- splits the provided Item IDs into chunks of five
+- calls Sell API `bulkMigrateListing` for each chunk
+- resyncs mirrored inventory after each chunk
+- resyncs mirrored offers after each chunk
+- prints a per-listing summary for each chunk:
+  - `listingId`
+  - `statusCode`
+  - migrated `sku`
+  - migrated `offerId`
+  - first error message when present
+
+## Pilot result
+
+The first pilot batch was useful.
+
+What happened
+- eBay migrated one listing from each duplicate-SKU pair
+- eBay rejected the second listing in each duplicate-SKU pair
+- the non-book DVD listing migrated cleanly
+
+What that means
+- duplicate legacy SKUs are a real migration constraint
+- eBay reports the duplicate-SKU failure as a vague `500`
+- the useful clue is hidden in the error parameters, where eBay includes the
+  conflicting `SKU`
+
+What the pilot proved
+- `2024 September A01`
+  - success: `176582430935`
+  - fail: `176577811710`
+- `2024 September A02`
+  - success: `176604590528`
+  - fail: `176604596280`
+- `brn-cbrd-DVDWB01 - 2025-08-01 002`
+  - success: `176779515895`
+
+Current migration rule
+- do not bulk migrate duplicate-SKU legacy listings blindly
+- migrate in small batches
+- sync the mirror after each batch
+- inspect the mirror before widening the migration
+
+## Listing date gap
+
+The current system does not preserve the original legacy listing date.
+
+What is true right now
+- `bulkMigrateListing` does not return an original listing date in its response
+- `bb_ebay_mirror` does not currently store an original legacy listing date
+- `bb_ai_listing` does not currently capture the original eBay listing date for
+  adopted legacy listings
+
+What that means
+- if keeping the original legacy listing date matters, we need to make that an
+  explicit requirement and decide where to store it
+- for now, migration is focused on getting legacy listings into the Sell
+  Inventory model and into the local mirror cleanly

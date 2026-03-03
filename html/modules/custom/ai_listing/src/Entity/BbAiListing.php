@@ -68,6 +68,11 @@ final class BbAiListing extends ContentEntityBase {
       ->setDefaultValue('')
       ->setSettings(['max_length' => 255]);
 
+    $fields['listing_code'] = BaseFieldDefinition::create('string')
+      ->setLabel('Listing code')
+      ->setDescription('Stable short code used in new marketplace SKUs.')
+      ->setSetting('max_length', 32);
+
     $fields['description'] = BaseFieldDefinition::create('text_long')
       ->setLabel('Description')
       ->setSettings(['default_value' => []]);

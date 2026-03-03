@@ -57,6 +57,33 @@ final class BookListingAssemblerTest extends KernelTestBase {
     $this->assertSame('Birdy by William Wharton Paperback Book', $request->getTitle());
   }
 
+  public function testUsesListingCodeInSkuWhenPresent(): void {
+    $assembler = $this->createAssembler();
+    $listing = $this->createBookListing(
+      ebayTitle: 'Birdy by William Wharton Paperback Book',
+      fieldTitle: 'Birdy',
+      conditionNote: 'Clean copy with light edge wear.'
+    );
+
+    $request = $assembler->assemble($listing);
+
+    $this->assertSame('2026 Feb BDMAA05 ai-book-' . $listing->get('listing_code')->value, $request->getSku());
+  }
+
+  public function testFallsBackToEntityIdInSkuWhenListingCodeIsMissing(): void {
+    $assembler = $this->createAssembler();
+    $listing = $this->createBookListing(
+      ebayTitle: 'Birdy by William Wharton Paperback Book',
+      fieldTitle: 'Birdy',
+      conditionNote: 'Clean copy with light edge wear.'
+    );
+    $listing->set('listing_code', NULL);
+
+    $request = $assembler->assemble($listing);
+
+    $this->assertSame('2026 Feb BDMAA05 ai-book-' . $listing->id(), $request->getSku());
+  }
+
   public function testRejectsMissingConditionNote(): void {
     $assembler = $this->createAssembler();
     $listing = $this->createBookListing(
@@ -91,7 +118,9 @@ final class BookListingAssemblerTest extends KernelTestBase {
 
     $skuGenerator = $this->createMock(SkuGeneratorInterface::class);
     $skuGenerator->method('generate')
-      ->willReturn('2026 Feb BDMAA05 ai-book-2');
+      ->willReturnCallback(
+        static fn (BbAiListing $listing, string $uniqueSuffix): string => '2026 Feb BDMAA05 ' . $uniqueSuffix
+      );
 
     $entityTypeManager = $this->createMock(EntityTypeManagerInterface::class);
     $entityTypeManager->method('hasDefinition')

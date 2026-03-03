@@ -207,11 +207,11 @@ final class ListingPublisherTest extends KernelTestBase {
       'existing-listing-id'
     );
 
-    // Even if the SKU generator would now produce a different SKU...
-    $this->skuGenerator->setNextSku('new-generated-sku');
+    // A normal update that does not change the location should still resolve
+    // to the same live SKU.
+    $this->skuGenerator->setNextSku('saved-sku');
 
-    // ...the update path must reuse the saved live SKU instead of inventing a
-    // new one.
+    // In that case the update path should stay on the in-place update flow.
     $this->listingPublisher->publishOrUpdate($listing);
 
     // This must be an update, not a first publish.
@@ -246,6 +246,42 @@ final class ListingPublisherTest extends KernelTestBase {
     $this->assertSame(['old-sku'], $this->marketplacePublisher->deletedSkus);
 
     // Drupal should now store the replacement live SKU.
+    $this->assertSame('new-sku', $this->skuResolver->getSku($listing));
+  }
+
+  public function testPublishOrUpdateRepublishesWhenSkuChanges(): void {
+    // Start with a listing that Drupal believes is already published.
+    $listing = $this->createBookListing(
+      ebayTitle: 'Birdy by William Wharton Paperback Book',
+      fieldTitle: 'Birdy',
+      conditionNote: 'Clean copy with light edge wear.'
+    );
+
+    // The current live SKU still reflects the old location.
+    $inventorySku = $this->skuResolver->setSku($listing, 'old-sku');
+
+    // Drupal also has a current publication row for that old SKU.
+    $this->publicationRecorder->recordPublicationSnapshot(
+      $listing,
+      $inventorySku,
+      $this->marketplacePublisher->getMarketplaceKey(),
+      'FIXED_PRICE',
+      'published',
+      'existing-pub-id',
+      'existing-listing-id'
+    );
+
+    // A location change causes the SKU generator to produce a new value.
+    $this->skuGenerator->setNextSku('new-sku');
+
+    // This should not try an in-place update with the old SKU.
+    // It should fall back to the publish path so the old SKU can be deleted
+    // and the new SKU can become the live one.
+    $this->listingPublisher->publishOrUpdate($listing);
+
+    $this->assertSame(['old-sku'], $this->marketplacePublisher->deletedSkus);
+    $this->assertCount(1, $this->marketplacePublisher->publishedRequests);
+    $this->assertCount(0, $this->marketplacePublisher->updatedRequests);
     $this->assertSame('new-sku', $this->skuResolver->getSku($listing));
   }
 

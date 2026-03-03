@@ -19,16 +19,15 @@ use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Model\AiListingBatchFilter;
 use Drupal\ai_listing\Service\AiListingBatchDatasetProvider;
 use Drupal\ai_listing\Service\AiListingBatchSelectionManager;
-use Drupal\listing_publishing\Service\ListingPublisher;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
-final class AiBookListingLocationBatchForm extends FormBase implements ContainerInjectionInterface {
-  public const PUBLISH_UPDATE_CONFIRM_TEMPSTORE_COLLECTION = 'ai_listing.location_batch';
+final class AiListingWorkbenchForm extends FormBase implements ContainerInjectionInterface {
+  public const WORKBENCH_TEMPSTORE_COLLECTION = 'ai_listing.workbench';
   public const PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY = 'publish_update_confirmation';
+  public const LOCATION_CONFIRM_TEMPSTORE_KEY = 'location_confirmation';
   public const SELECTED_LISTING_KEYS_FIELD = 'selected_listing_keys';
 
   private ?EntityTypeManagerInterface $entityTypeManager = null;
-  private ?ListingPublisher $listingPublisher = null;
   private ?DateFormatterInterface $dateFormatter = null;
   private ?PrivateTempStoreFactory $tempStoreFactory = null;
   private ?PagerManagerInterface $pagerManager = null;
@@ -39,7 +38,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   public static function create(ContainerInterface $container): self {
     $form = new self();
     $form->entityTypeManager = $container->get('entity_type.manager');
-    $form->listingPublisher = $container->get('drupal.listing_publishing.publisher');
     $form->dateFormatter = $container->get('date.formatter');
     $form->tempStoreFactory = $container->get('tempstore.private');
     $form->pagerManager = $container->get('pager.manager');
@@ -50,7 +48,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   }
 
   public function getFormId(): string {
-    return 'ai_book_listing_location_batch_form';
+    return 'ai_listing_workbench_form';
   }
 
   public function buildForm(array $form, FormStateInterface $form_state): array {
@@ -253,19 +251,12 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       ],
     ];
 
-    $form['location'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Storage location'),
-      '#description' => $this->t('Set the shelf or bin code to apply to the selected listings and publish them.'),
-      '#required' => FALSE,
-    ];
-
-    $form['actions']['set_location_and_publish'] = [
+    $form['actions']['update_location'] = [
       '#type' => 'submit',
-      '#name' => 'set_location_and_publish',
-      '#value' => $this->t('Set location and publish'),
+      '#name' => 'update_location',
+      '#value' => $this->t('Update location'),
       '#button_type' => 'primary',
-      '#submit' => ['::submitSetLocationAndPublish'],
+      '#submit' => ['::submitUpdateLocation'],
     ];
 
     $form['actions']['publish_update'] = [
@@ -306,33 +297,21 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return;
     }
 
-    if (!$this->isSetLocationAndPublishAction($form_state)) {
+    if ($this->isSetLocationAndPublishAction($form_state)) {
       return;
     }
-
-    $location = $this->getRequestedLocation($form_state);
-    if ($location !== '') {
-      return;
-    }
-
-    $form_state->setErrorByName('location', $this->t('Provide a storage location before submitting.'));
   }
 
-  public function submitSetLocationAndPublish(array &$form, FormStateInterface $form_state): void {
-    $this->queueListingBatch($form_state, TRUE, 'publish');
+  public function submitUpdateLocation(array &$form, FormStateInterface $form_state): void {
+    $this->redirectToLocationConfirmation($form_state);
   }
 
   public function submitPublishOrUpdate(array &$form, FormStateInterface $form_state): void {
-    $setLocation = $this->getRequestedLocation($form_state) !== '';
-    if ($this->redirectToPublishUpdateConfirmationIfNeeded($form_state, $setLocation)) {
-      return;
-    }
-
-    $this->queueListingBatch($form_state, $setLocation, 'publish_update');
+    $this->redirectToPublishUpdateConfirmation($form_state, FALSE, '', 'publish_update');
   }
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $this->queueListingBatch($form_state, TRUE, 'publish');
+    $this->submitPublishOrUpdate($form, $form_state);
   }
 
   public function submitDeleteSelected(array &$form, FormStateInterface $form_state): void {
@@ -346,7 +325,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     batch_set(self::buildDeleteBatchDefinition($selection));
   }
 
-  private function queueListingBatch(FormStateInterface $form_state, bool $setLocation, string $operationMode): void {
+  private function queueListingBatch(FormStateInterface $form_state, bool $setLocation, string $location, string $operationMode): void {
     $selection = $this->getSelectedListingRefs($form_state);
     if ($selection === []) {
       $this->messenger()->addError($this->t('Select at least one listing to update.'));
@@ -354,7 +333,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       return;
     }
 
-    $location = $this->getRequestedLocation($form_state);
     if ($setLocation && $location === '') {
       $this->messenger()->addError($this->t('Provide a storage location before submitting.'));
       $form_state->setRebuild();
@@ -631,7 +609,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
   private function isSetLocationAndPublishAction(FormStateInterface $form_state): bool {
     $trigger = $form_state->getTriggeringElement();
     $triggerName = $trigger['#name'] ?? '';
-    return $triggerName === 'set_location_and_publish';
+    return $triggerName === 'update_location';
   }
 
   private function isApplyFiltersAction(FormStateInterface $form_state): bool {
@@ -678,42 +656,60 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     return $default;
   }
 
-  private function getRequestedLocation(FormStateInterface $form_state): string {
-    return trim((string) $form_state->getValue('location'));
-  }
-
-  private function redirectToPublishUpdateConfirmationIfNeeded(FormStateInterface $form_state, bool $setLocation): bool {
+  private function redirectToPublishUpdateConfirmation(
+    FormStateInterface $form_state,
+    bool $setLocation,
+    string $location,
+    string $operationMode,
+  ): void {
     $selection = $this->getSelectedListingRefs($form_state);
     if ($selection === []) {
-      return FALSE;
+      $this->messenger()->addError($this->t('Select at least one listing to update.'));
+      $form_state->setRebuild();
+      return;
     }
 
     $selectedIds = [];
     foreach ($selection as $item) {
       $selectedIds[] = (int) $item['id'];
     }
-    if ($setLocation) {
-      return FALSE;
-    }
 
     $missingLocationIds = $this->findListingsMissingStorageLocation($selectedIds);
-    if ($missingLocationIds === []) {
-      return FALSE;
-    }
 
     $this->getConfirmTempStore()->set(self::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY, [
       'listing_ids' => $selectedIds,
       'set_location' => $setLocation,
-      'location' => $setLocation ? $this->getRequestedLocation($form_state) : '',
-      'operation_mode' => 'publish_update',
+      'location' => $location,
+      'operation_mode' => $operationMode,
       'missing_location_ids' => $missingLocationIds,
       'selected_count' => count($selectedIds),
       'missing_location_count' => count($missingLocationIds),
       'created_at' => time(),
     ]);
 
-    $form_state->setRedirect('ai_listing.location_batch.publish_update_confirm');
-    return TRUE;
+    $form_state->setRedirect('ai_listing.workbench.publish_update_confirm');
+  }
+
+  private function redirectToLocationConfirmation(FormStateInterface $form_state): void {
+    $selection = $this->getSelectedListingRefs($form_state);
+    if ($selection === []) {
+      $this->messenger()->addError($this->t('Select at least one listing to update.'));
+      $form_state->setRebuild();
+      return;
+    }
+
+    $selectedIds = [];
+    foreach ($selection as $item) {
+      $selectedIds[] = (int) $item['id'];
+    }
+
+    $this->getConfirmTempStore()->set(self::LOCATION_CONFIRM_TEMPSTORE_KEY, [
+      'listing_ids' => $selectedIds,
+      'selected_count' => count($selectedIds),
+      'created_at' => time(),
+    ]);
+
+    $form_state->setRedirect('ai_listing.workbench.location_confirm');
   }
 
   private function findListingsMissingStorageLocation(array $listingIds): array {
@@ -855,13 +851,6 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
     return $this->entityTypeManager;
   }
 
-  private function getListingPublisher(): ListingPublisher {
-    if ($this->listingPublisher === null) {
-      $this->listingPublisher = \Drupal::service('drupal.listing_publishing.publisher');
-    }
-    return $this->listingPublisher;
-  }
-
   private function getDateFormatter(): DateFormatterInterface {
     if ($this->dateFormatter === null) {
       $this->dateFormatter = \Drupal::service('date.formatter');
@@ -874,7 +863,7 @@ final class AiBookListingLocationBatchForm extends FormBase implements Container
       $this->tempStoreFactory = \Drupal::service('tempstore.private');
     }
 
-    return $this->tempStoreFactory->get(self::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_COLLECTION);
+    return $this->tempStoreFactory->get(self::WORKBENCH_TEMPSTORE_COLLECTION);
   }
 
   private function getPagerManager(): PagerManagerInterface {

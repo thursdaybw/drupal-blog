@@ -42,6 +42,11 @@ services:
     arguments:
       - '@entity_type.manager'
 
+  drupal.listing_publishing.marketplace_publication_lifecycle_manager:
+    class: Drupal\listing_publishing\Service\MarketplacePublicationLifecycleManager
+    arguments:
+      - '@entity_type.manager'
+
   drupal.listing_publishing.marketplace_publication_resolver:
     class: Drupal\listing_publishing\Service\MarketplacePublicationResolver
     arguments:

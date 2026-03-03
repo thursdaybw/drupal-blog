@@ -2,10 +2,10 @@ ai_listing.add_action:
   route_name: ai_listing.add
   title: 'Add AI Book Listing'
   appears_on:
-    - ai_listing.location_batch
+    - ai_listing.workbench
 
 ai_listing.add_bundle_action:
   route_name: ai_listing.bundle_add
   title: 'Add AI Book Bundle Listing'
   appears_on:
-    - ai_listing.location_batch
+    - ai_listing.workbench

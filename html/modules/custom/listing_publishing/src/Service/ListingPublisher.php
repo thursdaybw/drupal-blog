@@ -69,7 +69,14 @@ final class ListingPublisher {
     }
 
     $request = $this->assembler->assemble($listing);
-    $request = $request->withSku((string) $inventorySku->get('sku')->value);
+    $currentSku = (string) $inventorySku->get('sku')->value;
+    $desiredSku = $request->getSku();
+
+    if ($currentSku !== '' && $currentSku !== $desiredSku) {
+      return $this->publish($listing);
+    }
+
+    $request = $request->withSku($currentSku);
 
     $publicationType = (string) ($publication->get('publication_type')->value ?? '');
     $result = $this->publisher->updatePublication($publicationId, $request, $publicationType);

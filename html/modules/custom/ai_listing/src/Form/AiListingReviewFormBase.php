@@ -452,7 +452,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     /** @var \Drupal\ai_listing\Entity\BbAiListing $listing */
     $listing = $form_state->get('listing');
     if (!$listing instanceof BbAiListing) {
-      $form_state->setRedirect('ai_listing.location_batch');
+      $form_state->setRedirect('ai_listing.workbench');
       return;
     }
 
@@ -461,8 +461,8 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       'id' => (int) $listing->id(),
     ]];
 
-    batch_set(AiBookListingLocationBatchForm::buildDeleteBatchDefinition($selection));
-    $form_state->setRedirect('ai_listing.location_batch');
+    batch_set(AiListingWorkbenchForm::buildDeleteBatchDefinition($selection));
+    $form_state->setRedirect('ai_listing.workbench');
   }
 
   protected function handlePublishFailure(BbAiListing $listing, string $message): void {
@@ -484,7 +484,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       return;
     }
 
-    $form_state->setRedirect('ai_listing.location_batch', [], [
+    $form_state->setRedirect('ai_listing.workbench', [], [
       'query' => ['status_filter' => 'ready_to_shelve'],
     ]);
   }

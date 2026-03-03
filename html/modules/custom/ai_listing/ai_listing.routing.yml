@@ -14,19 +14,27 @@ ai_listing.bundle_add:
   requirements:
     _permission: 'administer ai listings'
 
-ai_listing.location_batch:
-  path: '/admin/ai-listings/ready-to-shelve/bulk-location'
+ai_listing.workbench:
+  path: '/admin/ai-listings/workbench'
   defaults:
-    _form: '\Drupal\ai_listing\Form\AiBookListingLocationBatchForm'
-    _title: 'Batch location update'
+    _form: '\Drupal\ai_listing\Form\AiListingWorkbenchForm'
+    _title: 'Listing workbench'
   requirements:
     _permission: 'administer ai listings'
 
-ai_listing.location_batch.publish_update_confirm:
-  path: '/admin/ai-listings/ready-to-shelve/bulk-location/publish-update/confirm'
+ai_listing.workbench.publish_update_confirm:
+  path: '/admin/ai-listings/workbench/publish-update/confirm'
   defaults:
     _form: '\Drupal\ai_listing\Form\AiBookListingPublishUpdateConfirmForm'
     _title: 'Confirm publish/update without location'
+  requirements:
+    _permission: 'administer ai listings'
+
+ai_listing.workbench.location_confirm:
+  path: '/admin/ai-listings/workbench/location/confirm'
+  defaults:
+    _form: '\Drupal\ai_listing\Form\AiListingLocationUpdateConfirmForm'
+    _title: 'Confirm location update'
   requirements:
     _permission: 'administer ai listings'
 

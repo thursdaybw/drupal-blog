@@ -1,7 +1,7 @@
 ai_listing.group:
   title: 'AI Listings'
   description: 'Review and publish AI generated listings'
-  route_name: ai_listing.location_batch
+  route_name: ai_listing.workbench
   parent: bb_platform.applications
   weight: 0
 
@@ -17,9 +17,9 @@ ai_listing.add_bundle_menu:
   parent: ai_listing.group
   weight: 11
 
-ai_listing.bulk_location:
-  title: 'Batch location update'
-  route_name: ai_listing.location_batch
+ai_listing.workbench:
+  title: 'Listing workbench'
+  route_name: ai_listing.workbench
   parent: ai_listing.group
   weight: 20
 

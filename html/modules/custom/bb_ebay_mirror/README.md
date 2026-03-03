@@ -2,6 +2,12 @@
 
 Local mirror of eBay Inventory/Offer state for auditing and reconciliation.
 
+Important rule
+- Mirror sync is now full reconcile sync.
+- That means a sync does not just insert and update rows it sees.
+- It also deletes mirror rows for the account that eBay did not return in the current sync run.
+- The mirror should reflect current remote state, not "anything we have ever seen".
+
 What it stores
 - `bb_ebay_inventory_item`: copy of Inventory API inventory items keyed by SKU (title, description, condition, aspects JSON, images JSON, quantity, raw JSON, last seen).
 - `bb_ebay_offer`: copy of Inventory API offers keyed by offer ID (price, policies, listing IDs/status, status, raw JSON, last seen).
@@ -31,6 +37,8 @@ Current steps
 Current state
 - Inventory sync works and has been run against the live account.
 - Offer sync works and has been run against the live account.
+- Inventory sync now does full reconcile for one account.
+- Offer sync now does full reconcile for one account.
 - First audit report exists:
   - `bb-ebay-mirror:audit-missing-inventory`
 - Second audit report exists:
@@ -53,6 +61,11 @@ Current state
 - It falls back to legacy entity ID for older SKUs.
 - The sixth and seventh audits answer the multiplicity question:
   - does one local listing now resolve from more than one mirrored SKU or offer?
+- After deleting four stale old-SKU rows on eBay and rerunning sync:
+  - orphaned inventory is clean
+  - orphaned offers are clean
+  - multiple mirrored inventory per listing is clean
+  - multiple mirrored offers per listing is clean
 
 Next planned work
 - Inspect the live multiplicity results and decide whether the orphaned old-SKU rows are just stale eBay debris.

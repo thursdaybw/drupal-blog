@@ -31,7 +31,7 @@ final class BookListingAssembler {
     $bookTitle = $this->resolveBookTitle($listing);
     $description = $this->resolveDescription($listing, $title);
     $author = $this->resolveAuthor($listing);
-    $skuSuffix = 'ai-book-' . $listing->id();
+    $skuSuffix = $this->resolveSkuSuffix($listing);
     $sku = $this->skuGenerator->generate($listing, $skuSuffix);
     $files = $this->loadImageFiles($listing);
     $imageSources = $this->collectImageSources($files);
@@ -87,6 +87,15 @@ final class BookListingAssembler {
     }
 
     return $this->truncateEbayTitle('Untitled AI Listing');
+  }
+
+  private function resolveSkuSuffix(BbAiListing $listing): string {
+    $listingCode = trim((string) ($listing->get('listing_code')->value ?? ''));
+    if ($listingCode !== '') {
+      return 'ai-book-' . $listingCode;
+    }
+
+    return 'ai-book-' . $listing->id();
   }
 
   private function truncateEbayTitle(string $title): string {

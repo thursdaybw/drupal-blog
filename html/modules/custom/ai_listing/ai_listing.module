@@ -117,6 +117,31 @@ function ai_listing_entity_insert(\Drupal\Core\Entity\EntityInterface $entity): 
 }
 
 /**
+ * Implements hook_entity_presave().
+ */
+function ai_listing_entity_presave(EntityInterface $entity): void {
+
+  if (!$entity instanceof BbAiListing) {
+    return;
+  }
+
+  $listingCode = trim((string) ($entity->get('listing_code')->value ?? ''));
+  if ($listingCode !== '') {
+    return;
+  }
+
+  $entity->set('listing_code', ai_listing_generate_listing_code($entity));
+}
+
+/**
+ * Generates the stable short code used in new listing SKUs.
+ */
+function ai_listing_generate_listing_code(BbAiListing $listing): string {
+  $uuid = strtoupper(str_replace('-', '', $listing->uuid()));
+  return substr($uuid, 0, 8);
+}
+
+/**
  * Implements hook_theme().
  */
 function ai_listing_theme($existing, $type, $theme, $path) {

@@ -1,0 +1,393 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Drupal\bb_ebay_mirror\Service;
+
+use Drupal\Core\Database\Connection;
+
+final class EbayMirrorAuditService {
+
+  public function __construct(
+    private readonly Connection $database,
+  ) {}
+
+  public function countMirroredInventoryRows(int $accountId): int {
+    return (int) $this->database->select('bb_ebay_inventory_item', 'inventory')
+      ->condition('account_id', $accountId)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+  }
+
+  public function countMirroredOfferRows(int $accountId): int {
+    return (int) $this->database->select('bb_ebay_offer', 'offer')
+      ->condition('account_id', $accountId)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+  }
+
+  /**
+   * Find local published eBay listings whose SKU is missing from the mirror.
+   *
+   * @return array<int,array{listing_id:int,ebay_title:?string,storage_location:?string,sku:string,marketplace_listing_id:?string}>
+   */
+  public function findPublishedListingsMissingMirroredInventory(int $accountId): array {
+    $query = $this->database->select('ai_marketplace_publication', 'publication');
+    $query->leftJoin(
+      'bb_ebay_inventory_item',
+      'inventory',
+      'inventory.account_id = :account_id AND inventory.sku = publication.inventory_sku_value',
+      [':account_id' => $accountId]
+    );
+    $query->leftJoin('bb_ai_listing', 'listing', 'listing.id = publication.listing');
+
+    $query->fields('publication', ['listing', 'inventory_sku_value', 'marketplace_listing_id']);
+    $query->fields('listing', ['ebay_title', 'storage_location']);
+    $query->condition('publication.marketplace_key', 'ebay');
+    $query->condition('publication.status', 'published');
+    $query->isNull('inventory.sku');
+    $query->orderBy('publication.listing', 'ASC');
+
+    $results = $query->execute()->fetchAllAssoc('listing');
+    $rows = [];
+
+    foreach ($results as $listingId => $result) {
+      $rows[] = [
+        'listing_id' => (int) $listingId,
+        'ebay_title' => $this->normalizeNullableString($result->ebay_title ?? NULL),
+        'storage_location' => $this->normalizeNullableString($result->storage_location ?? NULL),
+        'sku' => (string) ($result->inventory_sku_value ?? ''),
+        'marketplace_listing_id' => $this->normalizeNullableString($result->marketplace_listing_id ?? NULL),
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * Find local published eBay listings whose SKU is missing from the offer mirror.
+   *
+   * @return array<int,array{listing_id:int,ebay_title:?string,storage_location:?string,sku:string,marketplace_listing_id:?string}>
+   */
+  public function findPublishedListingsMissingMirroredOffer(int $accountId): array {
+    $query = $this->database->select('ai_marketplace_publication', 'publication');
+    $query->leftJoin(
+      'bb_ebay_offer',
+      'offer',
+      'offer.account_id = :account_id AND offer.sku = publication.inventory_sku_value',
+      [':account_id' => $accountId]
+    );
+    $query->leftJoin('bb_ai_listing', 'listing', 'listing.id = publication.listing');
+
+    $query->fields('publication', ['listing', 'inventory_sku_value', 'marketplace_listing_id']);
+    $query->fields('listing', ['ebay_title', 'storage_location']);
+    $query->condition('publication.marketplace_key', 'ebay');
+    $query->condition('publication.status', 'published');
+    $query->isNull('offer.offer_id');
+    $query->orderBy('publication.listing', 'ASC');
+
+    $results = $query->execute()->fetchAllAssoc('listing');
+    $rows = [];
+
+    foreach ($results as $listingId => $result) {
+      $rows[] = [
+        'listing_id' => (int) $listingId,
+        'ebay_title' => $this->normalizeNullableString($result->ebay_title ?? NULL),
+        'storage_location' => $this->normalizeNullableString($result->storage_location ?? NULL),
+        'sku' => (string) ($result->inventory_sku_value ?? ''),
+        'marketplace_listing_id' => $this->normalizeNullableString($result->marketplace_listing_id ?? NULL),
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * Find mirrored inventory rows that have no local published listing.
+   *
+   * In the current system, a local listing is treated as present when Drupal
+   * has a published eBay publication row for the mirrored SKU.
+   *
+   * @return array<int,array{sku:string,title:?string,available_quantity:?int,condition:?string}>
+   */
+  public function findMirroredInventoryMissingLocalListing(int $accountId): array {
+    $query = $this->database->select('bb_ebay_inventory_item', 'inventory');
+    $query->leftJoin(
+      'ai_marketplace_publication',
+      'publication',
+      'publication.marketplace_key = :marketplace_key AND publication.status = :status AND publication.inventory_sku_value = inventory.sku',
+      [
+        ':marketplace_key' => 'ebay',
+        ':status' => 'published',
+      ]
+    );
+
+    $query->fields('inventory', ['sku', 'title', 'available_quantity', 'condition']);
+    $query->condition('inventory.account_id', $accountId);
+    $query->isNull('publication.id');
+    $query->orderBy('inventory.sku', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rows = [];
+
+    foreach ($results as $result) {
+      $rows[] = [
+        'sku' => (string) ($result->sku ?? ''),
+        'title' => $this->normalizeNullableString($result->title ?? NULL),
+        'available_quantity' => $this->normalizeNullableInt($result->available_quantity ?? NULL),
+        'condition' => $this->normalizeNullableString($result->condition ?? NULL),
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * Find mirrored offers that have no local published listing.
+   *
+   * In the current system, a local listing is treated as present when Drupal
+   * has a published eBay publication row for the mirrored SKU.
+   *
+   * @return array<int,array{offer_id:string,sku:string,listing_id:?string,listing_status:?string,status:?string}>
+   */
+  public function findMirroredOffersMissingLocalListing(int $accountId): array {
+    $query = $this->database->select('bb_ebay_offer', 'offer');
+    $query->leftJoin(
+      'ai_marketplace_publication',
+      'publication',
+      'publication.marketplace_key = :marketplace_key AND publication.status = :status AND publication.inventory_sku_value = offer.sku',
+      [
+        ':marketplace_key' => 'ebay',
+        ':status' => 'published',
+      ]
+    );
+
+    $query->fields('offer', ['offer_id', 'sku', 'listing_id', 'listing_status', 'status']);
+    $query->condition('offer.account_id', $accountId);
+    $query->isNull('publication.id');
+    $query->orderBy('offer.sku', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rows = [];
+
+    foreach ($results as $result) {
+      $rows[] = [
+        'offer_id' => (string) ($result->offer_id ?? ''),
+        'sku' => (string) ($result->sku ?? ''),
+        'listing_id' => $this->normalizeNullableString($result->listing_id ?? NULL),
+        'listing_status' => $this->normalizeNullableString($result->listing_status ?? NULL),
+        'status' => $this->normalizeNullableString($result->status ?? NULL),
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * Find mirrored SKUs whose embedded listing identifier disagrees with Drupal.
+   *
+   * This is more opinionated than the presence/absence audits. It reads the
+   * identifier hidden inside the SKU, resolves that back to a local listing,
+   * then checks whether Drupal's current publication link agrees with it.
+   *
+   * Resolution order:
+   * - new SKUs: match `listing_code`
+   * - legacy SKUs: fall back to numeric entity ID
+   *
+   * @return array<int,array{
+   *   sku:string,
+   *   sku_identifier:?string,
+   *   resolved_listing_id:?int,
+   *   resolved_listing_code:?string,
+   *   resolved_ebay_title:?string,
+   *   publication_listing_id:?int,
+   *   publication_marketplace_listing_id:?string,
+   *   offer_id:?string,
+   *   offer_status:?string,
+   *   reason:string
+   * }>
+   */
+  public function findSkuLinkMismatches(int $accountId): array {
+    $query = $this->database->select('bb_ebay_inventory_item', 'inventory');
+    $query->leftJoin(
+      'bb_ebay_offer',
+      'offer',
+      'offer.account_id = inventory.account_id AND offer.sku = inventory.sku'
+    );
+    $query->fields('inventory', ['sku']);
+    $query->fields('offer', ['offer_id', 'status']);
+    $query->condition('inventory.account_id', $accountId);
+    $query->orderBy('inventory.sku', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rows = [];
+
+    foreach ($results as $result) {
+      $sku = (string) ($result->sku ?? '');
+      $skuIdentifier = $this->extractSkuIdentifier($sku);
+
+      if ($skuIdentifier === NULL) {
+        $rows[] = [
+          'sku' => $sku,
+          'sku_identifier' => NULL,
+          'resolved_listing_id' => NULL,
+          'resolved_listing_code' => NULL,
+          'resolved_ebay_title' => NULL,
+          'publication_listing_id' => NULL,
+          'publication_marketplace_listing_id' => NULL,
+          'offer_id' => $this->normalizeNullableString($result->offer_id ?? NULL),
+          'offer_status' => $this->normalizeNullableString($result->status ?? NULL),
+          'reason' => 'sku_identifier_missing',
+        ];
+        continue;
+      }
+
+      $resolvedListing = $this->resolveListingFromSkuIdentifier($skuIdentifier);
+      $publication = $this->loadPublishedPublicationBySku($sku);
+
+      if ($resolvedListing === NULL) {
+        $rows[] = [
+          'sku' => $sku,
+          'sku_identifier' => $skuIdentifier,
+          'resolved_listing_id' => NULL,
+          'resolved_listing_code' => NULL,
+          'resolved_ebay_title' => NULL,
+          'publication_listing_id' => $publication['listing_id'] ?? NULL,
+          'publication_marketplace_listing_id' => $publication['marketplace_listing_id'] ?? NULL,
+          'offer_id' => $this->normalizeNullableString($result->offer_id ?? NULL),
+          'offer_status' => $this->normalizeNullableString($result->status ?? NULL),
+          'reason' => 'sku_identifier_does_not_resolve',
+        ];
+        continue;
+      }
+
+      if ($publication === NULL) {
+        $rows[] = [
+          'sku' => $sku,
+          'sku_identifier' => $skuIdentifier,
+          'resolved_listing_id' => $resolvedListing['id'],
+          'resolved_listing_code' => $resolvedListing['listing_code'],
+          'resolved_ebay_title' => $resolvedListing['ebay_title'],
+          'publication_listing_id' => NULL,
+          'publication_marketplace_listing_id' => NULL,
+          'offer_id' => $this->normalizeNullableString($result->offer_id ?? NULL),
+          'offer_status' => $this->normalizeNullableString($result->status ?? NULL),
+          'reason' => 'missing_local_publication_link',
+        ];
+        continue;
+      }
+
+      if ($publication['listing_id'] !== $resolvedListing['id']) {
+        $rows[] = [
+          'sku' => $sku,
+          'sku_identifier' => $skuIdentifier,
+          'resolved_listing_id' => $resolvedListing['id'],
+          'resolved_listing_code' => $resolvedListing['listing_code'],
+          'resolved_ebay_title' => $resolvedListing['ebay_title'],
+          'publication_listing_id' => $publication['listing_id'],
+          'publication_marketplace_listing_id' => $publication['marketplace_listing_id'],
+          'offer_id' => $this->normalizeNullableString($result->offer_id ?? NULL),
+          'offer_status' => $this->normalizeNullableString($result->status ?? NULL),
+          'reason' => 'publication_points_to_different_listing',
+        ];
+      }
+    }
+
+    return $rows;
+  }
+
+  private function extractSkuIdentifier(string $sku): ?string {
+    $marker = 'ai-book-';
+    $position = strrpos($sku, $marker);
+    if ($position === FALSE) {
+      return NULL;
+    }
+
+    $identifier = trim(substr($sku, $position + strlen($marker)));
+    return $identifier === '' ? NULL : $identifier;
+  }
+
+  /**
+   * @return array{id:int,listing_code:?string,ebay_title:?string}|null
+   */
+  private function resolveListingFromSkuIdentifier(string $skuIdentifier): ?array {
+    $byCode = $this->database->select('bb_ai_listing', 'listing')
+      ->fields('listing', ['id', 'listing_code', 'ebay_title'])
+      ->condition('listing_code', $skuIdentifier)
+      ->range(0, 1)
+      ->execute()
+      ->fetchAssoc();
+
+    if (is_array($byCode)) {
+      return [
+        'id' => (int) $byCode['id'],
+        'listing_code' => $this->normalizeNullableString($byCode['listing_code'] ?? NULL),
+        'ebay_title' => $this->normalizeNullableString($byCode['ebay_title'] ?? NULL),
+      ];
+    }
+
+    if (!ctype_digit($skuIdentifier)) {
+      return NULL;
+    }
+
+    $byId = $this->database->select('bb_ai_listing', 'listing')
+      ->fields('listing', ['id', 'listing_code', 'ebay_title'])
+      ->condition('id', (int) $skuIdentifier)
+      ->range(0, 1)
+      ->execute()
+      ->fetchAssoc();
+
+    if (!is_array($byId)) {
+      return NULL;
+    }
+
+    return [
+      'id' => (int) $byId['id'],
+      'listing_code' => $this->normalizeNullableString($byId['listing_code'] ?? NULL),
+      'ebay_title' => $this->normalizeNullableString($byId['ebay_title'] ?? NULL),
+    ];
+  }
+
+  /**
+   * @return array{listing_id:int,marketplace_listing_id:?string}|null
+   */
+  private function loadPublishedPublicationBySku(string $sku): ?array {
+    $publication = $this->database->select('ai_marketplace_publication', 'publication')
+      ->fields('publication', ['listing', 'marketplace_listing_id'])
+      ->condition('marketplace_key', 'ebay')
+      ->condition('status', 'published')
+      ->condition('inventory_sku_value', $sku)
+      ->range(0, 1)
+      ->execute()
+      ->fetchAssoc();
+
+    if (!is_array($publication)) {
+      return NULL;
+    }
+
+    return [
+      'listing_id' => (int) $publication['listing'],
+      'marketplace_listing_id' => $this->normalizeNullableString($publication['marketplace_listing_id'] ?? NULL),
+    ];
+  }
+
+  private function normalizeNullableString(mixed $value): ?string {
+    if (!is_scalar($value)) {
+      return NULL;
+    }
+
+    $normalizedValue = trim((string) $value);
+    return $normalizedValue === '' ? NULL : $normalizedValue;
+  }
+
+  private function normalizeNullableInt(mixed $value): ?int {
+    if ($value === NULL || $value === '') {
+      return NULL;
+    }
+
+    return (int) $value;
+  }
+
+}

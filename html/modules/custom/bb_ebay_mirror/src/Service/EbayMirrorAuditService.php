@@ -298,6 +298,137 @@ final class EbayMirrorAuditService {
     return $rows;
   }
 
+  /**
+   * Find local listings that resolve from more than one mirrored inventory SKU.
+   *
+   * @return array<int,array{
+   *   listing_id:int,
+   *   listing_code:?string,
+   *   ebay_title:?string,
+   *   mirrored_sku_count:int,
+   *   mirrored_skus:string[]
+   * }>
+   */
+  public function findListingsWithMultipleMirroredInventorySkus(int $accountId): array {
+    $query = $this->database->select('bb_ebay_inventory_item', 'inventory');
+    $query->fields('inventory', ['sku']);
+    $query->condition('inventory.account_id', $accountId);
+    $query->orderBy('inventory.sku', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rowsByListing = [];
+
+    foreach ($results as $result) {
+      $sku = (string) ($result->sku ?? '');
+      $skuIdentifier = $this->extractSkuIdentifier($sku);
+      if ($skuIdentifier === NULL) {
+        continue;
+      }
+
+      $resolvedListing = $this->resolveListingFromSkuIdentifier($skuIdentifier);
+      if ($resolvedListing === NULL) {
+        continue;
+      }
+
+      $listingId = $resolvedListing['id'];
+      if (!isset($rowsByListing[$listingId])) {
+        $rowsByListing[$listingId] = [
+          'listing_id' => $listingId,
+          'listing_code' => $resolvedListing['listing_code'],
+          'ebay_title' => $resolvedListing['ebay_title'],
+          'mirrored_sku_count' => 0,
+          'mirrored_skus' => [],
+        ];
+      }
+
+      if (!in_array($sku, $rowsByListing[$listingId]['mirrored_skus'], TRUE)) {
+        $rowsByListing[$listingId]['mirrored_skus'][] = $sku;
+        $rowsByListing[$listingId]['mirrored_sku_count']++;
+      }
+    }
+
+    $rows = array_values(array_filter(
+      $rowsByListing,
+      static fn (array $row): bool => $row['mirrored_sku_count'] > 1
+    ));
+
+    usort(
+      $rows,
+      static fn (array $left, array $right): int => $left['listing_id'] <=> $right['listing_id']
+    );
+
+    return $rows;
+  }
+
+  /**
+   * Find local listings that resolve from more than one mirrored offer.
+   *
+   * @return array<int,array{
+   *   listing_id:int,
+   *   listing_code:?string,
+   *   ebay_title:?string,
+   *   mirrored_offer_count:int,
+   *   mirrored_offers:string[],
+   *   mirrored_skus:string[]
+   * }>
+   */
+  public function findListingsWithMultipleMirroredOffers(int $accountId): array {
+    $query = $this->database->select('bb_ebay_offer', 'offer');
+    $query->fields('offer', ['offer_id', 'sku']);
+    $query->condition('offer.account_id', $accountId);
+    $query->orderBy('offer.sku', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rowsByListing = [];
+
+    foreach ($results as $result) {
+      $sku = (string) ($result->sku ?? '');
+      $skuIdentifier = $this->extractSkuIdentifier($sku);
+      if ($skuIdentifier === NULL) {
+        continue;
+      }
+
+      $resolvedListing = $this->resolveListingFromSkuIdentifier($skuIdentifier);
+      if ($resolvedListing === NULL) {
+        continue;
+      }
+
+      $listingId = $resolvedListing['id'];
+      if (!isset($rowsByListing[$listingId])) {
+        $rowsByListing[$listingId] = [
+          'listing_id' => $listingId,
+          'listing_code' => $resolvedListing['listing_code'],
+          'ebay_title' => $resolvedListing['ebay_title'],
+          'mirrored_offer_count' => 0,
+          'mirrored_offers' => [],
+          'mirrored_skus' => [],
+        ];
+      }
+
+      $offerId = (string) ($result->offer_id ?? '');
+      if ($offerId !== '' && !in_array($offerId, $rowsByListing[$listingId]['mirrored_offers'], TRUE)) {
+        $rowsByListing[$listingId]['mirrored_offers'][] = $offerId;
+        $rowsByListing[$listingId]['mirrored_offer_count']++;
+      }
+
+      if ($sku !== '' && !in_array($sku, $rowsByListing[$listingId]['mirrored_skus'], TRUE)) {
+        $rowsByListing[$listingId]['mirrored_skus'][] = $sku;
+      }
+    }
+
+    $rows = array_values(array_filter(
+      $rowsByListing,
+      static fn (array $row): bool => $row['mirrored_offer_count'] > 1
+    ));
+
+    usort(
+      $rows,
+      static fn (array $left, array $right): int => $left['listing_id'] <=> $right['listing_id']
+    );
+
+    return $rows;
+  }
+
   private function extractSkuIdentifier(string $sku): ?string {
     $marker = 'ai-book-';
     $position = strrpos($sku, $marker);

@@ -17,13 +17,16 @@ Why it is separate
 
 Current steps
 1. Keep the mirror tables account-aware.
-2. Build audit reports:
+2. Build the core audit set:
    - local published listing with no mirrored inventory
    - local published listing with no mirrored offer
    - mirrored inventory with no local listing
    - mirrored offer with no local listing
    - mirror row whose SKU suffix does not line up with the local listing link
-3. Only then add `/bulk_migrate_listing` support and resync after each migration batch.
+   - local listing that resolves from multiple mirrored inventory SKUs
+   - local listing that resolves from multiple mirrored offers
+3. Use those audits to understand stale eBay state before touching migration.
+4. Only then add `/bulk_migrate_listing` support and resync after each migration batch.
 
 Current state
 - Inventory sync works and has been run against the live account.
@@ -38,20 +41,22 @@ Current state
   - `bb-ebay-mirror:audit-orphaned-offers`
 - Fifth audit report exists:
   - `bb-ebay-mirror:audit-sku-link-mismatch`
+- Sixth audit report exists:
+  - `bb-ebay-mirror:audit-multiple-inventory`
+- Seventh audit report exists:
+  - `bb-ebay-mirror:audit-multiple-offers`
 - First admin report page exists:
   - `/admin/ebay-mirror/report`
 - That first audit currently reports no local published eBay listings missing mirrored inventory for the primary account.
-- The second audit still needs to be run against the live account.
-- The third audit still needs to be run against the live account.
-- The fourth audit still needs to be run against the live account.
 - The fifth audit now checks the identifier hidden inside the SKU.
 - It resolves new SKUs by `listing_code`.
 - It falls back to legacy entity ID for older SKUs.
+- The sixth and seventh audits answer the multiplicity question:
+  - does one local listing now resolve from more than one mirrored SKU or offer?
 
-Next planned audit
-- Compare the identifier encoded in the mirrored SKU suffix with the local listing/publication linkage.
-- This is more opinionated than the first four audits because it depends on the SKU convention.
-- It helps surface stale old-SKU artefacts and publication drift more clearly.
+Next planned work
+- Inspect the live multiplicity results and decide whether the orphaned old-SKU rows are just stale eBay debris.
+- Then add cleanup or migration work on top of the settled audit set.
 
 Why Drush first
 - These reports will likely want an admin UI later.
@@ -148,4 +153,28 @@ Or audit one specific eBay account:
 
 ```bash
 ddev drush bb-ebay-mirror:audit-sku-link-mismatch 1
+```
+
+Audit local listings that resolve from multiple mirrored inventory SKUs:
+
+```bash
+ddev drush bb-ebay-mirror:audit-multiple-inventory
+```
+
+Or audit one specific eBay account:
+
+```bash
+ddev drush bb-ebay-mirror:audit-multiple-inventory 1
+```
+
+Audit local listings that resolve from multiple mirrored offers:
+
+```bash
+ddev drush bb-ebay-mirror:audit-multiple-offers
+```
+
+Or audit one specific eBay account:
+
+```bash
+ddev drush bb-ebay-mirror:audit-multiple-offers 1
 ```

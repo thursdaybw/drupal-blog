@@ -35,6 +35,8 @@ final class EbayMirrorReportController extends ControllerBase {
     $orphanedInventoryRows = $this->auditService->findMirroredInventoryMissingLocalListing($accountId);
     $orphanedOfferRows = $this->auditService->findMirroredOffersMissingLocalListing($accountId);
     $skuLinkMismatchRows = $this->auditService->findSkuLinkMismatches($accountId);
+    $multipleInventoryRows = $this->auditService->findListingsWithMultipleMirroredInventorySkus($accountId);
+    $multipleOfferRows = $this->auditService->findListingsWithMultipleMirroredOffers($accountId);
 
     $build = [];
     $build['summary'] = [
@@ -70,6 +72,12 @@ final class EbayMirrorReportController extends ControllerBase {
           $this->t('Mirrored SKU/link mismatches: @count', [
             '@count' => (string) count($skuLinkMismatchRows),
           ]),
+          $this->t('Local listings with multiple mirrored inventory SKUs: @count', [
+            '@count' => (string) count($multipleInventoryRows),
+          ]),
+          $this->t('Local listings with multiple mirrored offers: @count', [
+            '@count' => (string) count($multipleOfferRows),
+          ]),
         ],
       ],
     ];
@@ -85,6 +93,8 @@ final class EbayMirrorReportController extends ControllerBase {
     $build['orphaned_inventory'] = $this->buildOrphanedInventoryTable($orphanedInventoryRows);
     $build['orphaned_offers'] = $this->buildOrphanedOfferTable($orphanedOfferRows);
     $build['sku_link_mismatch'] = $this->buildSkuLinkMismatchTable($skuLinkMismatchRows);
+    $build['multiple_inventory'] = $this->buildMultipleInventoryTable($multipleInventoryRows);
+    $build['multiple_offers'] = $this->buildMultipleOffersTable($multipleOfferRows);
 
     return $build;
   }
@@ -210,6 +220,75 @@ final class EbayMirrorReportController extends ControllerBase {
     }
 
     return $this->buildSectionTable('Mirrored SKU Link Mismatches', $header, $tableRows, 'No rows in this bucket.');
+  }
+
+  /**
+   * @param array<int,array{
+   *   listing_id:int,
+   *   listing_code:?string,
+   *   ebay_title:?string,
+   *   mirrored_sku_count:int,
+   *   mirrored_skus:string[]
+   * }> $rows
+   */
+  private function buildMultipleInventoryTable(array $rows): array {
+    $header = [
+      $this->t('Listing'),
+      $this->t('Listing code'),
+      $this->t('eBay title'),
+      $this->t('Mirrored SKU count'),
+      $this->t('Mirrored SKUs'),
+    ];
+
+    $tableRows = [];
+
+    foreach ($rows as $row) {
+      $tableRows[] = [
+        $this->buildListingLinkCell($row['listing_id']),
+        $row['listing_code'] ?? (string) $this->t('Unset'),
+        $row['ebay_title'] ?? (string) $this->t('Untitled listing'),
+        (string) $row['mirrored_sku_count'],
+        implode(', ', $row['mirrored_skus']),
+      ];
+    }
+
+    return $this->buildSectionTable('Local Listings With Multiple Mirrored Inventory SKUs', $header, $tableRows, 'No rows in this bucket.');
+  }
+
+  /**
+   * @param array<int,array{
+   *   listing_id:int,
+   *   listing_code:?string,
+   *   ebay_title:?string,
+   *   mirrored_offer_count:int,
+   *   mirrored_offers:string[],
+   *   mirrored_skus:string[]
+   * }> $rows
+   */
+  private function buildMultipleOffersTable(array $rows): array {
+    $header = [
+      $this->t('Listing'),
+      $this->t('Listing code'),
+      $this->t('eBay title'),
+      $this->t('Mirrored offer count'),
+      $this->t('Offer IDs'),
+      $this->t('SKUs'),
+    ];
+
+    $tableRows = [];
+
+    foreach ($rows as $row) {
+      $tableRows[] = [
+        $this->buildListingLinkCell($row['listing_id']),
+        $row['listing_code'] ?? (string) $this->t('Unset'),
+        $row['ebay_title'] ?? (string) $this->t('Untitled listing'),
+        (string) $row['mirrored_offer_count'],
+        implode(', ', $row['mirrored_offers']),
+        implode(', ', $row['mirrored_skus']),
+      ];
+    }
+
+    return $this->buildSectionTable('Local Listings With Multiple Mirrored Offers', $header, $tableRows, 'No rows in this bucket.');
   }
 
   /**

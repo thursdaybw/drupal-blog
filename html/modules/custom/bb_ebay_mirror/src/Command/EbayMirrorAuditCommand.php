@@ -192,6 +192,81 @@ final class EbayMirrorAuditCommand extends DrushCommands {
     }
   }
 
+  /**
+   * Audit local listings that resolve from multiple mirrored inventory SKUs.
+   *
+   * @command bb-ebay-mirror:audit-multiple-inventory
+   */
+  public function auditMultipleInventory(?int $accountId = NULL): void {
+    $account = $this->resolveAccount($accountId);
+    $rows = $this->auditService->findListingsWithMultipleMirroredInventorySkus((int) $account->id());
+
+    if ($rows === []) {
+      $this->output()->writeln(sprintf(
+        'No local listings resolve from multiple mirrored inventory SKUs for account %d (%s).',
+        (int) $account->id(),
+        (string) $account->label()
+      ));
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Found %d local listings that resolve from multiple mirrored inventory SKUs for account %d (%s):',
+      count($rows),
+      (int) $account->id(),
+      (string) $account->label()
+    ));
+
+    foreach ($rows as $row) {
+      $this->output()->writeln(sprintf(
+        '- listing %d | listingCode %s | skuCount %d | %s | skus: %s',
+        $row['listing_id'],
+        $row['listing_code'] ?? 'unset',
+        $row['mirrored_sku_count'],
+        $row['ebay_title'] ?? 'Untitled listing',
+        implode(', ', $row['mirrored_skus'])
+      ));
+    }
+  }
+
+  /**
+   * Audit local listings that resolve from multiple mirrored offers.
+   *
+   * @command bb-ebay-mirror:audit-multiple-offers
+   */
+  public function auditMultipleOffers(?int $accountId = NULL): void {
+    $account = $this->resolveAccount($accountId);
+    $rows = $this->auditService->findListingsWithMultipleMirroredOffers((int) $account->id());
+
+    if ($rows === []) {
+      $this->output()->writeln(sprintf(
+        'No local listings resolve from multiple mirrored offers for account %d (%s).',
+        (int) $account->id(),
+        (string) $account->label()
+      ));
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Found %d local listings that resolve from multiple mirrored offers for account %d (%s):',
+      count($rows),
+      (int) $account->id(),
+      (string) $account->label()
+    ));
+
+    foreach ($rows as $row) {
+      $this->output()->writeln(sprintf(
+        '- listing %d | listingCode %s | offerCount %d | %s | offers: %s | skus: %s',
+        $row['listing_id'],
+        $row['listing_code'] ?? 'unset',
+        $row['mirrored_offer_count'],
+        $row['ebay_title'] ?? 'Untitled listing',
+        implode(', ', $row['mirrored_offers']),
+        implode(', ', $row['mirrored_skus'])
+      ));
+    }
+  }
+
   private function resolveAccount(?int $accountId): EbayAccount {
     $storage = $this->entityTypeManager->getStorage('ebay_account');
 

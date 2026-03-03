@@ -74,9 +74,13 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertArrayHasKey('orphaned_inventory', $build);
     $this->assertArrayHasKey('orphaned_offers', $build);
     $this->assertArrayHasKey('sku_link_mismatch', $build);
+    $this->assertArrayHasKey('multiple_inventory', $build);
+    $this->assertArrayHasKey('multiple_offers', $build);
 
     $this->assertSame('table', $build['missing_inventory']['table']['#type']);
     $this->assertSame('table', $build['sku_link_mismatch']['table']['#type']);
+    $this->assertSame('table', $build['multiple_inventory']['table']['#type']);
+    $this->assertSame('table', $build['multiple_offers']['table']['#type']);
 
     $missingInventoryRows = $build['missing_inventory']['table']['#rows'];
     $this->assertCount(1, $missingInventoryRows);
@@ -88,6 +92,9 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertSame('2026 Mar BDMCC05 ai-book-MIRROR01', (string) $skuMismatchRows[0][0]);
     $this->assertSame('MIRROR01', (string) $skuMismatchRows[0][1]);
     $this->assertStringContainsString((string) $listing->id(), (string) $skuMismatchRows[0][2]);
+
+    $this->assertSame('No rows in this bucket.', (string) $build['multiple_inventory']['table']['#empty']);
+    $this->assertSame('No rows in this bucket.', (string) $build['multiple_offers']['table']['#empty']);
   }
 
   private function createProductionAccount(): void {

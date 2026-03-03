@@ -200,6 +200,55 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
     $this->assertSame('publication_points_to_different_listing', $rowsBySku[$legacySku]['reason']);
   }
 
+  public function testFindListingsWithMultipleMirroredInventorySkus(): void {
+    $listing = $this->createBookListing(
+      ebayTitle: 'Multiple inventory listing',
+      fieldTitle: 'Multiple inventory listing',
+      storageLocation: 'BDMAA11'
+    );
+    $listing->set('listing_code', 'MULTIINV');
+    $listing->save();
+
+    $this->seedMirroredInventorySku(1, '2026 Mar BDMCC05 ai-book-MULTIINV');
+    $this->seedMirroredInventorySku(1, '2026 Mar BRNCBD004 ai-book-MULTIINV');
+
+    $rows = $this->auditService->findListingsWithMultipleMirroredInventorySkus(1);
+
+    $this->assertCount(1, $rows);
+    $this->assertSame((int) $listing->id(), $rows[0]['listing_id']);
+    $this->assertSame('MULTIINV', $rows[0]['listing_code']);
+    $this->assertSame(2, $rows[0]['mirrored_sku_count']);
+    $this->assertSame([
+      '2026 Mar BDMCC05 ai-book-MULTIINV',
+      '2026 Mar BRNCBD004 ai-book-MULTIINV',
+    ], $rows[0]['mirrored_skus']);
+  }
+
+  public function testFindListingsWithMultipleMirroredOffers(): void {
+    $listing = $this->createBookListing(
+      ebayTitle: 'Multiple offer listing',
+      fieldTitle: 'Multiple offer listing',
+      storageLocation: 'BDMAA12'
+    );
+    $listing->set('listing_code', 'MULTIOFR');
+    $listing->save();
+
+    $this->seedMirroredOffer(1, 'offer-a', '2026 Mar BDMCC05 ai-book-MULTIOFR');
+    $this->seedMirroredOffer(1, 'offer-b', '2026 Mar BRNCBD004 ai-book-MULTIOFR');
+
+    $rows = $this->auditService->findListingsWithMultipleMirroredOffers(1);
+
+    $this->assertCount(1, $rows);
+    $this->assertSame((int) $listing->id(), $rows[0]['listing_id']);
+    $this->assertSame('MULTIOFR', $rows[0]['listing_code']);
+    $this->assertSame(2, $rows[0]['mirrored_offer_count']);
+    $this->assertSame(['offer-a', 'offer-b'], $rows[0]['mirrored_offers']);
+    $this->assertSame([
+      '2026 Mar BDMCC05 ai-book-MULTIOFR',
+      '2026 Mar BRNCBD004 ai-book-MULTIOFR',
+    ], $rows[0]['mirrored_skus']);
+  }
+
   private function createBookListing(
     string $ebayTitle,
     string $fieldTitle,

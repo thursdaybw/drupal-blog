@@ -7,6 +7,8 @@ Important rule
 - That means a sync does not just insert and update rows it sees.
 - It also deletes mirror rows for the account that eBay did not return in the current sync run.
 - The mirror should reflect current remote state, not "anything we have ever seen".
+- Successful publish, update, and delete operations in `ebay_connector` also refresh the affected mirror rows immediately.
+- Cron/full sync is still needed later as the safety net for drift and manual eBay changes.
 
 What it stores
 - `bb_ebay_inventory_item`: copy of Inventory API inventory items keyed by SKU (title, description, condition, aspects JSON, images JSON, quantity, raw JSON, last seen).

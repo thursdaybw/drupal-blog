@@ -6,10 +6,13 @@ namespace Drupal\ebay_connector\Service;
 
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
+use Drupal\bb_ebay_mirror\Service\EbayInventoryMirrorSyncService;
+use Drupal\bb_ebay_mirror\Service\EbayOfferMirrorSyncService;
 use Drupal\listing_publishing\Contract\ListingImageUploaderInterface;
 use Drupal\listing_publishing\Contract\MarketplacePublisherInterface;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
 use Drupal\listing_publishing\Model\MarketplacePublishResult;
+use Drupal\ebay_infrastructure\Service\EbayAccountManager;
 use Drupal\ebay_infrastructure\Service\SellApiClient;
 use Drupal\ebay_infrastructure\Service\StoreService;
 use Drupal\ebay_connector\Service\ConditionMapper;
@@ -32,6 +35,9 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     private readonly ConditionMapper $conditionMapper,
     private readonly ListingImageUploaderInterface $imageUploader,
     private readonly StoreService $storeService,
+    private readonly ?EbayAccountManager $accountManager,
+    private readonly ?EbayInventoryMirrorSyncService $inventoryMirrorSyncService,
+    private readonly ?EbayOfferMirrorSyncService $offerMirrorSyncService,
     LoggerChannelFactoryInterface $loggerFactory,
   ) {
     $this->logger = $loggerFactory->get('ebay_connector');
@@ -72,6 +78,7 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     );
 
     $publish = $this->sellApiClient->publishOffer($offerId);
+    $this->refreshMirrorForSku($request->getSku());
 
     return new MarketplacePublishResult(
       true,
@@ -101,6 +108,7 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
       $this->buildOfferPayload($request, $publicationType ?: 'FIXED_PRICE', TRUE)
     );
     $listingId = isset($updatedOffer['listing']['listingId']) ? (string) $updatedOffer['listing']['listingId'] : null;
+    $this->refreshMirrorForSku($request->getSku());
 
     return new MarketplacePublishResult(
       true,
@@ -137,6 +145,8 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
         throw $e;
       }
     }
+
+    $this->deleteMirrorRowsForSku($sku);
   }
 
   public function getMarketplaceKey(): string {
@@ -264,6 +274,26 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     }
 
     return null;
+  }
+
+  private function refreshMirrorForSku(string $sku): void {
+    if ($this->accountManager === null || $this->inventoryMirrorSyncService === null || $this->offerMirrorSyncService === null) {
+      return;
+    }
+
+    $account = $this->accountManager->loadPrimaryAccount();
+    $this->inventoryMirrorSyncService->syncSku($account, $sku);
+    $this->offerMirrorSyncService->syncSku($account, $sku);
+  }
+
+  private function deleteMirrorRowsForSku(string $sku): void {
+    if ($this->accountManager === null || $this->inventoryMirrorSyncService === null || $this->offerMirrorSyncService === null) {
+      return;
+    }
+
+    $accountId = (int) $this->accountManager->loadPrimaryAccount()->id();
+    $this->offerMirrorSyncService->deleteSku($accountId, $sku);
+    $this->inventoryMirrorSyncService->deleteSku($accountId, $sku);
   }
 
   private function truncateBookTitleAspect(string $value): string {

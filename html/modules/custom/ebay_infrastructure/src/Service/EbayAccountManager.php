@@ -62,7 +62,7 @@ final class EbayAccountManager {
     return $account;
   }
 
-  private function loadPrimaryAccount(): EbayAccount {
+  public function loadPrimaryAccount(): EbayAccount {
     if ($this->cachedAccount !== null) {
       return $this->cachedAccount;
     }

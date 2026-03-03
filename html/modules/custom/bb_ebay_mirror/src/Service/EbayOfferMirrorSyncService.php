@@ -59,6 +59,45 @@ final class EbayOfferMirrorSyncService {
     ];
   }
 
+  public function syncSku(EbayAccount $account, string $sku): array {
+    $accountId = (int) $account->id();
+    $response = $this->sellApiClient->listOffersBySkuForAccount($account, $sku);
+    $offers = $response['offers'] ?? [];
+    $seenOfferIds = [];
+    $offersSeen = 0;
+    $offersUpserted = 0;
+
+    if (is_array($offers)) {
+      foreach ($offers as $offer) {
+        if (!is_array($offer)) {
+          continue;
+        }
+
+        $this->upsertOffer($accountId, $sku, $offer);
+        $offerId = trim((string) ($offer['offerId'] ?? ''));
+        if ($offerId !== '') {
+          $seenOfferIds[$offerId] = TRUE;
+        }
+        $offersSeen++;
+        $offersUpserted++;
+      }
+    }
+
+    $this->deleteOffersBySkuNotSeenInRun($accountId, $sku, array_keys($seenOfferIds));
+
+    return [
+      'offers_seen' => $offersSeen,
+      'offers_upserted' => $offersUpserted,
+    ];
+  }
+
+  public function deleteSku(int $accountId, string $sku): void {
+    $this->database->delete('bb_ebay_offer')
+      ->condition('account_id', $accountId)
+      ->condition('sku', $sku)
+      ->execute();
+  }
+
   /**
    * @return string[]
    */
@@ -130,6 +169,24 @@ final class EbayOfferMirrorSyncService {
   private function deleteOffersNotSeenInRun(int $accountId, array $seenOfferIds): void {
     $delete = $this->database->delete('bb_ebay_offer')
       ->condition('account_id', $accountId);
+
+    if ($seenOfferIds !== []) {
+      $delete->condition('offer_id', $seenOfferIds, 'NOT IN');
+    }
+
+    $delete->execute();
+  }
+
+  /**
+   * Remove mirrored offer rows for one SKU that eBay did not return.
+   *
+   * @param string[] $seenOfferIds
+   *   The offer IDs returned by eBay for this SKU in the current refresh.
+   */
+  private function deleteOffersBySkuNotSeenInRun(int $accountId, string $sku, array $seenOfferIds): void {
+    $delete = $this->database->delete('bb_ebay_offer')
+      ->condition('account_id', $accountId)
+      ->condition('sku', $sku);
 
     if ($seenOfferIds !== []) {
       $delete->condition('offer_id', $seenOfferIds, 'NOT IN');

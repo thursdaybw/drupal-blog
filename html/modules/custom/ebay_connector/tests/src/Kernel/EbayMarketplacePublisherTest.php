@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\ebay_connector\Kernel;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\bb_ebay_mirror\Service\EbayInventoryMirrorSyncService;
+use Drupal\bb_ebay_mirror\Service\EbayOfferMirrorSyncService;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\ebay_connector\Entity\EbayAccount;
 use Drupal\ebay_connector\Service\ConditionMapper;
@@ -49,6 +51,7 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
     'listing_publishing',
     'ebay_infrastructure',
     'ebay_connector',
+    'bb_ebay_mirror',
   ];
 
   private RecordedHttpClient $httpClient;
@@ -58,6 +61,7 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
 
     $this->installEntitySchema('user');
     $this->installEntitySchema('ebay_account');
+    $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);
     $this->httpClient = new RecordedHttpClient();
 
     $user = User::create([
@@ -92,6 +96,8 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       [],
       [],
       ['listingId' => 'listing-1'],
+      ['sku' => 'sku-1', 'product' => ['title' => 'Birdy by William Wharton Paperback Book']],
+      ['offers' => [['offerId' => 'offer-1', 'sku' => 'sku-1', 'status' => 'PUBLISHED']]],
     ]);
     $publisher->publish($request);
 
@@ -105,6 +111,8 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       [],
       [],
       ['listing' => ['listingId' => 'listing-1']],
+      ['sku' => 'sku-1', 'product' => ['title' => 'Birdy by William Wharton Paperback Book']],
+      ['offers' => [['offerId' => 'offer-1', 'sku' => 'sku-1', 'status' => 'PUBLISHED']]],
     ]);
     $publisher->updatePublication('offer-1', $request, 'FIXED_PRICE');
 
@@ -130,6 +138,8 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       [],
       [],
       ['listingId' => 'listing-1'],
+      ['sku' => 'sku-1', 'product' => ['title' => 'Birdy by William Wharton Paperback Book']],
+      ['offers' => [['offerId' => 'offer-1', 'sku' => 'sku-1', 'status' => 'PUBLISHED']]],
     ]);
     $publisher->publish($request);
 
@@ -142,6 +152,8 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       [],
       [],
       ['listing' => ['listingId' => 'listing-1']],
+      ['sku' => 'sku-1', 'product' => ['title' => 'Birdy by William Wharton Paperback Book']],
+      ['offers' => [['offerId' => 'offer-1', 'sku' => 'sku-1', 'status' => 'PUBLISHED']]],
     ]);
     $publisher->updatePublication('offer-1', $request, 'FIXED_PRICE');
 
@@ -167,6 +179,8 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       [],
       [],
       ['listingId' => 'listing-1'],
+      ['sku' => 'sku-1', 'product' => ['title' => 'Birdy by William Wharton Paperback Book']],
+      ['offers' => [['offerId' => 'offer-1', 'sku' => 'sku-1', 'status' => 'PUBLISHED']]],
     ]);
     $publisher->publish($request);
 
@@ -194,6 +208,8 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       [],
       [],
       ['listingId' => 'listing-1'],
+      ['sku' => 'sku-1', 'product' => ['title' => 'Birdy by William Wharton Paperback Book']],
+      ['offers' => [['offerId' => 'offer-1', 'sku' => 'sku-1', 'status' => 'PUBLISHED']]],
     ]);
     $publisher->publish($request);
 
@@ -221,6 +237,8 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       [],
       [],
       ['listingId' => 'listing-1'],
+      ['sku' => 'sku-1', 'product' => ['title' => 'Birdy by William Wharton Paperback Book']],
+      ['offers' => [['offerId' => 'offer-1', 'sku' => 'sku-1', 'status' => 'PUBLISHED']]],
     ]);
     $publisher->publish($request);
 
@@ -245,6 +263,8 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       [],
       [],
       ['listingId' => 'listing-1'],
+      ['sku' => 'sku-1', 'product' => ['title' => 'Birdy by William Wharton Paperback Book']],
+      ['offers' => [['offerId' => 'offer-1', 'sku' => 'sku-1', 'status' => 'PUBLISHED']]],
     ]);
     $publisher->publish($request);
 
@@ -267,12 +287,127 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       [],
       ['listingId' => 'listing-1'],
       ['listingId' => 'listing-1'],
+      ['sku' => 'sku-1', 'product' => ['title' => 'Birdy by William Wharton Paperback Book']],
+      ['offers' => [['offerId' => 'offer-9', 'sku' => 'sku-1', 'status' => 'PUBLISHED']]],
     ]);
     $publisher->publish($request);
 
     $this->assertNull($this->httpClient->findRequestByPath('POST', '/sell/inventory/v1/offer'));
     $this->assertNotNull($this->httpClient->findRequest('PUT', '/sell/inventory/v1/offer/offer-9'));
     $this->assertNotNull($this->httpClient->findRequest('POST', '/sell/inventory/v1/offer/offer-9/publish'));
+  }
+
+  public function testPublisherServiceBuildsFromDrupalContainer(): void {
+    $publisher = $this->container->get('drupal.ebay_connector.marketplace_publisher');
+
+    $this->assertInstanceOf(EbayMarketplacePublisher::class, $publisher);
+  }
+
+  public function testPublishRefreshesMirrorRowsForSku(): void {
+    $publisher = $this->createPublisher(['https://images.example.com/book.jpg']);
+    $request = $this->createRequest(
+      title: 'Birdy by William Wharton Paperback Book',
+      description: 'A short listing description.',
+      conditionDescription: 'Clean copy with light edge wear.',
+    );
+
+    $this->queueJsonResponses([
+      [],
+      [],
+      ['offers' => []],
+      ['offerId' => 'offer-1'],
+      [],
+      [],
+      ['listingId' => 'listing-1'],
+      [
+        'sku' => 'sku-1',
+        'product' => [
+          'title' => 'Birdy by William Wharton Paperback Book',
+        ],
+        'condition' => 'USED_GOOD',
+      ],
+      [
+        'offers' => [
+          [
+            'offerId' => 'offer-1',
+            'sku' => 'sku-1',
+            'status' => 'PUBLISHED',
+          ],
+        ],
+      ],
+    ]);
+
+    $publisher->publish($request);
+
+    $inventoryRow = $this->container->get('database')
+      ->select('bb_ebay_inventory_item', 'i')
+      ->fields('i')
+      ->condition('account_id', 1)
+      ->condition('sku', 'sku-1')
+      ->execute()
+      ->fetchObject();
+
+    $offerRow = $this->container->get('database')
+      ->select('bb_ebay_offer', 'o')
+      ->fields('o')
+      ->condition('account_id', 1)
+      ->condition('offer_id', 'offer-1')
+      ->execute()
+      ->fetchObject();
+
+    $this->assertNotFalse($inventoryRow);
+    $this->assertSame('Birdy by William Wharton Paperback Book', $inventoryRow->title);
+    $this->assertNotFalse($offerRow);
+    $this->assertSame('sku-1', $offerRow->sku);
+    $this->assertSame('PUBLISHED', $offerRow->status);
+  }
+
+  public function testDeleteSkuRemovesMirrorRowsImmediately(): void {
+    $publisher = $this->createPublisher(['https://images.example.com/book.jpg']);
+
+    $this->container->get('database')->insert('bb_ebay_inventory_item')
+      ->fields([
+        'account_id' => 1,
+        'sku' => 'sku-1',
+        'title' => 'Stale title',
+        'last_seen' => time(),
+      ])
+      ->execute();
+    $this->container->get('database')->insert('bb_ebay_offer')
+      ->fields([
+        'account_id' => 1,
+        'offer_id' => 'offer-1',
+        'sku' => 'sku-1',
+        'status' => 'PUBLISHED',
+        'last_seen' => time(),
+      ])
+      ->execute();
+
+    $this->queueJsonResponses([
+      ['offers' => [['offerId' => 'offer-1']]],
+      [],
+      [],
+    ]);
+
+    $publisher->deleteSku('sku-1');
+
+    $inventoryCount = $this->container->get('database')
+      ->select('bb_ebay_inventory_item', 'i')
+      ->condition('account_id', 1)
+      ->condition('sku', 'sku-1')
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+    $offerCount = $this->container->get('database')
+      ->select('bb_ebay_offer', 'o')
+      ->condition('account_id', 1)
+      ->condition('sku', 'sku-1')
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+
+    $this->assertSame('0', (string) $inventoryCount);
+    $this->assertSame('0', (string) $offerCount);
   }
 
   private function createPublisher(array $uploadedUrls): EbayMarketplacePublisher {
@@ -286,12 +421,23 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
 
     $sellApiClient = new SellApiClient($this->httpClient, $accountManager);
     $storeService = new StoreService($sellApiClient);
+    $inventoryMirrorSyncService = new EbayInventoryMirrorSyncService(
+      $sellApiClient,
+      $this->container->get('database'),
+    );
+    $offerMirrorSyncService = new EbayOfferMirrorSyncService(
+      $sellApiClient,
+      $this->container->get('database'),
+    );
 
     return new EbayMarketplacePublisher(
       $sellApiClient,
       new ConditionMapper(),
       new FixedImageUploader($uploadedUrls),
       $storeService,
+      $accountManager,
+      $inventoryMirrorSyncService,
+      $offerMirrorSyncService,
       $this->container->get('logger.factory'),
     );
   }

@@ -64,6 +64,22 @@ final class EbayInventoryMirrorSyncService {
     ];
   }
 
+  public function syncSku(EbayAccount $account, string $sku): void {
+    $inventoryItem = $this->sellApiClient->getInventoryItem($sku);
+    if (!is_array($inventoryItem)) {
+      return;
+    }
+
+    $this->upsertInventoryItem((int) $account->id(), $inventoryItem);
+  }
+
+  public function deleteSku(int $accountId, string $sku): void {
+    $this->database->delete('bb_ebay_inventory_item')
+      ->condition('account_id', $accountId)
+      ->condition('sku', $sku)
+      ->execute();
+  }
+
   private function upsertInventoryItem(int $accountId, array $inventoryItem): void {
     $sku = trim((string) ($inventoryItem['sku'] ?? ''));
     if ($sku === '') {

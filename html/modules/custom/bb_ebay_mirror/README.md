@@ -18,6 +18,7 @@ What it does not do (yet)
 - `bb-ebay-mirror:sync-inventory` is in place.
 - `bb-ebay-mirror:sync-offers` is in place.
 - A first admin report page is in place.
+- Legacy listing migration is being split into `bb_ebay_legacy_migration`.
 
 Why it is separate
 - `ebay_connector` owns the marketplace publish/update adapter.
@@ -34,7 +35,7 @@ Current steps
    - local listing that resolves from multiple mirrored inventory SKUs
    - local listing that resolves from multiple mirrored offers
 3. Use those audits to understand stale eBay state before touching migration.
-4. Only then add `/bulk_migrate_listing` support and resync after each migration batch.
+4. Hand migration work off to `bb_ebay_legacy_migration`.
 
 Current state
 - Inventory sync works and has been run against the live account.
@@ -70,8 +71,8 @@ Current state
   - multiple mirrored offers per listing is clean
 
 Next planned work
-- Inspect the live multiplicity results and decide whether the orphaned old-SKU rows are just stale eBay debris.
-- Then add cleanup or migration work on top of the settled audit set.
+- Keep this module focused on mirror sync, audits, and report UI.
+- Put `bulkMigrateListing` work in `bb_ebay_legacy_migration`.
 
 Why Drush first
 - These reports will likely want an admin UI later.

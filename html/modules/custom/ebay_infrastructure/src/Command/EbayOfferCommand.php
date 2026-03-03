@@ -235,13 +235,27 @@ final class EbayOfferCommand extends DrushCommands {
   }
 
   /**
-   * Delete inventory and offers for one or more SKUs.
+   * Delete one or more SKUs on eBay and delete matching local publication rows.
    *
-   * @command ebay-connector:delete-inventory
+   * What this does:
+   * - finds offers for each SKU on eBay
+   * - deletes those offers on eBay
+   * - deletes the inventory item on eBay
+   * - deletes matching local ai_marketplace_publication rows in Drupal
    *
-   * @usage  ebay-connector:delete-inventory "SKU1 SKU2"
+   * What this does not do:
+   * - it does not delete the local bb_ai_listing entity
+   * - it does not delete mirror rows directly; mirror rows are cleaned by resync
+   *
+   * @command ebay-connector:delete-sku-and-local-publication
+   * @aliases ebay-connector:delete-inventory
+   *
+   * @usage ebay-connector:delete-sku-and-local-publication "SKU1 SKU2"
+   *   Delete one or more SKUs on eBay and delete matching local publication rows.
+   * @usage ebay-connector:delete-inventory "SKU1 SKU2"
+   *   Deprecated alias for delete-sku-and-local-publication.
    */
-  public function deleteInventory(string $skuList): void {
+  public function deleteSkuAndLocalPublication(string $skuList): void {
     $skus = $this->parseSkuList($skuList);
 
     if ([] === $skus) {
@@ -251,7 +265,7 @@ final class EbayOfferCommand extends DrushCommands {
     foreach ($skus as $sku) {
       $deletedOffers = $this->deleteInventoryForSku($sku, TRUE);
       $this->output()->writeln(sprintf(
-        'Deleted %d offers and inventory item %s',
+        'Deleted %d offers, deleted remote inventory item, and deleted local publication rows for SKU %s',
         $deletedOffers,
         $sku
       ));
@@ -259,13 +273,26 @@ final class EbayOfferCommand extends DrushCommands {
   }
 
   /**
-   * Delete inventory and offers on eBay only, without touching Drupal records.
+   * Delete one or more SKUs on eBay only, without touching local publication rows.
    *
-   * @command ebay-connector:delete-inventory-remote-only
+   * What this does:
+   * - finds offers for each SKU on eBay
+   * - deletes those offers on eBay
+   * - deletes the inventory item on eBay
    *
-   * @usage  ebay-connector:delete-inventory-remote-only "SKU1 SKU2"
+   * What this does not do:
+   * - it does not delete local ai_marketplace_publication rows
+   * - it does not delete the local bb_ai_listing entity
+   *
+   * @command ebay-connector:delete-sku-remote-only
+   * @aliases ebay-connector:delete-inventory-remote-only
+   *
+   * @usage ebay-connector:delete-sku-remote-only "SKU1 SKU2"
+   *   Delete one or more SKUs on eBay only.
+   * @usage ebay-connector:delete-inventory-remote-only "SKU1 SKU2"
+   *   Deprecated alias for delete-sku-remote-only.
    */
-  public function deleteInventoryRemoteOnly(string $skuList): void {
+  public function deleteSkuRemoteOnly(string $skuList): void {
     $skus = $this->parseSkuList($skuList);
 
     if ([] === $skus) {
@@ -275,7 +302,7 @@ final class EbayOfferCommand extends DrushCommands {
     foreach ($skus as $sku) {
       $deletedOffers = $this->deleteInventoryForSku($sku, FALSE);
       $this->output()->writeln(sprintf(
-        'Deleted %d offers and inventory item on eBay only: %s',
+        'Deleted %d offers and deleted remote inventory item for SKU %s. Local publication rows were left untouched.',
         $deletedOffers,
         $sku
       ));
@@ -339,18 +366,31 @@ final class EbayOfferCommand extends DrushCommands {
   }
 
   /**
-   * Delete a single offer by ID.
+   * Delete a single eBay offer by offer ID.
    *
-   * @command ebay-connector:delete-offer
+   * What this does:
+   * - deletes the remote eBay offer only
+   *
+   * What this does not do:
+   * - it does not delete the inventory item
+   * - it does not delete local ai_marketplace_publication rows
+   *
+   * @command ebay-connector:delete-offer-remote-only
+   * @aliases ebay-connector:delete-offer
+   *
+   * @usage ebay-connector:delete-offer-remote-only 123456789011
+   *   Delete one remote eBay offer by offer ID.
+   * @usage ebay-connector:delete-offer 123456789011
+   *   Deprecated alias for delete-offer-remote-only.
    */
-  public function deleteOffer(string $offerId): void {
+  public function deleteOfferRemoteOnly(string $offerId): void {
     try {
       $this->sellApiClient->deleteOffer($offerId);
-      $this->output()->writeln('Deleted offer ' . $offerId);
+      $this->output()->writeln('Deleted remote offer ' . $offerId . '.');
     }
     catch (\RuntimeException $exception) {
       if (str_contains($exception->getMessage(), '"errorId":25713')) {
-        $this->output()->writeln('Offer ' . $offerId . ' already unavailable.');
+        $this->output()->writeln('Remote offer ' . $offerId . ' is already unavailable.');
         return;
       }
       throw $exception;

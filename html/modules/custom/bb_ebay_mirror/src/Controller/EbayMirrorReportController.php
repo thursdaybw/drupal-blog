@@ -34,6 +34,7 @@ final class EbayMirrorReportController extends ControllerBase {
     $missingOfferRows = $this->auditService->findPublishedListingsMissingMirroredOffer($accountId);
     $orphanedInventoryRows = $this->auditService->findMirroredInventoryMissingLocalListing($accountId);
     $orphanedOfferRows = $this->auditService->findMirroredOffersMissingLocalListing($accountId);
+    $skuLinkMismatchRows = $this->auditService->findSkuLinkMismatches($accountId);
 
     $build = [];
     $build['summary'] = [
@@ -66,6 +67,9 @@ final class EbayMirrorReportController extends ControllerBase {
           $this->t('Mirrored offers with no local published listing: @count', [
             '@count' => (string) count($orphanedOfferRows),
           ]),
+          $this->t('Mirrored SKU/link mismatches: @count', [
+            '@count' => (string) count($skuLinkMismatchRows),
+          ]),
         ],
       ],
     ];
@@ -80,6 +84,7 @@ final class EbayMirrorReportController extends ControllerBase {
     );
     $build['orphaned_inventory'] = $this->buildOrphanedInventoryTable($orphanedInventoryRows);
     $build['orphaned_offers'] = $this->buildOrphanedOfferTable($orphanedOfferRows);
+    $build['sku_link_mismatch'] = $this->buildSkuLinkMismatchTable($skuLinkMismatchRows);
 
     return $build;
   }
@@ -166,6 +171,48 @@ final class EbayMirrorReportController extends ControllerBase {
   }
 
   /**
+   * @param array<int,array{
+   *   sku:string,
+   *   sku_identifier:?string,
+   *   resolved_listing_id:?int,
+   *   resolved_listing_code:?string,
+   *   resolved_ebay_title:?string,
+   *   publication_listing_id:?int,
+   *   publication_marketplace_listing_id:?string,
+   *   offer_id:?string,
+   *   offer_status:?string,
+   *   reason:string
+   * }> $rows
+   */
+  private function buildSkuLinkMismatchTable(array $rows): array {
+    $header = [
+      $this->t('SKU'),
+      $this->t('Identifier in SKU'),
+      $this->t('Resolved local listing'),
+      $this->t('Resolved listing code'),
+      $this->t('Publication listing'),
+      $this->t('Offer'),
+      $this->t('Reason'),
+    ];
+
+    $tableRows = [];
+
+    foreach ($rows as $row) {
+      $tableRows[] = [
+        $row['sku'],
+        $row['sku_identifier'] ?? (string) $this->t('Unknown'),
+        $row['resolved_listing_id'] === NULL ? (string) $this->t('Unknown') : $this->buildListingLinkCell($row['resolved_listing_id']),
+        $row['resolved_listing_code'] ?? (string) $this->t('Unset'),
+        $row['publication_listing_id'] === NULL ? (string) $this->t('None') : $this->buildListingLinkCell($row['publication_listing_id']),
+        $row['offer_id'] ?? (string) $this->t('None'),
+        str_replace('_', ' ', $row['reason']),
+      ];
+    }
+
+    return $this->buildSectionTable('Mirrored SKU Link Mismatches', $header, $tableRows, 'No rows in this bucket.');
+  }
+
+  /**
    * @param array<int,array<int|string,\Drupal\Core\StringTranslation\TranslatableMarkup>> $rows
    */
   private function buildSectionTable(string $title, array $header, array $rows, string $emptyText): array {
@@ -183,7 +230,7 @@ final class EbayMirrorReportController extends ControllerBase {
     ];
   }
 
-  private function buildListingLinkCell(int $listingId): string {
+  private function buildListingLinkCell(int $listingId): string|\Drupal\Component\Render\MarkupInterface {
     $url = Url::fromRoute('entity.bb_ai_listing.canonical', [
       'bb_ai_listing' => $listingId,
     ]);

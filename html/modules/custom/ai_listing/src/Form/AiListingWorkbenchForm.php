@@ -223,6 +223,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       '#header' => [
         'type' => $this->t('Type'),
         'entity_id' => $this->t('Entity ID'),
+        'listing_code' => $this->t('Listing code'),
         'sku' => $this->t('SKU'),
         'status' => $this->t('Status'),
         'ebay' => $this->t('eBay'),
@@ -772,6 +773,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       $options[$selectionKey] = [
         'type' => $listingType === 'book_bundle' ? $this->t('Book bundle') : $this->t('Book'),
         'entity_id' => $listingId,
+        'listing_code' => trim((string) ($listing->get('listing_code')->value ?? '')) ?: $this->t('Unset'),
         'sku' => $row['sku'] !== '' ? $row['sku'] : $this->t('—'),
         'status' => $listing->get('status')->value ?: $this->t('—'),
         'ebay' => $this->buildEbayItemLink($row['ebay_listing_id']),

@@ -53,6 +53,7 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
       '#header' => [
         $this->t('Type'),
         $this->t('Entity ID'),
+        $this->t('Listing code'),
         $this->t('Title'),
         $this->t('Current location'),
       ],
@@ -141,6 +142,7 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
       $rows[] = [
         $listing->bundle() === 'book_bundle' ? (string) $this->t('Book bundle') : (string) $this->t('Book'),
         (string) $listingId,
+        trim((string) ($listing->get('listing_code')->value ?? '')) ?: (string) $this->t('Unset'),
         Link::fromTextAndUrl(
           $this->buildListingLabel($listing),
           Url::fromRoute('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $listingId])

@@ -123,6 +123,12 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#description' => $this->t('Set this once the listing is ready to shelve so the SKU can encode where the book lives.'),
       '#default_value' => (string) ($listing->get('storage_location')->value ?? ''),
     ];
+    $form['basic']['listing_code'] = [
+      '#type' => 'item',
+      '#title' => 'Listing code',
+      '#markup' => Html::escape(trim((string) ($listing->get('listing_code')->value ?? '')) ?: 'Will be generated on save'),
+      '#description' => $this->t('Stable short code used in new SKUs. Older listings may still be on entity ID based SKUs.'),
+    ];
     $form['basic']['status'] = [
       '#type' => 'select',
       '#title' => 'Stage',

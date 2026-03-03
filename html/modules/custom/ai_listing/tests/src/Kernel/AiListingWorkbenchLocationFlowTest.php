@@ -158,10 +158,12 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
     $this->assertArrayHasKey('selected_listings', $form['summary']);
     $rows = $form['summary']['selected_listings']['#rows'];
     $this->assertCount(2, $rows);
-    $this->assertStringContainsString('Growing Better Vegetables', (string) $rows[0][2]);
-    $this->assertSame('BDMAA05', (string) $rows[0][3]);
-    $this->assertStringContainsString('Birdy', (string) $rows[1][2]);
-    $this->assertSame('BRNCBD004', (string) $rows[1][3]);
+    $this->assertSame((string) $firstListing->get('listing_code')->value, (string) $rows[0][2]);
+    $this->assertStringContainsString('Growing Better Vegetables', (string) $rows[0][3]);
+    $this->assertSame('BDMAA05', (string) $rows[0][4]);
+    $this->assertSame((string) $secondListing->get('listing_code')->value, (string) $rows[1][2]);
+    $this->assertStringContainsString('Birdy', (string) $rows[1][3]);
+    $this->assertSame('BRNCBD004', (string) $rows[1][4]);
   }
 
   /**
@@ -189,10 +191,12 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
     $this->assertArrayHasKey('selected_listings', $form);
     $rows = $form['selected_listings']['table']['#rows'];
     $this->assertCount(2, $rows);
-    $this->assertStringContainsString('Growing Better Vegetables', (string) $rows[0][2]);
-    $this->assertSame('BDMAA05', (string) $rows[0][3]);
-    $this->assertStringContainsString('Birdy', (string) $rows[1][2]);
-    $this->assertSame('Unset yet', (string) $rows[1][3]);
+    $this->assertSame((string) $firstListing->get('listing_code')->value, (string) $rows[0][2]);
+    $this->assertStringContainsString('Growing Better Vegetables', (string) $rows[0][3]);
+    $this->assertSame('BDMAA05', (string) $rows[0][4]);
+    $this->assertSame((string) $secondListing->get('listing_code')->value, (string) $rows[1][2]);
+    $this->assertStringContainsString('Birdy', (string) $rows[1][3]);
+    $this->assertSame('Unset yet', (string) $rows[1][4]);
   }
 
   /**

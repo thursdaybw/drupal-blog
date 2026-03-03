@@ -1,0 +1,8 @@
+name: 'BB eBay Legacy Migration'
+type: module
+description: 'Temporary migration tooling for moving old eBay listings into the Sell Inventory model.'
+package: 'BB'
+core_version_requirement: ^10
+dependencies:
+  - ebay_infrastructure
+  - bb_ebay_mirror

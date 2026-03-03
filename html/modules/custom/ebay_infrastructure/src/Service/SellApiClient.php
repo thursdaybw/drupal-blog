@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\ebay_infrastructure\Service;
 
+use Drupal\ebay_connector\Entity\EbayAccount;
 use Drupal\ebay_infrastructure\Service\EbayAccountManager;
 use GuzzleHttp\ClientInterface;
 
@@ -164,13 +165,23 @@ final class SellApiClient {
     int $offset = 0
   ): array {
 
+    return $this->listInventoryItemsForAccount(NULL, $limit, $offset);
+  }
+
+  public function listInventoryItemsForAccount(
+    ?EbayAccount $account,
+    int $limit = 25,
+    int $offset = 0
+  ): array {
+
     return $this->requestWithQuery(
       'GET',
       '/sell/inventory/v1/inventory_item',
       [
         'limit' => $limit,
         'offset' => $offset,
-      ]
+      ],
+      $account
     );
   }
 
@@ -200,11 +211,16 @@ final class SellApiClient {
   }
 
   public function listOffersBySku(string $sku): array {
+    return $this->listOffersBySkuForAccount(NULL, $sku);
+  }
+
+  public function listOffersBySkuForAccount(?EbayAccount $account, string $sku): array {
     try {
       return $this->requestWithQuery(
         'GET',
         '/sell/inventory/v1/offer',
-        ['sku' => $sku]
+        ['sku' => $sku],
+        $account
       );
     }
     catch (\RuntimeException $exception) {
@@ -242,9 +258,11 @@ final class SellApiClient {
     );
   }
 
-  private function request(string $method, string $path, array $json = []): array {
+  private function request(string $method, string $path, array $json = [], ?EbayAccount $account = NULL): array {
 
-    $accessToken = $this->accountManager->getValidAccessToken();
+    $accessToken = $account instanceof EbayAccount
+      ? $this->accountManager->getValidAccessTokenForAccount($account)
+      : $this->accountManager->getValidAccessToken();
 
     $options = [
       'headers' => [
@@ -279,10 +297,13 @@ final class SellApiClient {
   private function requestWithQuery(
     string $method,
     string $path,
-    array $query
+    array $query,
+    ?EbayAccount $account = NULL
   ): array {
 
-    $accessToken = $this->accountManager->getValidAccessToken();
+    $accessToken = $account instanceof EbayAccount
+      ? $this->accountManager->getValidAccessTokenForAccount($account)
+      : $this->accountManager->getValidAccessToken();
 
     $options = [
       'headers' => [

@@ -15,6 +15,13 @@ function bb_ebay_mirror_schema(): array {
     'bb_ebay_inventory_item' => [
       'description' => 'Mirror of eBay Inventory API inventory items, keyed by SKU.',
       'fields' => [
+        'account_id' => [
+          'description' => 'The eBay account entity ID this mirrored inventory item belongs to.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
         'sku' => [
           'description' => 'The eBay inventory item SKU.',
           'type' => 'varchar',
@@ -83,8 +90,9 @@ function bb_ebay_mirror_schema(): array {
           'default' => 0,
         ],
       ],
-      'primary key' => ['sku'],
+      'primary key' => ['account_id', 'sku'],
       'indexes' => [
+        'account_id' => ['account_id'],
         'last_seen' => ['last_seen'],
         'condition' => ['condition'],
       ],
@@ -92,6 +100,13 @@ function bb_ebay_mirror_schema(): array {
     'bb_ebay_offer' => [
       'description' => 'Mirror of eBay Inventory API offers, keyed by offer ID.',
       'fields' => [
+        'account_id' => [
+          'description' => 'The eBay account entity ID this mirrored offer belongs to.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
         'offer_id' => [
           'description' => 'The eBay offer ID.',
           'type' => 'varchar',
@@ -238,8 +253,9 @@ function bb_ebay_mirror_schema(): array {
           'default' => 0,
         ],
       ],
-      'primary key' => ['offer_id'],
+      'primary key' => ['account_id', 'offer_id'],
       'indexes' => [
+        'account_id' => ['account_id'],
         'sku' => ['sku'],
         'listing_id' => ['listing_id'],
         'status' => ['status'],

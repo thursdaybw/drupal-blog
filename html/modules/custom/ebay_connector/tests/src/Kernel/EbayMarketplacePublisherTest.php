@@ -13,13 +13,13 @@ use Drupal\ebay_infrastructure\Service\EbayAccountManager;
 use Drupal\ebay_infrastructure\Service\OAuthTokenService;
 use Drupal\ebay_infrastructure\Service\SellApiClient;
 use Drupal\ebay_infrastructure\Service\StoreService;
+use Drupal\Tests\ebay_infrastructure\Support\RecordedHttpClient;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\listing_publishing\Contract\ListingImageUploaderInterface;
 use Drupal\listing_publishing\Model\ListingImageUploadResult;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
 use Drupal\user\Entity\User;
 use GuzzleHttp\ClientInterface;
-use GuzzleHttp\Psr7\Response;
 
 /**
  * Tests the eBay-specific payload rules in EbayMarketplacePublisher.
@@ -51,14 +51,14 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
     'ebay_connector',
   ];
 
-  private array $httpRequests = [];
-  private array $httpResponses = [];
+  private RecordedHttpClient $httpClient;
 
   protected function setUp(): void {
     parent::setUp();
 
     $this->installEntitySchema('user');
     $this->installEntitySchema('ebay_account');
+    $this->httpClient = new RecordedHttpClient();
 
     $user = User::create([
       'name' => 'ebay-test-user',
@@ -84,31 +84,31 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
     );
 
     // First run the publish path.
-    $this->httpResponses = [
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['offers' => []]),
-      $this->jsonResponse(['offerId' => 'offer-1']),
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['listingId' => 'listing-1']),
-    ];
+    $this->queueJsonResponses([
+      [],
+      [],
+      ['offers' => []],
+      ['offerId' => 'offer-1'],
+      [],
+      [],
+      ['listingId' => 'listing-1'],
+    ]);
     $publisher->publish($request);
 
-    $publishInventoryPayload = $this->findJsonPayload('PUT', '/sell/inventory/v1/inventory_item/');
+    $publishInventoryPayload = $this->httpClient->findJsonPayload('PUT', '/sell/inventory/v1/inventory_item/');
     $this->assertNotNull($publishInventoryPayload);
 
     // Reset the captured HTTP traffic and run the update path.
-    $this->httpRequests = [];
-    $this->httpResponses = [
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['listing' => ['listingId' => 'listing-1']]),
-    ];
+    $this->httpClient->clearRecordedRequests();
+    $this->queueJsonResponses([
+      [],
+      [],
+      [],
+      ['listing' => ['listingId' => 'listing-1']],
+    ]);
     $publisher->updatePublication('offer-1', $request, 'FIXED_PRICE');
 
-    $updateInventoryPayload = $this->findJsonPayload('PUT', '/sell/inventory/v1/inventory_item/');
+    $updateInventoryPayload = $this->httpClient->findJsonPayload('PUT', '/sell/inventory/v1/inventory_item/');
     $this->assertNotNull($updateInventoryPayload);
 
     $this->assertSame($publishInventoryPayload, $updateInventoryPayload);
@@ -122,30 +122,30 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       conditionDescription: 'Clean copy with light edge wear.',
     );
 
-    $this->httpResponses = [
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['offers' => []]),
-      $this->jsonResponse(['offerId' => 'offer-1']),
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['listingId' => 'listing-1']),
-    ];
+    $this->queueJsonResponses([
+      [],
+      [],
+      ['offers' => []],
+      ['offerId' => 'offer-1'],
+      [],
+      [],
+      ['listingId' => 'listing-1'],
+    ]);
     $publisher->publish($request);
 
-    $publishOfferUpdatePayload = $this->findJsonPayload('PUT', '/sell/inventory/v1/offer/offer-1');
+    $publishOfferUpdatePayload = $this->httpClient->findJsonPayload('PUT', '/sell/inventory/v1/offer/offer-1');
     $this->assertNotNull($publishOfferUpdatePayload);
 
-    $this->httpRequests = [];
-    $this->httpResponses = [
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['listing' => ['listingId' => 'listing-1']]),
-    ];
+    $this->httpClient->clearRecordedRequests();
+    $this->queueJsonResponses([
+      [],
+      [],
+      [],
+      ['listing' => ['listingId' => 'listing-1']],
+    ]);
     $publisher->updatePublication('offer-1', $request, 'FIXED_PRICE');
 
-    $updateOfferPayload = $this->findJsonPayload('PUT', '/sell/inventory/v1/offer/offer-1');
+    $updateOfferPayload = $this->httpClient->findJsonPayload('PUT', '/sell/inventory/v1/offer/offer-1');
     $this->assertNotNull($updateOfferPayload);
 
     $this->assertSame($publishOfferUpdatePayload, $updateOfferPayload);
@@ -159,19 +159,19 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       conditionDescription: 'Clean copy with light edge wear.',
     );
 
-    $this->httpResponses = [
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['offers' => []]),
-      $this->jsonResponse(['offerId' => 'offer-1']),
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['listingId' => 'listing-1']),
-    ];
+    $this->queueJsonResponses([
+      [],
+      [],
+      ['offers' => []],
+      ['offerId' => 'offer-1'],
+      [],
+      [],
+      ['listingId' => 'listing-1'],
+    ]);
     $publisher->publish($request);
 
-    $createOfferPayload = $this->findJsonPayload('POST', '/sell/inventory/v1/offer');
-    $updateOfferPayload = $this->findJsonPayload('PUT', '/sell/inventory/v1/offer/offer-1');
+    $createOfferPayload = $this->httpClient->findJsonPayload('POST', '/sell/inventory/v1/offer');
+    $updateOfferPayload = $this->httpClient->findJsonPayload('PUT', '/sell/inventory/v1/offer/offer-1');
 
     $this->assertSame('A short listing description.', $createOfferPayload['listingDescription']);
     $this->assertSame('A short listing description.', $updateOfferPayload['listingDescription']);
@@ -186,18 +186,18 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       bookTitle: 'Birdy',
     );
 
-    $this->httpResponses = [
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['offers' => []]),
-      $this->jsonResponse(['offerId' => 'offer-1']),
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['listingId' => 'listing-1']),
-    ];
+    $this->queueJsonResponses([
+      [],
+      [],
+      ['offers' => []],
+      ['offerId' => 'offer-1'],
+      [],
+      [],
+      ['listingId' => 'listing-1'],
+    ]);
     $publisher->publish($request);
 
-    $inventoryPayload = $this->findJsonPayload('PUT', '/sell/inventory/v1/inventory_item/');
+    $inventoryPayload = $this->httpClient->findJsonPayload('PUT', '/sell/inventory/v1/inventory_item/');
 
     $this->assertSame('Clean copy with light edge wear.', $inventoryPayload['conditionDescription']);
     $this->assertSame('Birdy by William Wharton Paperback Book', $inventoryPayload['product']['title']);
@@ -213,18 +213,18 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       bookTitle: 'Birdy',
     );
 
-    $this->httpResponses = [
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['offers' => []]),
-      $this->jsonResponse(['offerId' => 'offer-1']),
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['listingId' => 'listing-1']),
-    ];
+    $this->queueJsonResponses([
+      [],
+      [],
+      ['offers' => []],
+      ['offerId' => 'offer-1'],
+      [],
+      [],
+      ['listingId' => 'listing-1'],
+    ]);
     $publisher->publish($request);
 
-    $inventoryPayload = $this->findJsonPayload('PUT', '/sell/inventory/v1/inventory_item/');
+    $inventoryPayload = $this->httpClient->findJsonPayload('PUT', '/sell/inventory/v1/inventory_item/');
 
     $this->assertSame('', $inventoryPayload['conditionDescription']);
   }
@@ -237,19 +237,19 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       conditionDescription: 'Clean copy with light edge wear.',
     );
 
-    $this->httpResponses = [
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['offers' => []]),
-      $this->jsonResponse(['offerId' => 'offer-1']),
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['listingId' => 'listing-1']),
-    ];
+    $this->queueJsonResponses([
+      [],
+      [],
+      ['offers' => []],
+      ['offerId' => 'offer-1'],
+      [],
+      [],
+      ['listingId' => 'listing-1'],
+    ]);
     $publisher->publish($request);
 
-    $this->assertNotNull($this->findRequestByPath('POST', '/sell/inventory/v1/offer'));
-    $this->assertNotNull($this->findRequest('POST', '/sell/inventory/v1/offer/offer-1/publish'));
+    $this->assertNotNull($this->httpClient->findRequestByPath('POST', '/sell/inventory/v1/offer'));
+    $this->assertNotNull($this->httpClient->findRequest('POST', '/sell/inventory/v1/offer/offer-1/publish'));
   }
 
   public function testPublishReusesAnExistingOfferWhenOneAlreadyExists(): void {
@@ -260,39 +260,22 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       conditionDescription: 'Clean copy with light edge wear.',
     );
 
-    $this->httpResponses = [
-      $this->jsonResponse([]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['offers' => [['offerId' => 'offer-9']]]),
-      $this->jsonResponse([]),
-      $this->jsonResponse(['listingId' => 'listing-1']),
-      $this->jsonResponse(['listingId' => 'listing-1']),
-    ];
+    $this->queueJsonResponses([
+      [],
+      [],
+      ['offers' => [['offerId' => 'offer-9']]],
+      [],
+      ['listingId' => 'listing-1'],
+      ['listingId' => 'listing-1'],
+    ]);
     $publisher->publish($request);
 
-    $this->assertNull($this->findRequestByPath('POST', '/sell/inventory/v1/offer'));
-    $this->assertNotNull($this->findRequest('PUT', '/sell/inventory/v1/offer/offer-9'));
-    $this->assertNotNull($this->findRequest('POST', '/sell/inventory/v1/offer/offer-9/publish'));
+    $this->assertNull($this->httpClient->findRequestByPath('POST', '/sell/inventory/v1/offer'));
+    $this->assertNotNull($this->httpClient->findRequest('PUT', '/sell/inventory/v1/offer/offer-9'));
+    $this->assertNotNull($this->httpClient->findRequest('POST', '/sell/inventory/v1/offer/offer-9/publish'));
   }
 
   private function createPublisher(array $uploadedUrls): EbayMarketplacePublisher {
-    $httpClient = $this->createMock(ClientInterface::class);
-    $httpClient->method('request')
-      ->willReturnCallback(function (string $method, string $url, array $options = []): Response {
-        $this->httpRequests[] = [
-          'method' => $method,
-          'url' => $url,
-          'options' => $options,
-        ];
-
-        $response = array_shift($this->httpResponses);
-        if (!$response instanceof Response) {
-          throw new \RuntimeException('No fake HTTP response was queued for ' . $method . ' ' . $url);
-        }
-
-        return $response;
-      });
-
     $accountManager = new EbayAccountManager(
       $this->container->get('entity_type.manager'),
       new OAuthTokenService(
@@ -301,7 +284,7 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       ),
     );
 
-    $sellApiClient = new SellApiClient($httpClient, $accountManager);
+    $sellApiClient = new SellApiClient($this->httpClient, $accountManager);
     $storeService = new StoreService($sellApiClient);
 
     return new EbayMarketplacePublisher(
@@ -348,50 +331,10 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
     );
   }
 
-  private function jsonResponse(array $data, int $statusCode = 200): Response {
-    return new Response($statusCode, ['Content-Type' => 'application/json'], json_encode($data));
-  }
-
-  private function findRequest(string $method, string $pathFragment): ?array {
-    foreach ($this->httpRequests as $request) {
-      if ($request['method'] !== $method) {
-        continue;
-      }
-
-      if (!str_contains($request['url'], $pathFragment)) {
-        continue;
-      }
-
-      return $request;
+  private function queueJsonResponses(array $responses): void {
+    foreach ($responses as $response) {
+      $this->httpClient->queueJsonResponse($response);
     }
-
-    return null;
-  }
-
-  private function findJsonPayload(string $method, string $pathFragment): ?array {
-    $request = $this->findRequest($method, $pathFragment);
-    if ($request === null) {
-      return null;
-    }
-
-    return $request['options']['json'] ?? null;
-  }
-
-  private function findRequestByPath(string $method, string $exactPath): ?array {
-    foreach ($this->httpRequests as $request) {
-      if ($request['method'] !== $method) {
-        continue;
-      }
-
-      $path = parse_url($request['url'], PHP_URL_PATH);
-      if ($path !== $exactPath) {
-        continue;
-      }
-
-      return $request;
-    }
-
-    return null;
   }
 
 }

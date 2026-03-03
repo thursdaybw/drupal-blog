@@ -1,0 +1,5 @@
+name: 'BB eBay Mirror'
+type: module
+description: 'Local mirror of eBay Inventory/Offer state for auditing and reconciliation.'
+package: 'BB'
+core_version_requirement: ^10

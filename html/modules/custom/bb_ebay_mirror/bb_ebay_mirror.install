@@ -1,0 +1,251 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @file
+ * Install hooks for the eBay mirror module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function bb_ebay_mirror_schema(): array {
+  return [
+    'bb_ebay_inventory_item' => [
+      'description' => 'Mirror of eBay Inventory API inventory items, keyed by SKU.',
+      'fields' => [
+        'sku' => [
+          'description' => 'The eBay inventory item SKU.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+        ],
+        'locale' => [
+          'description' => 'The locale returned by eBay for the inventory item.',
+          'type' => 'varchar',
+          'length' => 16,
+          'not null' => FALSE,
+        ],
+        'title' => [
+          'description' => 'The inventory product title.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+        ],
+        'description' => [
+          'description' => 'The inventory product description HTML/text.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'condition' => [
+          'description' => 'The eBay inventory condition code.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'condition_description' => [
+          'description' => 'The seller-facing condition description stored on the inventory item.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'available_quantity' => [
+          'description' => 'The available quantity from ship-to-location availability.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'aspects_json' => [
+          'description' => 'JSON copy of the product aspects object.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'image_urls_json' => [
+          'description' => 'JSON copy of the product image URL list.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'raw_json' => [
+          'description' => 'Full raw JSON payload last seen from eBay for this inventory item.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'last_seen' => [
+          'description' => 'Unix timestamp for when this inventory item was last synced from eBay.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+      ],
+      'primary key' => ['sku'],
+      'indexes' => [
+        'last_seen' => ['last_seen'],
+        'condition' => ['condition'],
+      ],
+    ],
+    'bb_ebay_offer' => [
+      'description' => 'Mirror of eBay Inventory API offers, keyed by offer ID.',
+      'fields' => [
+        'offer_id' => [
+          'description' => 'The eBay offer ID.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'sku' => [
+          'description' => 'The SKU this offer is attached to.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+        ],
+        'marketplace_id' => [
+          'description' => 'The eBay marketplace ID, for example EBAY_AU.',
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => FALSE,
+        ],
+        'format' => [
+          'description' => 'Offer format, for example FIXED_PRICE.',
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => FALSE,
+        ],
+        'listing_description' => [
+          'description' => 'The listing description stored on the offer.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'available_quantity' => [
+          'description' => 'The quantity available on the offer.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'price_value' => [
+          'description' => 'The offer price value as a string from eBay.',
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => FALSE,
+        ],
+        'price_currency' => [
+          'description' => 'The offer price currency code.',
+          'type' => 'varchar',
+          'length' => 8,
+          'not null' => FALSE,
+        ],
+        'payment_policy_id' => [
+          'description' => 'The linked payment policy ID.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'return_policy_id' => [
+          'description' => 'The linked return policy ID.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'fulfillment_policy_id' => [
+          'description' => 'The linked fulfillment policy ID.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'ebay_plus_if_eligible' => [
+          'description' => 'Whether the offer is eBay Plus eligible.',
+          'type' => 'int',
+          'size' => 'tiny',
+          'not null' => FALSE,
+        ],
+        'category_id' => [
+          'description' => 'The eBay category ID.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'merchant_location_key' => [
+          'description' => 'The eBay merchant location key.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'apply_tax' => [
+          'description' => 'Whether tax is applied for the offer.',
+          'type' => 'int',
+          'size' => 'tiny',
+          'not null' => FALSE,
+        ],
+        'listing_id' => [
+          'description' => 'The published eBay listing ID nested under the offer listing object.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'listing_status' => [
+          'description' => 'The published listing status nested under the offer listing object.',
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => FALSE,
+        ],
+        'sold_quantity' => [
+          'description' => 'The sold quantity nested under the offer listing object.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'status' => [
+          'description' => 'The top-level eBay offer status, for example PUBLISHED.',
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => FALSE,
+        ],
+        'listing_duration' => [
+          'description' => 'The listing duration, for example GTC.',
+          'type' => 'varchar',
+          'length' => 16,
+          'not null' => FALSE,
+        ],
+        'include_catalog_product_details' => [
+          'description' => 'Whether catalog product details are included.',
+          'type' => 'int',
+          'size' => 'tiny',
+          'not null' => FALSE,
+        ],
+        'hide_buyer_details' => [
+          'description' => 'Whether buyer details are hidden.',
+          'type' => 'int',
+          'size' => 'tiny',
+          'not null' => FALSE,
+        ],
+        'raw_json' => [
+          'description' => 'Full raw JSON payload last seen from eBay for this offer.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'last_seen' => [
+          'description' => 'Unix timestamp for when this offer was last synced from eBay.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+      ],
+      'primary key' => ['offer_id'],
+      'indexes' => [
+        'sku' => ['sku'],
+        'listing_id' => ['listing_id'],
+        'status' => ['status'],
+        'listing_status' => ['listing_status'],
+        'last_seen' => ['last_seen'],
+      ],
+    ],
+  ];
+}

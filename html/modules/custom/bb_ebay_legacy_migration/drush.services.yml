@@ -1,0 +1,7 @@
+services:
+  bb_ebay_legacy_migration.migrate_command:
+    class: Drupal\bb_ebay_legacy_migration\Command\EbayLegacyMigrationCommand
+    arguments:
+      - '@bb_ebay_legacy_migration.migration_service'
+    tags:
+      - { name: drush.command }

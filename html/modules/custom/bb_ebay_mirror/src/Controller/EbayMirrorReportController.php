@@ -37,6 +37,8 @@ final class EbayMirrorReportController extends ControllerBase {
     $skuLinkMismatchRows = $this->auditService->findSkuLinkMismatches($accountId);
     $multipleInventoryRows = $this->auditService->findListingsWithMultipleMirroredInventorySkus($accountId);
     $multipleOfferRows = $this->auditService->findListingsWithMultipleMirroredOffers($accountId);
+    $legacyUnmigratedRows = $this->auditService->findLegacyListingsMissingMirroredSellOffer($accountId);
+    $legacyMigratedRows = $this->auditService->findLegacyListingsWithMirroredSellOffer($accountId);
 
     $build = [];
     $build['summary'] = [
@@ -56,6 +58,9 @@ final class EbayMirrorReportController extends ControllerBase {
           ]),
           $this->t('Mirrored offer rows: @count', [
             '@count' => (string) $this->auditService->countMirroredOfferRows($accountId),
+          ]),
+          $this->t('Legacy listing rows: @count', [
+            '@count' => (string) $this->auditService->countLegacyListingRows($accountId),
           ]),
           $this->t('Local published listings missing mirrored inventory: @count', [
             '@count' => (string) count($missingInventoryRows),
@@ -78,6 +83,12 @@ final class EbayMirrorReportController extends ControllerBase {
           $this->t('Local listings with multiple mirrored offers: @count', [
             '@count' => (string) count($multipleOfferRows),
           ]),
+          $this->t('Legacy listings with no mirrored Sell offer: @count', [
+            '@count' => (string) count($legacyUnmigratedRows),
+          ]),
+          $this->t('Legacy listings with mirrored Sell offer: @count', [
+            '@count' => (string) count($legacyMigratedRows),
+          ]),
         ],
       ],
     ];
@@ -95,6 +106,8 @@ final class EbayMirrorReportController extends ControllerBase {
     $build['sku_link_mismatch'] = $this->buildSkuLinkMismatchTable($skuLinkMismatchRows);
     $build['multiple_inventory'] = $this->buildMultipleInventoryTable($multipleInventoryRows);
     $build['multiple_offers'] = $this->buildMultipleOffersTable($multipleOfferRows);
+    $build['legacy_unmigrated'] = $this->buildLegacyUnmigratedTable($legacyUnmigratedRows);
+    $build['legacy_migrated'] = $this->buildLegacyMigratedTable($legacyMigratedRows);
 
     return $build;
   }
@@ -289,6 +302,76 @@ final class EbayMirrorReportController extends ControllerBase {
     }
 
     return $this->buildSectionTable('Local Listings With Multiple Mirrored Offers', $header, $tableRows, 'No rows in this bucket.');
+  }
+
+  /**
+   * @param array<int,array{
+   *   ebay_listing_id:string,
+   *   sku:?string,
+   *   title:?string,
+   *   ebay_listing_started_at:?int,
+   *   listing_status:?string
+   * }> $rows
+   */
+  private function buildLegacyUnmigratedTable(array $rows): array {
+    $header = [
+      $this->t('eBay listing ID'),
+      $this->t('SKU'),
+      $this->t('Title'),
+      $this->t('Legacy start time'),
+      $this->t('Listing status'),
+    ];
+
+    $tableRows = [];
+    foreach ($rows as $row) {
+      $tableRows[] = [
+        $row['ebay_listing_id'],
+        $row['sku'] ?? (string) $this->t('Unset'),
+        $row['title'] ?? (string) $this->t('Untitled legacy listing'),
+        $row['ebay_listing_started_at'] === NULL ? (string) $this->t('Unknown') : gmdate('Y-m-d H:i:s', $row['ebay_listing_started_at']),
+        $row['listing_status'] ?? (string) $this->t('Unknown'),
+      ];
+    }
+
+    return $this->buildSectionTable('Legacy Listings With No Mirrored Sell Offer', $header, $tableRows, 'No rows in this bucket.');
+  }
+
+  /**
+   * @param array<int,array{
+   *   ebay_listing_id:string,
+   *   sku:?string,
+   *   title:?string,
+   *   ebay_listing_started_at:?int,
+   *   listing_status:?string,
+   *   mirrored_offer_id:string,
+   *   mirrored_offer_status:?string
+   * }> $rows
+   */
+  private function buildLegacyMigratedTable(array $rows): array {
+    $header = [
+      $this->t('eBay listing ID'),
+      $this->t('SKU'),
+      $this->t('Title'),
+      $this->t('Legacy start time'),
+      $this->t('Listing status'),
+      $this->t('Mirrored offer ID'),
+      $this->t('Mirrored offer status'),
+    ];
+
+    $tableRows = [];
+    foreach ($rows as $row) {
+      $tableRows[] = [
+        $row['ebay_listing_id'],
+        $row['sku'] ?? (string) $this->t('Unset'),
+        $row['title'] ?? (string) $this->t('Untitled legacy listing'),
+        $row['ebay_listing_started_at'] === NULL ? (string) $this->t('Unknown') : gmdate('Y-m-d H:i:s', $row['ebay_listing_started_at']),
+        $row['listing_status'] ?? (string) $this->t('Unknown'),
+        $row['mirrored_offer_id'],
+        $row['mirrored_offer_status'] ?? (string) $this->t('Unknown'),
+      ];
+    }
+
+    return $this->buildSectionTable('Legacy Listings With Mirrored Sell Offer', $header, $tableRows, 'No rows in this bucket.');
   }
 
   /**

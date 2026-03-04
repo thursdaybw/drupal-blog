@@ -267,6 +267,80 @@ final class EbayMirrorAuditCommand extends DrushCommands {
     }
   }
 
+  /**
+   * Audit legacy listings that are not yet visible in the Sell offer mirror.
+   *
+   * @command bb-ebay-mirror:audit-legacy-unmigrated
+   */
+  public function auditLegacyUnmigrated(?int $accountId = NULL): void {
+    $account = $this->resolveAccount($accountId);
+    $rows = $this->auditService->findLegacyListingsMissingMirroredSellOffer((int) $account->id());
+
+    if ($rows === []) {
+      $this->output()->writeln(sprintf(
+        'No legacy listings are missing mirrored Sell offers for account %d (%s).',
+        (int) $account->id(),
+        (string) $account->label()
+      ));
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Found %d legacy listings with no mirrored Sell offer for account %d (%s):',
+      count($rows),
+      (int) $account->id(),
+      (string) $account->label()
+    ));
+
+    foreach ($rows as $row) {
+      $this->output()->writeln(sprintf(
+        '- listingId %s | sku %s | started %s | status %s | %s',
+        $row['ebay_listing_id'],
+        $row['sku'] ?? 'unset',
+        $row['ebay_listing_started_at'] === NULL ? 'unknown' : gmdate('Y-m-d H:i:s', $row['ebay_listing_started_at']),
+        $row['listing_status'] ?? 'unknown',
+        $row['title'] ?? 'Untitled legacy listing'
+      ));
+    }
+  }
+
+  /**
+   * Audit legacy listings that are already visible in the Sell offer mirror.
+   *
+   * @command bb-ebay-mirror:audit-legacy-migrated
+   */
+  public function auditLegacyMigrated(?int $accountId = NULL): void {
+    $account = $this->resolveAccount($accountId);
+    $rows = $this->auditService->findLegacyListingsWithMirroredSellOffer((int) $account->id());
+
+    if ($rows === []) {
+      $this->output()->writeln(sprintf(
+        'No legacy listings are already visible in the Sell offer mirror for account %d (%s).',
+        (int) $account->id(),
+        (string) $account->label()
+      ));
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Found %d legacy listings that already have mirrored Sell offers for account %d (%s):',
+      count($rows),
+      (int) $account->id(),
+      (string) $account->label()
+    ));
+
+    foreach ($rows as $row) {
+      $this->output()->writeln(sprintf(
+        '- listingId %s | sku %s | offer %s | offerStatus %s | %s',
+        $row['ebay_listing_id'],
+        $row['sku'] ?? 'unset',
+        $row['mirrored_offer_id'],
+        $row['mirrored_offer_status'] ?? 'unknown',
+        $row['title'] ?? 'Untitled legacy listing'
+      ));
+    }
+  }
+
   private function resolveAccount(?int $accountId): EbayAccount {
     $storage = $this->entityTypeManager->getStorage('ebay_account');
 

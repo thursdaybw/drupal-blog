@@ -1,7 +1,22 @@
 services:
+  bb_ebay_legacy_migration.sync_legacy_listings_command:
+    class: Drupal\bb_ebay_legacy_migration\Command\EbayLegacyListingMirrorCommand
+    arguments:
+      - '@bb_ebay_legacy_migration.legacy_listing_mirror_sync_service'
+      - '@drupal.ebay_infrastructure.account_manager'
+    tags:
+      - { name: drush.command }
+
   bb_ebay_legacy_migration.migrate_command:
     class: Drupal\bb_ebay_legacy_migration\Command\EbayLegacyMigrationCommand
     arguments:
       - '@bb_ebay_legacy_migration.migration_service'
+    tags:
+      - { name: drush.command }
+
+  bb_ebay_legacy_migration.adopt_book_command:
+    class: Drupal\bb_ebay_legacy_migration\Command\EbayLegacyListingAdoptionCommand
+    arguments:
+      - '@bb_ebay_legacy_migration.adoption_service'
     tags:
       - { name: drush.command }

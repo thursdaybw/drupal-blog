@@ -28,6 +28,14 @@ final class EbayMirrorAuditService {
       ->fetchField();
   }
 
+  public function countLegacyListingRows(int $accountId): int {
+    return (int) $this->database->select('bb_ebay_legacy_listing', 'legacy')
+      ->condition('account_id', $accountId)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+  }
+
   /**
    * Find local published eBay listings whose SKU is missing from the mirror.
    *
@@ -425,6 +433,102 @@ final class EbayMirrorAuditService {
       $rows,
       static fn (array $left, array $right): int => $left['listing_id'] <=> $right['listing_id']
     );
+
+    return $rows;
+  }
+
+  /**
+   * Find legacy listings that do not yet exist in the Sell offer mirror.
+   *
+   * @return array<int,array{
+   *   ebay_listing_id:string,
+   *   sku:?string,
+   *   title:?string,
+   *   ebay_listing_started_at:?int,
+   *   listing_status:?string
+   * }>
+   */
+  public function findLegacyListingsMissingMirroredSellOffer(int $accountId): array {
+    $query = $this->database->select('bb_ebay_legacy_listing', 'legacy');
+    $query->leftJoin(
+      'bb_ebay_offer',
+      'offer',
+      'offer.account_id = legacy.account_id AND offer.listing_id = legacy.ebay_listing_id'
+    );
+
+    $query->fields('legacy', [
+      'ebay_listing_id',
+      'sku',
+      'title',
+      'ebay_listing_started_at',
+      'listing_status',
+    ]);
+    $query->condition('legacy.account_id', $accountId);
+    $query->isNull('offer.offer_id');
+    $query->orderBy('legacy.ebay_listing_id', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rows = [];
+
+    foreach ($results as $result) {
+      $rows[] = [
+        'ebay_listing_id' => (string) ($result->ebay_listing_id ?? ''),
+        'sku' => $this->normalizeNullableString($result->sku ?? NULL),
+        'title' => $this->normalizeNullableString($result->title ?? NULL),
+        'ebay_listing_started_at' => $this->normalizeNullableInt($result->ebay_listing_started_at ?? NULL),
+        'listing_status' => $this->normalizeNullableString($result->listing_status ?? NULL),
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * Find legacy listings that are already visible in the Sell offer mirror.
+   *
+   * @return array<int,array{
+   *   ebay_listing_id:string,
+   *   sku:?string,
+   *   title:?string,
+   *   ebay_listing_started_at:?int,
+   *   listing_status:?string,
+   *   mirrored_offer_id:string,
+   *   mirrored_offer_status:?string
+   * }>
+   */
+  public function findLegacyListingsWithMirroredSellOffer(int $accountId): array {
+    $query = $this->database->select('bb_ebay_legacy_listing', 'legacy');
+    $query->innerJoin(
+      'bb_ebay_offer',
+      'offer',
+      'offer.account_id = legacy.account_id AND offer.listing_id = legacy.ebay_listing_id'
+    );
+
+    $query->fields('legacy', [
+      'ebay_listing_id',
+      'sku',
+      'title',
+      'ebay_listing_started_at',
+      'listing_status',
+    ]);
+    $query->fields('offer', ['offer_id', 'status']);
+    $query->condition('legacy.account_id', $accountId);
+    $query->orderBy('legacy.ebay_listing_id', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rows = [];
+
+    foreach ($results as $result) {
+      $rows[] = [
+        'ebay_listing_id' => (string) ($result->ebay_listing_id ?? ''),
+        'sku' => $this->normalizeNullableString($result->sku ?? NULL),
+        'title' => $this->normalizeNullableString($result->title ?? NULL),
+        'ebay_listing_started_at' => $this->normalizeNullableInt($result->ebay_listing_started_at ?? NULL),
+        'listing_status' => $this->normalizeNullableString($result->listing_status ?? NULL),
+        'mirrored_offer_id' => (string) ($result->offer_id ?? ''),
+        'mirrored_offer_status' => $this->normalizeNullableString($result->status ?? NULL),
+      ];
+    }
 
     return $rows;
   }

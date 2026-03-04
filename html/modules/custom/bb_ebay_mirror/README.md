@@ -34,6 +34,8 @@ Current steps
    - mirror row whose SKU suffix does not line up with the local listing link
    - local listing that resolves from multiple mirrored inventory SKUs
    - local listing that resolves from multiple mirrored offers
+   - legacy listing with no mirrored Sell offer
+   - legacy listing with mirrored Sell offer
 3. Use those audits to understand stale eBay state before touching migration.
 4. Hand migration work off to `bb_ebay_legacy_migration`.
 
@@ -56,6 +58,10 @@ Current state
   - `bb-ebay-mirror:audit-multiple-inventory`
 - Seventh audit report exists:
   - `bb-ebay-mirror:audit-multiple-offers`
+- Eighth audit report exists:
+  - `bb-ebay-mirror:audit-legacy-unmigrated`
+- Ninth audit report exists:
+  - `bb-ebay-mirror:audit-legacy-migrated`
 - First admin report page exists:
   - `/admin/ebay-mirror/report`
 - That first audit currently reports no local published eBay listings missing mirrored inventory for the primary account.
@@ -64,6 +70,9 @@ Current state
 - It falls back to legacy entity ID for older SKUs.
 - The sixth and seventh audits answer the multiplicity question:
   - does one local listing now resolve from more than one mirrored SKU or offer?
+- The eighth and ninth audits classify the legacy mirror:
+  - legacy listing with no mirrored Sell offer = not yet visible in Sell
+  - legacy listing with mirrored Sell offer = already visible in Sell
 - After deleting four stale old-SKU rows on eBay and rerunning sync:
   - orphaned inventory is clean
   - orphaned offers are clean
@@ -193,4 +202,28 @@ Or audit one specific eBay account:
 
 ```bash
 ddev drush bb-ebay-mirror:audit-multiple-offers 1
+```
+
+Audit legacy listings that do not yet have a mirrored Sell offer:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-unmigrated
+```
+
+Or audit one specific eBay account:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-unmigrated 1
+```
+
+Audit legacy listings that already have a mirrored Sell offer:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-migrated
+```
+
+Or audit one specific eBay account:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-migrated 1
 ```

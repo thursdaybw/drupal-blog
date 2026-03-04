@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\bb_ebay_legacy_migration\Kernel;
 
 use Drupal\bb_ebay_legacy_migration\Service\EbayLegacyMigrationService;
+use Drupal\bb_ebay_legacy_migration\Service\EbayTradingLegacyClient;
 use Drupal\bb_ebay_mirror\Service\EbayInventoryMirrorSyncService;
 use Drupal\bb_ebay_mirror\Service\EbayOfferMirrorSyncService;
 use Drupal\Core\Config\ConfigFactoryInterface;
@@ -40,6 +41,8 @@ final class EbayLegacyMigrationServiceTest extends KernelTestBase {
     'filter',
     'options',
     'bb_platform',
+    'ai_listing',
+    'listing_publishing',
     'ebay_infrastructure',
     'ebay_connector',
     'bb_ebay_mirror',
@@ -53,6 +56,7 @@ final class EbayLegacyMigrationServiceTest extends KernelTestBase {
 
     $this->installEntitySchema('user');
     $this->installEntitySchema('ebay_account');
+    $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing']);
     $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);
 
     $this->httpClient = new RecordedHttpClient();
@@ -132,6 +136,82 @@ final class EbayLegacyMigrationServiceTest extends KernelTestBase {
     $this->assertSame(['offer-pilot-2'], $offerIds);
   }
 
+  public function testPrepareAndMigrateListingSkipsAlreadyMigratedRows(): void {
+    $service = $this->createMigrationService();
+    $account = $this->createPrimaryAccount();
+
+    $this->seedLegacyListingRow($account, '176582430935', '2024 September A01');
+    $this->seedMirroredOfferRow($account, 'offer-existing', '2024 September A01', '176582430935');
+
+    $result = $service->prepareAndMigrateListingId('176582430935');
+
+    $this->assertSame('already_migrated', $result['status']);
+    $this->assertSame('2024 September A01', $result['previous_sku']);
+    $this->assertSame('2024 September A01', $result['prepared_sku']);
+    $this->assertNull($result['migrate_response']);
+    $this->assertSame([], $this->httpClient->getRequests());
+  }
+
+  public function testPrepareAndMigrateListingGeneratesSkuWhenMissing(): void {
+    $service = $this->createMigrationService();
+    $account = $this->createPrimaryAccount();
+
+    $this->seedLegacyListingRow($account, '177300004039', NULL);
+
+    $this->queueTradingSuccessResponse();
+    $this->httpClient->queueJsonResponse([
+      'responses' => [
+        ['listingId' => '177300004039', 'statusCode' => 200],
+      ],
+    ]);
+    $this->queueMirrorSyncResponses('legacy-ebay-177300004039', 'offer-missing-sku');
+
+    $result = $service->prepareAndMigrateListingId('177300004039');
+
+    $this->assertSame('migrated', $result['status']);
+    $this->assertNull($result['previous_sku']);
+    $this->assertSame('legacy-ebay-177300004039', $result['prepared_sku']);
+    $this->assertSame('missing_legacy_sku', $result['sku_change_reason']);
+
+    $reviseRequest = $this->httpClient->findRequestByPath('POST', '/ws/api.dll');
+    $this->assertNotNull($reviseRequest);
+    $this->assertSame('ReviseFixedPriceItem', $reviseRequest['options']['headers']['X-EBAY-API-CALL-NAME'] ?? NULL);
+    $this->assertStringContainsString('<ItemID>177300004039</ItemID>', (string) ($reviseRequest['options']['body'] ?? ''));
+    $this->assertStringContainsString('<SKU>legacy-ebay-177300004039</SKU>', (string) ($reviseRequest['options']['body'] ?? ''));
+
+    $storedSku = $this->container->get('database')
+      ->select('bb_ebay_legacy_listing', 'l')
+      ->fields('l', ['sku'])
+      ->condition('account_id', (int) $account->id())
+      ->condition('ebay_listing_id', '177300004039')
+      ->execute()
+      ->fetchField();
+    $this->assertSame('legacy-ebay-177300004039', $storedSku);
+  }
+
+  public function testPrepareAndMigrateListingNormalizesDuplicateSku(): void {
+    $service = $this->createMigrationService();
+    $account = $this->createPrimaryAccount();
+
+    $this->seedLegacyListingRow($account, '176577811710', '2024 September A01');
+    $this->seedLegacyListingRow($account, '176582430935', '2024 September A01');
+
+    $this->queueTradingSuccessResponse();
+    $this->httpClient->queueJsonResponse([
+      'responses' => [
+        ['listingId' => '176577811710', 'statusCode' => 200],
+      ],
+    ]);
+    $this->queueMirrorSyncResponses('2024 September A01-M2', 'offer-duplicate-sku');
+
+    $result = $service->prepareAndMigrateListingId('176577811710');
+
+    $this->assertSame('migrated', $result['status']);
+    $this->assertSame('2024 September A01', $result['previous_sku']);
+    $this->assertSame('2024 September A01-M2', $result['prepared_sku']);
+    $this->assertSame('duplicate_legacy_sku', $result['sku_change_reason']);
+  }
+
   private function queueMirrorSyncResponses(string $sku, string $offerId): void {
     // Inventory sync after this migrate chunk.
     $this->httpClient->queueJsonResponse([
@@ -155,6 +235,39 @@ final class EbayLegacyMigrationServiceTest extends KernelTestBase {
         ],
       ],
     ]);
+  }
+
+  private function queueTradingSuccessResponse(): void {
+    $this->httpClient->queueResponse(new \GuzzleHttp\Psr7\Response(
+      200,
+      ['Content-Type' => 'text/xml'],
+      '<?xml version="1.0" encoding="utf-8"?><ReviseFixedPriceItemResponse xmlns="urn:ebay:apis:eBLBaseComponents"><Ack>Success</Ack></ReviseFixedPriceItemResponse>'
+    ));
+  }
+
+  private function seedLegacyListingRow(EbayAccount $account, string $listingId, ?string $sku): void {
+    $this->container->get('database')->insert('bb_ebay_legacy_listing')
+      ->fields([
+        'account_id' => (int) $account->id(),
+        'ebay_listing_id' => $listingId,
+        'sku' => $sku,
+        'title' => 'Legacy listing ' . $listingId,
+        'last_seen' => time(),
+      ])
+      ->execute();
+  }
+
+  private function seedMirroredOfferRow(EbayAccount $account, string $offerId, string $sku, string $listingId): void {
+    $this->container->get('database')->insert('bb_ebay_offer')
+      ->fields([
+        'account_id' => (int) $account->id(),
+        'offer_id' => $offerId,
+        'sku' => $sku,
+        'listing_id' => $listingId,
+        'status' => 'PUBLISHED',
+        'last_seen' => time(),
+      ])
+      ->execute();
   }
 
   private function createPrimaryAccount(): EbayAccount {
@@ -196,6 +309,8 @@ final class EbayLegacyMigrationServiceTest extends KernelTestBase {
     );
 
     return new EbayLegacyMigrationService(
+      $this->container->get('database'),
+      new EbayTradingLegacyClient($this->httpClient, $accountManager),
       $sellApiClient,
       $accountManager,
       $inventorySyncService,

@@ -1,0 +1,17 @@
+services:
+  bb_ebay_mirror.inventory_sync_service:
+    class: Drupal\bb_ebay_mirror\Service\EbayInventoryMirrorSyncService
+    arguments:
+      - '@drupal.ebay_infrastructure.sell_api'
+      - '@database'
+
+  bb_ebay_mirror.offer_sync_service:
+    class: Drupal\bb_ebay_mirror\Service\EbayOfferMirrorSyncService
+    arguments:
+      - '@drupal.ebay_infrastructure.sell_api'
+      - '@database'
+
+  bb_ebay_mirror.audit_service:
+    class: Drupal\bb_ebay_mirror\Service\EbayMirrorAuditService
+    arguments:
+      - '@database'

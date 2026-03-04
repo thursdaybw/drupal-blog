@@ -533,6 +533,177 @@ final class EbayMirrorAuditService {
     return $rows;
   }
 
+  /**
+   * Find legacy listings whose SKU is shared by more than one legacy listing.
+   *
+   * These rows are not clean migration candidates because Sell inventory is
+   * keyed by SKU. If more than one legacy listing shares the same SKU, the
+   * migration path needs extra handling first.
+   *
+   * @return array<int,array{
+   *   sku:string,
+   *   legacy_listing_count:int,
+   *   ebay_listing_ids:string[],
+   *   titles:string[],
+   *   listing_statuses:string[]
+   * }>
+   */
+  public function findLegacyListingsWithDuplicateSku(int $accountId): array {
+    $query = $this->database->select('bb_ebay_legacy_listing', 'legacy');
+    $query->addExpression('COUNT(*)', 'legacy_listing_count');
+    $query->fields('legacy', ['sku']);
+    $query->condition('legacy.account_id', $accountId);
+    $query->isNotNull('legacy.sku');
+    $query->where("TRIM(legacy.sku) <> ''");
+    $query->groupBy('legacy.sku');
+    $query->having('COUNT(*) > 1');
+    $query->orderBy('legacy.sku', 'ASC');
+
+    $duplicateSkuResults = $query->execute()->fetchAll();
+    $rows = [];
+
+    foreach ($duplicateSkuResults as $duplicateSkuResult) {
+      $sku = (string) ($duplicateSkuResult->sku ?? '');
+      $listingRows = $this->database->select('bb_ebay_legacy_listing', 'legacy')
+        ->fields('legacy', ['ebay_listing_id', 'title', 'listing_status'])
+        ->condition('account_id', $accountId)
+        ->condition('sku', $sku)
+        ->orderBy('ebay_listing_id', 'ASC')
+        ->execute()
+        ->fetchAll();
+
+      $ebayListingIds = [];
+      $titles = [];
+      $listingStatuses = [];
+
+      foreach ($listingRows as $listingRow) {
+        $ebayListingIds[] = (string) ($listingRow->ebay_listing_id ?? '');
+        $titles[] = $this->normalizeNullableString($listingRow->title ?? NULL) ?? 'Untitled legacy listing';
+        $listingStatuses[] = $this->normalizeNullableString($listingRow->listing_status ?? NULL) ?? 'unknown';
+      }
+
+      $rows[] = [
+        'sku' => $sku,
+        'legacy_listing_count' => (int) ($duplicateSkuResult->legacy_listing_count ?? 0),
+        'ebay_listing_ids' => $ebayListingIds,
+        'titles' => $titles,
+        'listing_statuses' => $listingStatuses,
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * Find legacy listings that have no usable SKU.
+   *
+   * These rows are blocked for migration because Sell inventory needs a SKU.
+   *
+   * @return array<int,array{
+   *   ebay_listing_id:string,
+   *   sku:?string,
+   *   title:?string,
+   *   ebay_listing_started_at:?int,
+   *   listing_status:?string
+   * }>
+   */
+  public function findLegacyListingsMissingSku(int $accountId): array {
+    $query = $this->database->select('bb_ebay_legacy_listing', 'legacy');
+    $query->fields('legacy', [
+      'ebay_listing_id',
+      'sku',
+      'title',
+      'ebay_listing_started_at',
+      'listing_status',
+    ]);
+    $query->condition('legacy.account_id', $accountId);
+    $query->where('(legacy.sku IS NULL OR TRIM(legacy.sku) = \'\')');
+    $query->orderBy('legacy.ebay_listing_id', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rows = [];
+
+    foreach ($results as $result) {
+      $rows[] = [
+        'ebay_listing_id' => (string) ($result->ebay_listing_id ?? ''),
+        'sku' => $this->normalizeNullableString($result->sku ?? NULL),
+        'title' => $this->normalizeNullableString($result->title ?? NULL),
+        'ebay_listing_started_at' => $this->normalizeNullableInt($result->ebay_listing_started_at ?? NULL),
+        'listing_status' => $this->normalizeNullableString($result->listing_status ?? NULL),
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * Find legacy listings that are clean candidates for Sell migration.
+   *
+   * Ready means:
+   * - visible in the legacy mirror
+   * - not already visible in the Sell offer mirror
+   * - has a usable SKU
+   * - does not share that SKU with another legacy listing
+   *
+   * @return array<int,array{
+   *   ebay_listing_id:string,
+   *   sku:string,
+   *   title:?string,
+   *   ebay_listing_started_at:?int,
+   *   listing_status:?string
+   * }>
+   */
+  public function findLegacyListingsReadyToMigrate(int $accountId): array {
+    $duplicateSkuQuery = $this->database->select('bb_ebay_legacy_listing', 'dup');
+    $duplicateSkuQuery->addExpression('dup.sku', 'sku');
+    $duplicateSkuQuery->condition('dup.account_id', $accountId);
+    $duplicateSkuQuery->isNotNull('dup.sku');
+    $duplicateSkuQuery->where("TRIM(dup.sku) <> ''");
+    $duplicateSkuQuery->groupBy('dup.sku');
+    $duplicateSkuQuery->having('COUNT(*) > 1');
+
+    $query = $this->database->select('bb_ebay_legacy_listing', 'legacy');
+    $query->leftJoin(
+      'bb_ebay_offer',
+      'offer',
+      'offer.account_id = legacy.account_id AND offer.listing_id = legacy.ebay_listing_id'
+    );
+    $query->leftJoin(
+      $duplicateSkuQuery,
+      'duplicate_sku',
+      'duplicate_sku.sku = legacy.sku'
+    );
+
+    $query->fields('legacy', [
+      'ebay_listing_id',
+      'sku',
+      'title',
+      'ebay_listing_started_at',
+      'listing_status',
+    ]);
+    $query->condition('legacy.account_id', $accountId);
+    $query->isNull('offer.offer_id');
+    $query->isNotNull('legacy.sku');
+    $query->where("TRIM(legacy.sku) <> ''");
+    $query->isNull('duplicate_sku.sku');
+    $query->orderBy('legacy.ebay_listing_id', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rows = [];
+
+    foreach ($results as $result) {
+      $rows[] = [
+        'ebay_listing_id' => (string) ($result->ebay_listing_id ?? ''),
+        'sku' => (string) ($result->sku ?? ''),
+        'title' => $this->normalizeNullableString($result->title ?? NULL),
+        'ebay_listing_started_at' => $this->normalizeNullableInt($result->ebay_listing_started_at ?? NULL),
+        'listing_status' => $this->normalizeNullableString($result->listing_status ?? NULL),
+      ];
+    }
+
+    return $rows;
+  }
+
   private function extractSkuIdentifier(string $sku): ?string {
     $marker = 'ai-book-';
     $position = strrpos($sku, $marker);

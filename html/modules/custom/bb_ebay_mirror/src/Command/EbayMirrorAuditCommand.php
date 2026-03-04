@@ -341,6 +341,116 @@ final class EbayMirrorAuditCommand extends DrushCommands {
     }
   }
 
+  /**
+   * Audit legacy listings that share duplicate SKUs.
+   *
+   * @command bb-ebay-mirror:audit-legacy-duplicate-sku
+   */
+  public function auditLegacyDuplicateSku(?int $accountId = NULL): void {
+    $account = $this->resolveAccount($accountId);
+    $rows = $this->auditService->findLegacyListingsWithDuplicateSku((int) $account->id());
+
+    if ($rows === []) {
+      $this->output()->writeln(sprintf(
+        'No legacy listings share duplicate SKUs for account %d (%s).',
+        (int) $account->id(),
+        (string) $account->label()
+      ));
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Found %d duplicate legacy SKU groups for account %d (%s):',
+      count($rows),
+      (int) $account->id(),
+      (string) $account->label()
+    ));
+
+    foreach ($rows as $row) {
+      $this->output()->writeln(sprintf(
+        '- sku %s | listingCount %d | listingIds %s | statuses %s | titles %s',
+        $row['sku'],
+        $row['legacy_listing_count'],
+        implode(', ', $row['ebay_listing_ids']),
+        implode(', ', $row['listing_statuses']),
+        implode(' || ', $row['titles'])
+      ));
+    }
+  }
+
+  /**
+   * Audit legacy listings that have no usable SKU.
+   *
+   * @command bb-ebay-mirror:audit-legacy-missing-sku
+   */
+  public function auditLegacyMissingSku(?int $accountId = NULL): void {
+    $account = $this->resolveAccount($accountId);
+    $rows = $this->auditService->findLegacyListingsMissingSku((int) $account->id());
+
+    if ($rows === []) {
+      $this->output()->writeln(sprintf(
+        'No legacy listings are missing a usable SKU for account %d (%s).',
+        (int) $account->id(),
+        (string) $account->label()
+      ));
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Found %d legacy listings with no usable SKU for account %d (%s):',
+      count($rows),
+      (int) $account->id(),
+      (string) $account->label()
+    ));
+
+    foreach ($rows as $row) {
+      $this->output()->writeln(sprintf(
+        '- listingId %s | started %s | status %s | %s',
+        $row['ebay_listing_id'],
+        $row['ebay_listing_started_at'] === NULL ? 'unknown' : gmdate('Y-m-d H:i:s', $row['ebay_listing_started_at']),
+        $row['listing_status'] ?? 'unknown',
+        $row['title'] ?? 'Untitled legacy listing'
+      ));
+    }
+  }
+
+  /**
+   * Audit legacy listings that are clean migration candidates.
+   *
+   * @command bb-ebay-mirror:audit-legacy-ready-to-migrate
+   */
+  public function auditLegacyReadyToMigrate(?int $accountId = NULL): void {
+    $account = $this->resolveAccount($accountId);
+    $rows = $this->auditService->findLegacyListingsReadyToMigrate((int) $account->id());
+
+    if ($rows === []) {
+      $this->output()->writeln(sprintf(
+        'No legacy listings are currently ready to migrate for account %d (%s).',
+        (int) $account->id(),
+        (string) $account->label()
+      ));
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Found %d legacy listings ready to migrate for account %d (%s):',
+      count($rows),
+      (int) $account->id(),
+      (string) $account->label()
+    ));
+
+    foreach ($rows as $row) {
+      $this->output()->writeln(sprintf(
+        '- listingId %s | sku %s | started %s | status %s | %s',
+        $row['ebay_listing_id'],
+        $row['sku'],
+        $row['ebay_listing_started_at'] === NULL ? 'unknown' : gmdate('Y-m-d H:i:s', $row['ebay_listing_started_at']),
+        $row['listing_status'] ?? 'unknown',
+        $row['title'] ?? 'Untitled legacy listing'
+      ));
+    }
+  }
+
   private function resolveAccount(?int $accountId): EbayAccount {
     $storage = $this->entityTypeManager->getStorage('ebay_account');
 

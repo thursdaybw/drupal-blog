@@ -272,6 +272,57 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
     $this->assertSame('PUBLISHED', $migratedRows[0]['mirrored_offer_status']);
   }
 
+  public function testFindLegacyListingsWithDuplicateSku(): void {
+    $this->seedLegacyListing(1, '176577811710', '2024 September A01', 'Legacy unmigrated listing', 1726406100, 'Active');
+    $this->seedLegacyListing(1, '176582430935', '2024 September A01', 'Legacy migrated listing', 1726406100, 'Active');
+    $this->seedLegacyListing(1, '176779515895', 'DVDWB01', 'Unique legacy listing', 1754000000, 'Active');
+
+    $rows = $this->auditService->findLegacyListingsWithDuplicateSku(1);
+
+    $this->assertCount(1, $rows);
+    $this->assertSame('2024 September A01', $rows[0]['sku']);
+    $this->assertSame(2, $rows[0]['legacy_listing_count']);
+    $this->assertSame(['176577811710', '176582430935'], $rows[0]['ebay_listing_ids']);
+    $this->assertSame(['Active', 'Active'], $rows[0]['listing_statuses']);
+    $this->assertSame([
+      'Legacy unmigrated listing',
+      'Legacy migrated listing',
+    ], $rows[0]['titles']);
+  }
+
+  public function testFindLegacyListingsMissingSku(): void {
+    $this->seedLegacyListing(1, '176577811710', '', 'Blank SKU legacy listing', 1726406100, 'Active');
+    $this->seedLegacyListing(1, '176582430935', '   ', 'Whitespace SKU legacy listing', 1726406200, 'Active');
+    $this->seedLegacyListing(1, '176779515895', 'DVDWB01', 'Unique legacy listing', 1754000000, 'Active');
+
+    $rows = $this->auditService->findLegacyListingsMissingSku(1);
+
+    $this->assertCount(2, $rows);
+    $this->assertSame('176577811710', $rows[0]['ebay_listing_id']);
+    $this->assertNull($rows[0]['sku']);
+    $this->assertSame('Blank SKU legacy listing', $rows[0]['title']);
+    $this->assertSame('176582430935', $rows[1]['ebay_listing_id']);
+    $this->assertNull($rows[1]['sku']);
+    $this->assertSame('Whitespace SKU legacy listing', $rows[1]['title']);
+  }
+
+  public function testFindLegacyListingsReadyToMigrate(): void {
+    $this->seedLegacyListing(1, '176577811710', '2024 September A01', 'Duplicate legacy listing one', 1726406100, 'Active');
+    $this->seedLegacyListing(1, '176582430935', '2024 September A01', 'Duplicate legacy listing two', 1726406200, 'Active');
+    $this->seedLegacyListing(1, '176779515895', '', 'Blank SKU legacy listing', 1754000000, 'Active');
+    $this->seedLegacyListing(1, '176700000001', 'READY-SKU-1', 'Ready legacy listing', 1755000000, 'Active');
+    $this->seedLegacyListing(1, '176700000002', 'MIGRATED-SKU-1', 'Already migrated legacy listing', 1755000100, 'Active');
+    $this->seedMirroredOffer(1, 'offer-already-migrated', 'MIGRATED-SKU-1', '176700000002', 'ACTIVE', 'PUBLISHED');
+
+    $rows = $this->auditService->findLegacyListingsReadyToMigrate(1);
+
+    $this->assertCount(1, $rows);
+    $this->assertSame('176700000001', $rows[0]['ebay_listing_id']);
+    $this->assertSame('READY-SKU-1', $rows[0]['sku']);
+    $this->assertSame('Ready legacy listing', $rows[0]['title']);
+    $this->assertSame(1755000000, $rows[0]['ebay_listing_started_at']);
+  }
+
   private function createBookListing(
     string $ebayTitle,
     string $fieldTitle,

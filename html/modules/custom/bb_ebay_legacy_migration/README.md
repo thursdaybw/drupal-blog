@@ -14,6 +14,7 @@ What this module should own
 - Small batch migration commands.
 - Small adoption commands that bring selected migrated listings into
   `bb_ai_listing`.
+- Migration provenance and run logging.
 - Pilot migration plans and notes.
 - Resyncing the mirror after each migration batch.
 - Legacy provenance rows that link adopted Drupal listings back to old eBay
@@ -28,6 +29,9 @@ Current decision
 - We will keep Trading API use narrow and read-only for legacy listing discovery.
 - We will keep Sell API as the migration path.
 - We will inspect migrated results through `bb_ebay_mirror`.
+- We will classify legacy listings locally before touching live migration.
+- Cleanup for blocked rows should happen inside the migration pipeline, not as a
+  separate manual pre-pass.
 
 ## Legacy listing mirror
 
@@ -62,6 +66,28 @@ What it does
 - syncs active legacy listings into `bb_ebay_legacy_listing`
 - deletes rows that are no longer present in the active legacy set
 
+What this mirror is for
+- it is a local cache of listings visible through Trading read access
+- it is not the same thing as "unmigrated listings"
+- Sell-created and already-migrated listings also appear here
+- migration state is worked out by comparing this table to the Sell mirror
+
+Current classification work
+- `bb_ebay_mirror` now classifies the legacy mirror into buckets:
+  - legacy listing with mirrored Sell offer
+  - legacy listing with no mirrored Sell offer
+  - legacy listing with duplicate SKU
+  - legacy listing with missing SKU
+  - legacy listing ready to migrate
+
+Why that matters
+- we do not want to hit the live Trading API every time we ask migration
+  readiness questions
+- the mirror gives us a local, repeatable way to sort the backlog into:
+  - ready now
+  - blocked by duplicate SKU
+  - blocked by missing SKU
+
 Current migration rule
 1. Pick small batches of legacy eBay Item IDs.
 2. Call `bulkMigrateListing` with one to five listing IDs.
@@ -69,6 +95,15 @@ Current migration rule
    - sync mirrored inventory
    - sync mirrored offers
 4. Inspect the mirror and reports before moving to the next batch.
+
+What we learned after building the legacy mirror
+- the next real migration step is not "migrate everything"
+- the next real step is to classify the backlog and then build one pipeline that:
+  - checks migration state
+  - normalizes duplicate SKUs when needed
+  - migrates
+  - resyncs mirrors
+  - records what changed
 
 Why the mirror matters first
 - It lets us see exactly what the migration created.
@@ -167,6 +202,43 @@ Current migration rule
 - sync the mirror after each batch
 - inspect the mirror before widening the migration
 
+What the pilot changed
+- we now know duplicate legacy SKUs are the first true migration blocker
+- this is no longer a guess
+- the migration pipeline must handle duplicate SKUs explicitly
+- "ready to migrate" and "blocked" are now real buckets, not just ideas
+
+## Current migration-readiness buckets
+
+These buckets now exist in `bb_ebay_mirror` and on `/admin/ebay-mirror/report`.
+
+1. Legacy listings with mirrored Sell offer
+   - already visible in the Sell model
+
+2. Legacy listings with no mirrored Sell offer
+   - not yet visible in the Sell model
+
+3. Legacy listings with duplicate SKU
+   - blocked
+   - not safe to bulk migrate as-is
+
+4. Legacy listings with missing SKU
+   - blocked
+   - no safe Sell migration path yet
+
+5. Legacy listings ready to migrate
+   - not yet in Sell
+   - has a usable SKU
+   - not in a duplicate legacy SKU group
+
+Current live state when this README was updated
+- legacy Trading mirror rows: `1963`
+- legacy migrated rows: `364`
+- legacy unmigrated rows: `1601`
+- legacy ready-to-migrate rows: `253`
+- legacy missing-SKU rows: `4`
+- duplicate-SKU legacy groups: many, expected from the old SKU scheme
+
 ## First adoption command
 
 Adopt one mirrored migrated eBay listing into `bb_ai_listing`:
@@ -184,7 +256,7 @@ What this first pass does
 
 What this first pass does not do
 - it does not use the old Trading API
-- it does not preserve original listing start date yet
+- it does not preserve original listing start date in local adoption yet
 - it does not infer bundle items
 - it does not support non-book adoption yet
 
@@ -199,15 +271,17 @@ The current system does not preserve the original legacy listing date.
 
 What is true right now
 - `bulkMigrateListing` does not return an original listing date in its response
-- `bb_ebay_mirror` does not currently store an original legacy listing date
-- `bb_ai_listing` does not currently capture the original eBay listing date for
-  adopted legacy listings
+- the Sell offer mirror does not expose the original legacy listing date
+- the legacy Trading mirror does store the original listing start time in
+  `bb_ebay_legacy_listing.ebay_listing_started_at`
+- the adoption command does not yet write that start time into
+  `bb_ebay_legacy_listing_link`
 
 What that means
-- if keeping the original legacy listing date matters, we need to make that an
-  explicit requirement and decide where to store it
-- for now, migration is focused on getting legacy listings into the Sell
-  Inventory model and into the local mirror cleanly
+- if keeping the original legacy listing date matters, the data source is now
+  clear: Trading read, not Sell mirror
+- we already have a place to store it: `bb_ebay_legacy_listing_link`
+- the missing work is wiring that value through the adoption pipeline
 
 ## Legacy provenance table
 
@@ -237,5 +311,20 @@ What it is for
 Current state
 - the schema exists
 - the first adoption command now writes to it
+- the first adoption command does not yet fill `ebay_listing_started_at`
 - legacy provenance stays in this table instead of adding migration-only fields
   directly onto `bb_ai_listing`
+
+## Next planned work
+
+1. Keep the classification audits current in `bb_ebay_mirror`
+2. Add migration run logging in this module
+3. Build a pipeline command that:
+   - reads one or more legacy listing IDs
+   - skips already migrated rows
+   - normalizes duplicate SKU rows when needed
+   - migrates through Sell API
+   - resyncs mirrors
+   - records old SKU, new SKU, result, and errors
+4. Wire original legacy `StartTime` into `bb_ebay_legacy_listing_link`
+5. Keep non-book listings mirror-only until a broader local listing model exists

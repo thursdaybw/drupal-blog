@@ -1,4 +1,16 @@
 services:
+  bb_ebay_legacy_migration.trading_legacy_client:
+    class: Drupal\bb_ebay_legacy_migration\Service\EbayTradingLegacyClient
+    arguments:
+      - '@http_client'
+      - '@drupal.ebay_infrastructure.account_manager'
+
+  bb_ebay_legacy_migration.legacy_listing_mirror_sync_service:
+    class: Drupal\bb_ebay_legacy_migration\Service\EbayLegacyListingMirrorSyncService
+    arguments:
+      - '@bb_ebay_legacy_migration.trading_legacy_client'
+      - '@database'
+
   bb_ebay_legacy_migration.migration_service:
     class: Drupal\bb_ebay_legacy_migration\Service\EbayLegacyMigrationService
     arguments:
@@ -6,3 +18,13 @@ services:
       - '@drupal.ebay_infrastructure.account_manager'
       - '@bb_ebay_mirror.inventory_sync_service'
       - '@bb_ebay_mirror.offer_sync_service'
+
+  bb_ebay_legacy_migration.adoption_service:
+    class: Drupal\bb_ebay_legacy_migration\Service\EbayLegacyListingAdoptionService
+    arguments:
+      - '@database'
+      - '@entity_type.manager'
+      - '@entity_field.manager'
+      - '@drupal.ebay_infrastructure.account_manager'
+      - '@ai_listing.inventory_sku_resolver'
+      - '@drupal.listing_publishing.marketplace_publication_recorder'

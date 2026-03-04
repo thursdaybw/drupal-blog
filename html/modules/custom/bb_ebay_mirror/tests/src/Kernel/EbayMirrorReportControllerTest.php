@@ -32,9 +32,11 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     'options',
     'bb_platform',
     'ai_listing',
+    'listing_publishing',
     'ebay_infrastructure',
     'ebay_connector',
     'bb_ebay_mirror',
+    'bb_ebay_legacy_migration',
   ];
 
   protected function setUp(): void {
@@ -45,6 +47,7 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installEntitySchema('ebay_account');
     $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);
+    $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing']);
     $this->installConfig(['field', 'ai_listing']);
 
     $this->createBookType();
@@ -64,6 +67,9 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->createPublication((int) $listing->id(), 'sku-missing', 'listing-11');
     $this->seedMirroredInventorySku(1, '2026 Mar BDMCC05 ai-book-MIRROR01');
     $this->seedMirroredOffer(1, 'offer-mirror', '2026 Mar BDMCC05 ai-book-MIRROR01');
+    $this->seedLegacyListing(1, '176577811710', '2024 September A01', 'Legacy unmigrated listing', 1726406100, 'Active');
+    $this->seedLegacyListing(1, '176582430935', '2024 September A01', 'Legacy migrated listing', 1726406100, 'Active');
+    $this->seedMirroredOffer(1, 'offer-legacy-migrated', '2024 September A01', '176582430935', 'ACTIVE', 'PUBLISHED');
 
     $controller = EbayMirrorReportController::create($this->container);
     $build = $controller->build();
@@ -76,11 +82,15 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertArrayHasKey('sku_link_mismatch', $build);
     $this->assertArrayHasKey('multiple_inventory', $build);
     $this->assertArrayHasKey('multiple_offers', $build);
+    $this->assertArrayHasKey('legacy_unmigrated', $build);
+    $this->assertArrayHasKey('legacy_migrated', $build);
 
     $this->assertSame('table', $build['missing_inventory']['table']['#type']);
     $this->assertSame('table', $build['sku_link_mismatch']['table']['#type']);
     $this->assertSame('table', $build['multiple_inventory']['table']['#type']);
     $this->assertSame('table', $build['multiple_offers']['table']['#type']);
+    $this->assertSame('table', $build['legacy_unmigrated']['table']['#type']);
+    $this->assertSame('table', $build['legacy_migrated']['table']['#type']);
 
     $missingInventoryRows = $build['missing_inventory']['table']['#rows'];
     $this->assertCount(1, $missingInventoryRows);
@@ -95,6 +105,16 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
 
     $this->assertSame('No rows in this bucket.', (string) $build['multiple_inventory']['table']['#empty']);
     $this->assertSame('No rows in this bucket.', (string) $build['multiple_offers']['table']['#empty']);
+
+    $legacyUnmigratedRows = $build['legacy_unmigrated']['table']['#rows'];
+    $this->assertCount(1, $legacyUnmigratedRows);
+    $this->assertSame('176577811710', (string) $legacyUnmigratedRows[0][0]);
+    $this->assertSame('2024 September A01', (string) $legacyUnmigratedRows[0][1]);
+
+    $legacyMigratedRows = $build['legacy_migrated']['table']['#rows'];
+    $this->assertCount(1, $legacyMigratedRows);
+    $this->assertSame('176582430935', (string) $legacyMigratedRows[0][0]);
+    $this->assertSame('offer-legacy-migrated', (string) $legacyMigratedRows[0][5]);
   }
 
   private function createProductionAccount(): void {
@@ -161,14 +181,43 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
       ->execute();
   }
 
-  private function seedMirroredOffer(int $accountId, string $offerId, string $sku): void {
+  private function seedMirroredOffer(
+    int $accountId,
+    string $offerId,
+    string $sku,
+    ?string $listingId = NULL,
+    string $listingStatus = 'UNPUBLISHED',
+    string $status = 'UNPUBLISHED',
+  ): void {
     $this->container->get('database')->insert('bb_ebay_offer')
       ->fields([
         'account_id' => $accountId,
         'offer_id' => $offerId,
         'sku' => $sku,
-        'listing_status' => 'UNPUBLISHED',
-        'status' => 'UNPUBLISHED',
+        'listing_id' => $listingId,
+        'listing_status' => $listingStatus,
+        'status' => $status,
+        'last_seen' => time(),
+      ])
+      ->execute();
+  }
+
+  private function seedLegacyListing(
+    int $accountId,
+    string $ebayListingId,
+    string $sku,
+    string $title,
+    int $startedAt,
+    string $listingStatus,
+  ): void {
+    $this->container->get('database')->insert('bb_ebay_legacy_listing')
+      ->fields([
+        'account_id' => $accountId,
+        'ebay_listing_id' => $ebayListingId,
+        'sku' => $sku,
+        'title' => $title,
+        'ebay_listing_started_at' => $startedAt,
+        'listing_status' => $listingStatus,
         'last_seen' => time(),
       ])
       ->execute();

@@ -1,0 +1,164 @@
+<?php
+
+/**
+ * @file
+ * Install file for the BB eBay legacy migration module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function bb_ebay_legacy_migration_schema(): array {
+  $schema['bb_ebay_legacy_listing'] = [
+    'description' => 'Read-only mirror of active legacy eBay listings from the Trading API.',
+    'fields' => [
+      'id' => [
+        'description' => 'Primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'account_id' => [
+        'description' => 'Owning eBay account entity ID.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'ebay_listing_id' => [
+        'description' => 'Legacy eBay Item ID.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+      ],
+      'sku' => [
+        'description' => 'Legacy seller SKU.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ],
+      'title' => [
+        'description' => 'Legacy eBay listing title.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ],
+      'ebay_listing_started_at' => [
+        'description' => 'Legacy eBay listing start time as a Unix timestamp.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ],
+      'listing_status' => [
+        'description' => 'Legacy listing status from the Trading API.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => FALSE,
+      ],
+      'primary_category_id' => [
+        'description' => 'Legacy primary category ID.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => FALSE,
+      ],
+      'raw_xml' => [
+        'description' => 'Raw XML fragment for the legacy listing item.',
+        'type' => 'text',
+        'size' => 'big',
+        'not null' => FALSE,
+      ],
+      'last_seen' => [
+        'description' => 'Unix timestamp when this row was last seen during legacy sync.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+    ],
+    'primary key' => ['id'],
+    'unique keys' => [
+      'account_listing' => ['account_id', 'ebay_listing_id'],
+    ],
+    'indexes' => [
+      'account_id' => ['account_id'],
+      'sku' => ['sku'],
+      'listing_status' => ['listing_status'],
+      'last_seen' => ['last_seen'],
+    ],
+  ];
+
+  $schema['bb_ebay_legacy_listing_link'] = [
+    'description' => 'Links local AI listings back to legacy eBay listing provenance.',
+    'fields' => [
+      'id' => [
+        'description' => 'Primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'listing' => [
+        'description' => 'Local bb_ai_listing entity ID.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'account_id' => [
+        'description' => 'Owning eBay account entity ID.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'origin_type' => [
+        'description' => 'How this listing entered the system, for example legacy_ebay_migrated.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => 'legacy_ebay_migrated',
+      ],
+      'ebay_listing_id' => [
+        'description' => 'Original legacy eBay Item ID.',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+      ],
+      'ebay_listing_started_at' => [
+        'description' => 'Original legacy eBay listing start time as a Unix timestamp.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ],
+      'source_sku' => [
+        'description' => 'Legacy seller SKU seen during migration or audit.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ],
+      'created' => [
+        'description' => 'Unix timestamp when the row was created.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'changed' => [
+        'description' => 'Unix timestamp when the row was last changed.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+    ],
+    'primary key' => ['id'],
+    'unique keys' => [
+      'listing' => ['listing'],
+      'ebay_listing_id' => ['ebay_listing_id'],
+    ],
+    'indexes' => [
+      'account_id' => ['account_id'],
+      'origin_type' => ['origin_type'],
+    ],
+  ];
+
+  return $schema;
+}

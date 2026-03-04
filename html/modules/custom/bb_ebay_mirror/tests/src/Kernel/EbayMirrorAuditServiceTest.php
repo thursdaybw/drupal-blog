@@ -34,9 +34,11 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
     'options',
     'bb_platform',
     'ai_listing',
+    'listing_publishing',
     'ebay_infrastructure',
     'ebay_connector',
     'bb_ebay_mirror',
+    'bb_ebay_legacy_migration',
   ];
 
   private EbayMirrorAuditService $auditService;
@@ -47,6 +49,7 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);
+    $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing']);
     $this->installConfig(['field', 'ai_listing']);
 
     $this->createBookType();
@@ -249,6 +252,26 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
     ], $rows[0]['mirrored_skus']);
   }
 
+  public function testFindLegacyListingsMissingAndHavingMirroredSellOffers(): void {
+    $this->seedLegacyListing(1, '176577811710', '2024 September A01', 'Legacy unmigrated listing', 1726406100, 'Active');
+    $this->seedLegacyListing(1, '176582430935', '2024 September A01', 'Legacy migrated listing', 1726406100, 'Active');
+    $this->seedMirroredOffer(1, 'offer-legacy-migrated', '2024 September A01', '176582430935', 'ACTIVE', 'PUBLISHED');
+
+    $missingRows = $this->auditService->findLegacyListingsMissingMirroredSellOffer(1);
+    $migratedRows = $this->auditService->findLegacyListingsWithMirroredSellOffer(1);
+
+    $this->assertCount(1, $missingRows);
+    $this->assertSame('176577811710', $missingRows[0]['ebay_listing_id']);
+    $this->assertSame('2024 September A01', $missingRows[0]['sku']);
+    $this->assertSame('Legacy unmigrated listing', $missingRows[0]['title']);
+    $this->assertSame(1726406100, $missingRows[0]['ebay_listing_started_at']);
+
+    $this->assertCount(1, $migratedRows);
+    $this->assertSame('176582430935', $migratedRows[0]['ebay_listing_id']);
+    $this->assertSame('offer-legacy-migrated', $migratedRows[0]['mirrored_offer_id']);
+    $this->assertSame('PUBLISHED', $migratedRows[0]['mirrored_offer_status']);
+  }
+
   private function createBookListing(
     string $ebayTitle,
     string $fieldTitle,
@@ -318,6 +341,27 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
         'listing_id' => $listingId,
         'listing_status' => $listingStatus,
         'status' => $status,
+        'last_seen' => time(),
+      ])
+      ->execute();
+  }
+
+  private function seedLegacyListing(
+    int $accountId,
+    string $ebayListingId,
+    string $sku,
+    string $title,
+    int $startedAt,
+    string $listingStatus,
+  ): void {
+    $this->container->get('database')->insert('bb_ebay_legacy_listing')
+      ->fields([
+        'account_id' => $accountId,
+        'ebay_listing_id' => $ebayListingId,
+        'sku' => $sku,
+        'title' => $title,
+        'ebay_listing_started_at' => $startedAt,
+        'listing_status' => $listingStatus,
         'last_seen' => time(),
       ])
       ->execute();

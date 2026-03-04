@@ -5,25 +5,62 @@ Sell Inventory model.
 
 Why this exists
 - We do not want to support the old eBay Trading API as a normal runtime path.
-- We do need a narrow way to migrate old listings into the Sell Inventory model.
-- This module is the migration boundary for that one job.
+- We do need a narrow way to read and migrate old listings into the Sell Inventory model.
+- This module is the boundary for that one job.
 
 What this module should own
+- Read-only legacy listing mirror sync from the Trading API.
 - `bulkMigrateListing` calls against the Sell Inventory API.
 - Small batch migration commands.
+- Small adoption commands that bring selected migrated listings into
+  `bb_ai_listing`.
 - Pilot migration plans and notes.
 - Resyncing the mirror after each migration batch.
+- Legacy provenance rows that link adopted Drupal listings back to old eBay
+  Item IDs.
 
 What this module should not own
 - Normal eBay publishing.
 - Normal eBay mirror sync.
-- Importing migrated listings into `bb_ai_listing`.
 - Long-term support for the old Trading API.
 
 Current decision
-- We will not add old Trading API support just to audit legacy listings.
-- We will migrate using Sell API `bulkMigrateListing` only.
+- We will keep Trading API use narrow and read-only for legacy listing discovery.
+- We will keep Sell API as the migration path.
 - We will inspect migrated results through `bb_ebay_mirror`.
+
+## Legacy listing mirror
+
+This module now owns a local mirror of active legacy eBay listings:
+
+- `bb_ebay_legacy_listing`
+
+Why this exists
+- we need a local way to see which old listings still live only in the traditional API
+- we need a local way to compare legacy listings against the Sell mirror
+- we do not want to loop through the live traditional API every time we ask a migration question
+
+What it stores
+- eBay Item ID
+- eBay account ID
+- seller SKU
+- title
+- original listing start time
+- listing status
+- primary category ID
+- raw XML
+- last seen
+
+Current sync command
+
+```bash
+ddev drush bb-ebay-legacy-migration:sync-legacy-listings
+```
+
+What it does
+- calls the Trading API read-only
+- syncs active legacy listings into `bb_ebay_legacy_listing`
+- deletes rows that are no longer present in the active legacy set
 
 Current migration rule
 1. Pick small batches of legacy eBay Item IDs.
@@ -130,6 +167,32 @@ Current migration rule
 - sync the mirror after each batch
 - inspect the mirror before widening the migration
 
+## First adoption command
+
+Adopt one mirrored migrated eBay listing into `bb_ai_listing`:
+
+```bash
+ddev drush bb-ebay-legacy-migration:adopt-book 176582430935
+```
+
+What this first pass does
+- loads one mirrored migrated eBay listing by eBay Item ID
+- creates one local `bb_ai_listing` row with bundle type `book`
+- creates one local active SKU row using the mirrored SKU
+- creates one local published eBay publication row
+- writes one provenance row to `bb_ebay_legacy_listing_link`
+
+What this first pass does not do
+- it does not use the old Trading API
+- it does not preserve original listing start date yet
+- it does not infer bundle items
+- it does not support non-book adoption yet
+
+Current adoption rule
+- keep the first pass conservative
+- use mirrored title, description, price, condition, and aspects where present
+- leave anything missing for manual review later
+
 ## Listing date gap
 
 The current system does not preserve the original legacy listing date.
@@ -145,3 +208,34 @@ What that means
   explicit requirement and decide where to store it
 - for now, migration is focused on getting legacy listings into the Sell
   Inventory model and into the local mirror cleanly
+
+## Legacy provenance table
+
+This module now owns a small side table:
+
+- `bb_ebay_legacy_listing_link`
+
+Why this is a table and not base fields on `bb_ai_listing`
+- the data is provenance, not core listing truth
+- it is specific to one ingress path
+- it would muddy the main listing entity if stored as normal base fields
+
+What it stores
+- local `bb_ai_listing` ID
+- eBay account ID
+- origin type
+- original legacy eBay Item ID
+- original legacy eBay listing start time
+- legacy source SKU
+
+What it is for
+- preserving migration provenance
+- preserving original listing start date if we later fetch it from the
+  traditional API
+- linking adopted Drupal listings back to the legacy eBay record they came from
+
+Current state
+- the schema exists
+- the first adoption command now writes to it
+- legacy provenance stays in this table instead of adding migration-only fields
+  directly onto `bb_ai_listing`

@@ -96,6 +96,19 @@ Current migration rule
    - sync mirrored offers
 4. Inspect the mirror and reports before moving to the next batch.
 
+Current one-listing pipeline rule
+1. Load one legacy listing from the local legacy mirror.
+2. If a mirrored Sell offer already exists for that Item ID, stop as
+   `already_migrated`.
+3. If the legacy SKU is missing:
+   - generate `legacy-ebay-<ItemID>`
+   - write that SKU back to the legacy listing through the Trading API
+4. If the legacy SKU is duplicated:
+   - append a deterministic `-M<n>` suffix
+   - write that SKU back to the legacy listing through the Trading API
+5. Call `bulkMigrateListing` for that one Item ID.
+6. Resync Sell inventory and offer mirrors.
+
 What we learned after building the legacy mirror
 - the next real migration step is not "migrate everything"
 - the next real step is to classify the backlog and then build one pipeline that:
@@ -156,7 +169,7 @@ Questions this pilot should answer
 Migrate one or more legacy eBay Item IDs into the Sell Inventory model:
 
 ```bash
-ddev drush bb-ebay-legacy-migration:migrate-listings "176577811710,176582430935,176604590528,176604596280,176779515895"
+ddev drush bb-ebay-legacy-migration:convert-listings-to-sell-bulk "176577811710,176582430935,176604590528,176604596280,176779515895"
 ```
 
 How it works
@@ -208,6 +221,42 @@ What the pilot changed
 - the migration pipeline must handle duplicate SKUs explicitly
 - "ready to migrate" and "blocked" are now real buckets, not just ideas
 
+## One-listing pipeline command
+
+Normalize one legacy listing SKU if needed, then migrate it immediately:
+
+```bash
+ddev drush bb-ebay-legacy-migration:prepare-and-convert-listing-to-sell 176577811710
+```
+
+What it does
+- loads one listing from `bb_ebay_legacy_listing`
+- skips if that Item ID is already visible in `bb_ebay_offer`
+- generates `legacy-ebay-<ItemID>` when SKU is missing
+- appends a deterministic `-M<n>` suffix when SKU is duplicated
+- updates the legacy listing SKU through Trading API only when needed
+- migrates that one Item ID through Sell API
+- resyncs the Sell mirrors immediately
+
+## Batch pipeline command
+
+Run the one-listing pipeline over the current "ready to migrate" bucket:
+
+```bash
+ddev drush bb-ebay-legacy-migration:prepare-and-convert-ready-batch-to-sell --limit=25
+```
+
+Dry run preview:
+
+```bash
+ddev drush bb-ebay-legacy-migration:prepare-and-convert-ready-batch-to-sell --limit=25 --dry-run
+```
+
+What this does
+- reads listing IDs from the local "ready to migrate" audit set
+- runs the normalize-and-migrate pipeline per listing
+- prints a run summary bucketed by outcome
+
 ## Current migration-readiness buckets
 
 These buckets now exist in `bb_ebay_mirror` and on `/admin/ebay-mirror/report`.
@@ -224,7 +273,7 @@ These buckets now exist in `bb_ebay_mirror` and on `/admin/ebay-mirror/report`.
 
 4. Legacy listings with missing SKU
    - blocked
-   - no safe Sell migration path yet
+   - migration pipeline must generate a migration SKU first
 
 5. Legacy listings ready to migrate
    - not yet in Sell
@@ -323,8 +372,28 @@ Current state
    - reads one or more legacy listing IDs
    - skips already migrated rows
    - normalizes duplicate SKU rows when needed
+   - generates migration SKUs for missing-SKU rows
    - migrates through Sell API
    - resyncs mirrors
    - records old SKU, new SKU, result, and errors
 4. Wire original legacy `StartTime` into `bb_ebay_legacy_listing_link`
 5. Keep non-book listings mirror-only until a broader local listing model exists
+
+## Current migration mutation rules
+
+These rules are for the migration pipeline only.
+
+Duplicate legacy SKU
+- keep the original SKU shape as much as possible
+- append a deterministic suffix to make it unique
+- migrate immediately after the SKU update
+
+Missing legacy SKU
+- generate a new temporary migration SKU
+- current format:
+  - `legacy-ebay-<ItemID>`
+- example:
+  - `legacy-ebay-177300004039`
+- this is intentionally obvious and temporary
+- after the item is found and properly adopted, it can later be republished with
+  a real operational SKU

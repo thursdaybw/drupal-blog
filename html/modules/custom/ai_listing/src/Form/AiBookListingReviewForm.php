@@ -77,6 +77,22 @@ final class AiBookListingReviewForm extends AiListingReviewFormBase {
     }
   }
 
+  protected function validatePhotoSelections(FormStateInterface $form_state): void {
+    $listingImageItems = (array) $form_state->getValue(['photos', 'items', 'listing_image_items'], []);
+    if ($listingImageItems === []) {
+      $form_state->setErrorByName('photos][items][listing_image_items', 'Select at least one image to use for metadata.');
+      return;
+    }
+
+    foreach ($listingImageItems as $postedItem) {
+      if (is_array($postedItem) && !empty($postedItem['is_metadata_source'])) {
+        return;
+      }
+    }
+
+    $form_state->setErrorByName('photos][items][listing_image_items', 'Select at least one image to use for metadata.');
+  }
+
   protected function getAddRouteName(): string {
     return 'ai_listing.add';
   }

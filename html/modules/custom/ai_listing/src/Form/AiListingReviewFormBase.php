@@ -353,6 +353,10 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     return $listing->label() ?: 'Review Listing';
   }
 
+  public function validateForm(array &$form, FormStateInterface $form_state): void {
+    $this->validatePhotoSelections($form_state);
+  }
+
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     /** @var \Drupal\ai_listing\Entity\BbAiListing $listing */
     $listing = $form_state->get('listing');
@@ -791,6 +795,8 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
   abstract protected function buildPhotoItems(BbAiListing $listing): array;
 
   abstract protected function savePhotoSelections(BbAiListing $listing, FormStateInterface $form_state): void;
+
+  abstract protected function validatePhotoSelections(FormStateInterface $form_state): void;
 
   abstract protected function getAddRouteName(): string;
 

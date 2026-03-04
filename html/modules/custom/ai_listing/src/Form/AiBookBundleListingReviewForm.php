@@ -70,6 +70,39 @@ final class AiBookBundleListingReviewForm extends AiListingReviewFormBase {
     }
   }
 
+  protected function validatePhotoSelections(FormStateInterface $form_state): void {
+    $bundleItemPostedItems = (array) $form_state->getValue(['photos', 'items', 'bundle_item_images', 'items'], []);
+    if ($bundleItemPostedItems === []) {
+      $form_state->setErrorByName('photos][items][bundle_item_images][items', 'Each bundle item must have at least one image selected for metadata.');
+      return;
+    }
+
+    foreach ($bundleItemPostedItems as $bundleItemKey => $bundleItem) {
+      if (!is_array($bundleItem)) {
+        continue;
+      }
+
+      $postedImages = (array) ($bundleItem['images'] ?? []);
+      $hasMetadataSource = FALSE;
+
+      foreach ($postedImages as $postedImage) {
+        if (is_array($postedImage) && !empty($postedImage['is_metadata_source'])) {
+          $hasMetadataSource = TRUE;
+          break;
+        }
+      }
+
+      if ($hasMetadataSource) {
+        continue;
+      }
+
+      $form_state->setErrorByName(
+        'photos][items][bundle_item_images][items][' . $bundleItemKey . '][images',
+        'Each bundle item must have at least one image selected for metadata.'
+      );
+    }
+  }
+
   protected function getAddRouteName(): string {
     return 'ai_listing.bundle_add';
   }

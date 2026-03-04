@@ -1,0 +1,7 @@
+bb_ebay_mirror.report:
+  path: '/admin/ebay-mirror/report'
+  defaults:
+    _controller: '\Drupal\bb_ebay_mirror\Controller\EbayMirrorReportController::build'
+    _title: 'eBay mirror report'
+  requirements:
+    _permission: 'administer ai listings'

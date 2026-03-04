@@ -38,6 +38,21 @@ final class EbayTradingLegacyClient {
     return $this->parseActiveListingsResponse($responseBody);
   }
 
+  public function reviseFixedPriceItemSkuForAccount(
+    EbayAccount $account,
+    string $itemId,
+    string $sku,
+  ): void {
+    $requestBody = $this->buildReviseFixedPriceItemSkuRequest($itemId, $sku);
+    $responseBody = $this->requestXml(
+      $account,
+      'ReviseFixedPriceItem',
+      $requestBody,
+    );
+
+    $this->assertSuccessfulAckResponse($responseBody);
+  }
+
   private function buildGetMyeBaySellingRequest(int $pageNumber, int $entriesPerPage): string {
     return '<?xml version="1.0" encoding="utf-8"?>'
       . '<GetMyeBaySellingRequest xmlns="' . self::XML_NAMESPACE . '">'
@@ -49,6 +64,16 @@ final class EbayTradingLegacyClient {
       . '</Pagination>'
       . '</ActiveList>'
       . '</GetMyeBaySellingRequest>';
+  }
+
+  private function buildReviseFixedPriceItemSkuRequest(string $itemId, string $sku): string {
+    return '<?xml version="1.0" encoding="utf-8"?>'
+      . '<ReviseFixedPriceItemRequest xmlns="' . self::XML_NAMESPACE . '">'
+      . '<Item>'
+      . '<ItemID>' . htmlspecialchars($itemId, ENT_XML1) . '</ItemID>'
+      . '<SKU>' . htmlspecialchars($sku, ENT_XML1) . '</SKU>'
+      . '</Item>'
+      . '</ReviseFixedPriceItemRequest>';
   }
 
   private function requestXml(EbayAccount $account, string $callName, string $body): string {
@@ -81,15 +106,7 @@ final class EbayTradingLegacyClient {
     }
 
     $namespaced = $xml->children(self::XML_NAMESPACE);
-    $ack = trim((string) $namespaced->Ack);
-    if ($ack !== 'Success' && $ack !== 'Warning') {
-      $errorMessage = trim((string) $namespaced->Errors->LongMessage);
-      if ($errorMessage === '') {
-        $errorMessage = 'Unknown Trading API error';
-      }
-
-      throw new RuntimeException('eBay Trading API error: ' . $errorMessage);
-    }
+    $this->assertSuccessOrWarningAck($namespaced);
 
     $activeList = $namespaced->ActiveList;
     $totalPages = (int) ($activeList->PaginationResult->TotalNumberOfPages ?? 1);
@@ -132,6 +149,30 @@ final class EbayTradingLegacyClient {
   private function normalizeNullableString(string $value): ?string {
     $trimmed = trim($value);
     return $trimmed === '' ? NULL : $trimmed;
+  }
+
+  private function assertSuccessfulAckResponse(string $responseBody): void {
+    $xml = @simplexml_load_string($responseBody);
+    if (!$xml instanceof SimpleXMLElement) {
+      throw new RuntimeException('Unexpected XML response from eBay Trading API.');
+    }
+
+    $namespaced = $xml->children(self::XML_NAMESPACE);
+    $this->assertSuccessOrWarningAck($namespaced);
+  }
+
+  private function assertSuccessOrWarningAck(SimpleXMLElement $namespaced): void {
+    $ack = trim((string) $namespaced->Ack);
+    if ($ack === 'Success' || $ack === 'Warning') {
+      return;
+    }
+
+    $errorMessage = trim((string) $namespaced->Errors->LongMessage);
+    if ($errorMessage === '') {
+      $errorMessage = 'Unknown Trading API error';
+    }
+
+    throw new RuntimeException('eBay Trading API error: ' . $errorMessage);
   }
 
 }

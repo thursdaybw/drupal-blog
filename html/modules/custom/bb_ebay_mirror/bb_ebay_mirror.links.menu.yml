@@ -1,0 +1,12 @@
+bb_ebay_mirror.group:
+  title: 'eBay mirror'
+  description: 'Audit mirrored eBay inventory and offers'
+  route_name: bb_ebay_mirror.report
+  parent: bb_platform.applications
+  weight: 40
+
+bb_ebay_mirror.report:
+  title: 'Mirror report'
+  route_name: bb_ebay_mirror.report
+  parent: bb_ebay_mirror.group
+  weight: 10

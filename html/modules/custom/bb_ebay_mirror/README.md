@@ -62,6 +62,12 @@ Current state
   - `bb-ebay-mirror:audit-legacy-unmigrated`
 - Ninth audit report exists:
   - `bb-ebay-mirror:audit-legacy-migrated`
+- Tenth audit report exists:
+  - `bb-ebay-mirror:audit-legacy-duplicate-sku`
+- Eleventh audit report exists:
+  - `bb-ebay-mirror:audit-legacy-missing-sku`
+- Twelfth audit report exists:
+  - `bb-ebay-mirror:audit-legacy-ready-to-migrate`
 - First admin report page exists:
   - `/admin/ebay-mirror/report`
 - That first audit currently reports no local published eBay listings missing mirrored inventory for the primary account.
@@ -73,6 +79,14 @@ Current state
 - The eighth and ninth audits classify the legacy mirror:
   - legacy listing with no mirrored Sell offer = not yet visible in Sell
   - legacy listing with mirrored Sell offer = already visible in Sell
+- The tenth audit identifies duplicate legacy SKU groups:
+  - these are blocked migration candidates because Sell inventory is keyed by SKU
+- The eleventh audit identifies legacy listings with no usable SKU:
+  - these are also blocked migration candidates
+- The twelfth audit identifies the first clean migration queue:
+  - unmigrated
+  - non-empty SKU
+  - not in a duplicate legacy SKU group
 - After deleting four stale old-SKU rows on eBay and rerunning sync:
   - orphaned inventory is clean
   - orphaned offers are clean
@@ -226,4 +240,40 @@ Or audit one specific eBay account:
 
 ```bash
 ddev drush bb-ebay-mirror:audit-legacy-migrated 1
+```
+
+Audit legacy listings that still share duplicate SKUs:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-duplicate-sku
+```
+
+Or audit one specific eBay account:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-duplicate-sku 1
+```
+
+Audit legacy listings that have no usable SKU:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-missing-sku
+```
+
+Or audit one specific eBay account:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-missing-sku 1
+```
+
+Audit legacy listings that are ready to migrate:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-ready-to-migrate
+```
+
+Or audit one specific eBay account:
+
+```bash
+ddev drush bb-ebay-mirror:audit-legacy-ready-to-migrate 1
 ```

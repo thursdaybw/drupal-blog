@@ -39,6 +39,9 @@ final class EbayMirrorReportController extends ControllerBase {
     $multipleOfferRows = $this->auditService->findListingsWithMultipleMirroredOffers($accountId);
     $legacyUnmigratedRows = $this->auditService->findLegacyListingsMissingMirroredSellOffer($accountId);
     $legacyMigratedRows = $this->auditService->findLegacyListingsWithMirroredSellOffer($accountId);
+    $legacyDuplicateSkuRows = $this->auditService->findLegacyListingsWithDuplicateSku($accountId);
+    $legacyMissingSkuRows = $this->auditService->findLegacyListingsMissingSku($accountId);
+    $legacyReadyToMigrateRows = $this->auditService->findLegacyListingsReadyToMigrate($accountId);
 
     $build = [];
     $build['summary'] = [
@@ -89,6 +92,15 @@ final class EbayMirrorReportController extends ControllerBase {
           $this->t('Legacy listings with mirrored Sell offer: @count', [
             '@count' => (string) count($legacyMigratedRows),
           ]),
+          $this->t('Legacy duplicate SKU groups: @count', [
+            '@count' => (string) count($legacyDuplicateSkuRows),
+          ]),
+          $this->t('Legacy listings with missing SKU: @count', [
+            '@count' => (string) count($legacyMissingSkuRows),
+          ]),
+          $this->t('Legacy listings ready to migrate: @count', [
+            '@count' => (string) count($legacyReadyToMigrateRows),
+          ]),
         ],
       ],
     ];
@@ -108,6 +120,9 @@ final class EbayMirrorReportController extends ControllerBase {
     $build['multiple_offers'] = $this->buildMultipleOffersTable($multipleOfferRows);
     $build['legacy_unmigrated'] = $this->buildLegacyUnmigratedTable($legacyUnmigratedRows);
     $build['legacy_migrated'] = $this->buildLegacyMigratedTable($legacyMigratedRows);
+    $build['legacy_duplicate_sku'] = $this->buildLegacyDuplicateSkuTable($legacyDuplicateSkuRows);
+    $build['legacy_missing_sku'] = $this->buildLegacyMissingSkuTable($legacyMissingSkuRows);
+    $build['legacy_ready_to_migrate'] = $this->buildLegacyReadyToMigrateTable($legacyReadyToMigrateRows);
 
     return $build;
   }
@@ -372,6 +387,100 @@ final class EbayMirrorReportController extends ControllerBase {
     }
 
     return $this->buildSectionTable('Legacy Listings With Mirrored Sell Offer', $header, $tableRows, 'No rows in this bucket.');
+  }
+
+  /**
+   * @param array<int,array{
+   *   sku:string,
+   *   legacy_listing_count:int,
+   *   ebay_listing_ids:string[],
+   *   titles:string[],
+   *   listing_statuses:string[]
+   * }> $rows
+   */
+  private function buildLegacyDuplicateSkuTable(array $rows): array {
+    $header = [
+      $this->t('SKU'),
+      $this->t('Legacy listing count'),
+      $this->t('eBay listing IDs'),
+      $this->t('Listing statuses'),
+      $this->t('Titles'),
+    ];
+
+    $tableRows = [];
+    foreach ($rows as $row) {
+      $tableRows[] = [
+        $row['sku'],
+        (string) $row['legacy_listing_count'],
+        implode(', ', $row['ebay_listing_ids']),
+        implode(', ', $row['listing_statuses']),
+        implode(' || ', $row['titles']),
+      ];
+    }
+
+    return $this->buildSectionTable('Legacy Listings With Duplicate SKUs', $header, $tableRows, 'No rows in this bucket.');
+  }
+
+  /**
+   * @param array<int,array{
+   *   ebay_listing_id:string,
+   *   sku:?string,
+   *   title:?string,
+   *   ebay_listing_started_at:?int,
+   *   listing_status:?string
+   * }> $rows
+   */
+  private function buildLegacyMissingSkuTable(array $rows): array {
+    $header = [
+      $this->t('eBay listing ID'),
+      $this->t('Title'),
+      $this->t('Legacy start time'),
+      $this->t('Listing status'),
+    ];
+
+    $tableRows = [];
+    foreach ($rows as $row) {
+      $tableRows[] = [
+        $row['ebay_listing_id'],
+        $row['title'] ?? (string) $this->t('Untitled legacy listing'),
+        $row['ebay_listing_started_at'] === NULL ? (string) $this->t('Unknown') : gmdate('Y-m-d H:i:s', $row['ebay_listing_started_at']),
+        $row['listing_status'] ?? (string) $this->t('Unknown'),
+      ];
+    }
+
+    return $this->buildSectionTable('Legacy Listings With Missing SKU', $header, $tableRows, 'No rows in this bucket.');
+  }
+
+  /**
+   * @param array<int,array{
+   *   ebay_listing_id:string,
+   *   sku:string,
+   *   title:?string,
+   *   ebay_listing_started_at:?int,
+   *   listing_status:?string
+   * }> $rows
+   */
+  private function buildLegacyReadyToMigrateTable(array $rows): array {
+    $header = [
+      $this->t('eBay listing ID'),
+      $this->t('SKU'),
+      $this->t('Title'),
+      $this->t('Legacy start time'),
+      $this->t('Listing status'),
+    ];
+
+    $tableRows = [];
+    foreach ($rows as $row) {
+      $tableRows[] = [
+        $row['ebay_listing_id'],
+        $row['sku'],
+        $row['title'] ?? (string) $this->t('Untitled legacy listing'),
+        $row['ebay_listing_started_at'] === NULL ? (string) $this->t('Unknown') : gmdate('Y-m-d H:i:s', $row['ebay_listing_started_at']),
+        $row['listing_status'] ?? (string) $this->t('Unknown'),
+      ];
+    }
+
+    return $this->buildSectionTable('Legacy Listings Ready To Migrate', $header, $tableRows, 'No rows in this bucket.');
   }
 
   /**

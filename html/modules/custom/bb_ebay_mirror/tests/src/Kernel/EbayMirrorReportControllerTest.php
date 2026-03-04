@@ -84,6 +84,9 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertArrayHasKey('multiple_offers', $build);
     $this->assertArrayHasKey('legacy_unmigrated', $build);
     $this->assertArrayHasKey('legacy_migrated', $build);
+    $this->assertArrayHasKey('legacy_duplicate_sku', $build);
+    $this->assertArrayHasKey('legacy_missing_sku', $build);
+    $this->assertArrayHasKey('legacy_ready_to_migrate', $build);
 
     $this->assertSame('table', $build['missing_inventory']['table']['#type']);
     $this->assertSame('table', $build['sku_link_mismatch']['table']['#type']);
@@ -91,6 +94,9 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertSame('table', $build['multiple_offers']['table']['#type']);
     $this->assertSame('table', $build['legacy_unmigrated']['table']['#type']);
     $this->assertSame('table', $build['legacy_migrated']['table']['#type']);
+    $this->assertSame('table', $build['legacy_duplicate_sku']['table']['#type']);
+    $this->assertSame('table', $build['legacy_missing_sku']['table']['#type']);
+    $this->assertSame('table', $build['legacy_ready_to_migrate']['table']['#type']);
 
     $missingInventoryRows = $build['missing_inventory']['table']['#rows'];
     $this->assertCount(1, $missingInventoryRows);
@@ -115,6 +121,15 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertCount(1, $legacyMigratedRows);
     $this->assertSame('176582430935', (string) $legacyMigratedRows[0][0]);
     $this->assertSame('offer-legacy-migrated', (string) $legacyMigratedRows[0][5]);
+
+    $legacyDuplicateSkuRows = $build['legacy_duplicate_sku']['table']['#rows'];
+    $this->assertCount(1, $legacyDuplicateSkuRows);
+    $this->assertSame('2024 September A01', (string) $legacyDuplicateSkuRows[0][0]);
+    $this->assertSame('2', (string) $legacyDuplicateSkuRows[0][1]);
+    $this->assertSame('176577811710, 176582430935', (string) $legacyDuplicateSkuRows[0][2]);
+
+    $this->assertSame('No rows in this bucket.', (string) $build['legacy_missing_sku']['table']['#empty']);
+    $this->assertSame('No rows in this bucket.', (string) $build['legacy_ready_to_migrate']['table']['#empty']);
   }
 
   private function createProductionAccount(): void {

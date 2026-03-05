@@ -42,6 +42,8 @@ final class MarketplacePublicationRecorder {
     ?string $marketplacePublicationId = null,
     ?string $marketplaceListingId = null,
     ?string $lastErrorMessage = null,
+    ?string $source = null,
+    ?int $marketplaceStartedAt = null,
   ): void {
     $normalizedPublicationType = trim($publicationType);
     $publication = $this->loadPublicationRecord($listing, $marketplaceKey, $normalizedPublicationType);
@@ -74,6 +76,12 @@ final class MarketplacePublicationRecorder {
 
     if ($status === 'published') {
       $publication->set('published_at', time());
+    }
+
+    $publication->set('source', trim((string) ($source ?? 'local_publish')));
+
+    if ($marketplaceStartedAt !== null && $marketplaceStartedAt > 0) {
+      $publication->set('marketplace_started_at', $marketplaceStartedAt);
     }
 
     $publication->save();

@@ -17,6 +17,8 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
 
   private ?PrivateTempStoreFactory $tempStoreFactory = null;
   private ?EntityTypeManagerInterface $entityTypeManager = null;
+  /** @var array<string,string>|null */
+  private ?array $listingTypeLabels = null;
 
   public static function create(ContainerInterface $container): self {
     $form = new self();
@@ -140,7 +142,7 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
       }
 
       $rows[] = [
-        $listing->bundle() === 'book_bundle' ? (string) $this->t('Book bundle') : (string) $this->t('Book'),
+        $this->buildTypeLabel((string) $listing->bundle()),
         (string) $listingId,
         trim((string) ($listing->get('listing_code')->value ?? '')) ?: (string) $this->t('Unset'),
         Link::fromTextAndUrl(
@@ -159,7 +161,44 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
       return (string) ($listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled bundle'));
     }
 
-    return (string) ($listing->get('field_full_title')->value ?: $listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled listing'));
+    if ($listing->bundle() === 'book') {
+      return (string) ($listing->get('field_full_title')->value ?: $listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled listing'));
+    }
+
+    return (string) ($listing->label() ?: $listing->get('ebay_title')->value ?: $this->t('Untitled listing'));
+  }
+
+  private function buildTypeLabel(string $listingType): string {
+    $label = $this->getListingTypeLabels()[$listingType] ?? NULL;
+    if (is_string($label) && $label !== '') {
+      return $label;
+    }
+
+    return ucfirst(str_replace('_', ' ', $listingType));
+  }
+
+  /**
+   * @return array<string,string>
+   */
+  private function getListingTypeLabels(): array {
+    if ($this->listingTypeLabels !== null) {
+      return $this->listingTypeLabels;
+    }
+
+    $labels = [];
+    $types = $this->getEntityTypeManager()->getStorage('bb_ai_listing_type')->loadMultiple();
+    foreach ($types as $type) {
+      $id = (string) $type->id();
+      $label = (string) $type->label();
+      if ($id === '' || $label === '') {
+        continue;
+      }
+
+      $labels[$id] = $label;
+    }
+
+    $this->listingTypeLabels = $labels;
+    return $this->listingTypeLabels;
   }
 
   private function getEntityTypeManager(): EntityTypeManagerInterface {

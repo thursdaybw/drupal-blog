@@ -117,9 +117,6 @@ final class AiListingBatchDatasetProvider {
       }
 
       $listingType = (string) $listing->bundle();
-      if (!in_array($listingType, ['book', 'book_bundle'], TRUE)) {
-        continue;
-      }
 
       $filteredRows[$this->buildSelectionKey($listingType, $listingId)] = [
         'selection_key' => $this->buildSelectionKey($listingType, $listingId),

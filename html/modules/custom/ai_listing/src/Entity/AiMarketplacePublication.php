@@ -89,6 +89,20 @@ final class AiMarketplacePublication extends ContentEntityBase {
       ->setLabel('Published At')
       ->setRequired(FALSE);
 
+    $fields['marketplace_started_at'] = BaseFieldDefinition::create('timestamp')
+      ->setLabel('Marketplace Started At')
+      ->setRequired(FALSE);
+
+    $fields['source'] = BaseFieldDefinition::create('list_string')
+      ->setLabel('Source')
+      ->setRequired(TRUE)
+      ->setDefaultValue('local_publish')
+      ->setSetting('allowed_values', [
+        'local_publish' => 'Local Publish',
+        'legacy_adopted' => 'Legacy Adopted',
+        'mirror_reconciled' => 'Mirror Reconciled',
+      ]);
+
     $fields['created'] = BaseFieldDefinition::create('created')
       ->setLabel('Created');
 

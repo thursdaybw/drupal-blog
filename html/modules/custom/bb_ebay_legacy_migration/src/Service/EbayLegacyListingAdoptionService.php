@@ -62,44 +62,22 @@ final class EbayLegacyListingAdoptionService {
    * }
    */
   public function adoptBookListing(string $ebayListingId, ?int $accountId = NULL): array {
-    $normalizedListingId = trim($ebayListingId);
-    if ($normalizedListingId === '') {
-      throw new InvalidArgumentException('eBay listing ID cannot be empty.');
-    }
+    return $this->adoptListingByType($ebayListingId, 'book', $accountId);
+  }
 
-    $account = $this->resolveAccount($accountId);
-    $mirrorRow = $this->loadMirrorRow($account, $normalizedListingId);
-
-    if ($mirrorRow === NULL) {
-      throw new InvalidArgumentException(sprintf('No mirrored published offer was found for eBay listing %s.', $normalizedListingId));
-    }
-
-    $this->assertMirrorRowIsBookCategory($normalizedListingId, $mirrorRow);
-    $this->assertListingIsNotAlreadyAdopted($normalizedListingId, $mirrorRow['sku']);
-
-    $listing = $this->createLocalListingFromMirrorRow($mirrorRow);
-    $inventorySku = $this->inventorySkuResolver->setSku($listing, $mirrorRow['sku']);
-    $this->publicationRecorder->recordPublicationSnapshot(
-      $listing,
-      $inventorySku,
-      'ebay',
-      $mirrorRow['publication_type'],
-      'published',
-      $mirrorRow['offer_id'],
-      $mirrorRow['ebay_listing_id'],
-      NULL,
-      'legacy_adopted',
-      $mirrorRow['ebay_listing_started_at']
-    );
-    $this->insertLegacyLinkRow($listing, $account, $mirrorRow);
-
-    return [
-      'local_listing_id' => (int) $listing->id(),
-      'local_listing_code' => $this->normalizeNullableString($listing->get('listing_code')->value ?? NULL),
-      'ebay_listing_id' => $mirrorRow['ebay_listing_id'],
-      'sku' => $mirrorRow['sku'],
-      'offer_id' => $mirrorRow['offer_id'],
-    ];
+  /**
+   * Adopt one mirrored migrated non-book eBay listing into bb_ai_listing.
+   *
+   * @return array{
+   *   local_listing_id:int,
+   *   local_listing_code:?string,
+   *   ebay_listing_id:string,
+   *   sku:string,
+   *   offer_id:string
+   * }
+   */
+  public function adoptGenericListing(string $ebayListingId, ?int $accountId = NULL): array {
+    return $this->adoptListingByType($ebayListingId, 'generic', $accountId);
   }
 
   private function resolveAccount(?int $accountId): EbayAccount {
@@ -217,6 +195,23 @@ final class EbayLegacyListingAdoptionService {
   }
 
   /**
+   * @param array{category_id:?string} $mirrorRow
+   */
+  private function assertMirrorRowIsNonBookCategory(string $ebayListingId, array $mirrorRow): void {
+    $categoryId = (string) ($mirrorRow['category_id'] ?? '');
+    if ($categoryId !== '' && !in_array($categoryId, self::BOOK_CATEGORY_IDS, TRUE)) {
+      return;
+    }
+
+    $readableCategory = $categoryId === '' ? 'none' : $categoryId;
+    throw new InvalidArgumentException(sprintf(
+      'eBay listing %s is category %s and is not eligible for adopt-generic.',
+      $ebayListingId,
+      $readableCategory
+    ));
+  }
+
+  /**
    * @param array{
    *   sku:string,
    *   ebay_title:string,
@@ -232,7 +227,7 @@ final class EbayLegacyListingAdoptionService {
    *   ebay_listing_started_at:?int
    * } $mirrorRow
    */
-  private function createLocalListingFromMirrorRow(array $mirrorRow): BbAiListing {
+  private function createBookListingFromMirrorRow(array $mirrorRow): BbAiListing {
     $aspects = $this->decodeAspects($mirrorRow['aspects_json']);
     $bookTitle = $this->extractFirstAspectValue($aspects, 'Book Title');
     $author = $this->joinAspectValues($aspects, 'Author');
@@ -256,6 +251,43 @@ final class EbayLegacyListingAdoptionService {
     $this->setFieldIfAvailable($listing, 'field_full_title', $mirrorRow['ebay_title']);
     $this->setFieldIfAvailable($listing, 'field_author', $author);
     $this->setFieldIfAvailable($listing, 'field_isbn', $isbn);
+
+    $listing->save();
+    $this->importMirrorImagesIntoListing($listing, $mirrorRow['image_urls_json'] ?? NULL);
+
+    return $listing;
+  }
+
+  /**
+   * @param array{
+   *   sku:string,
+   *   ebay_title:string,
+   *   listing_description:string,
+   *   condition:?string,
+   *   condition_description:?string,
+   *   aspects_json:?string,
+   *   image_urls_json:?string,
+   *   price_value:?string,
+   *   offer_id:string,
+   *   ebay_listing_id:string,
+   *   publication_type:string,
+   *   ebay_listing_started_at:?int
+   * } $mirrorRow
+   */
+  private function createGenericListingFromMirrorRow(array $mirrorRow): BbAiListing {
+    $listing = BbAiListing::create([
+      'listing_type' => 'generic',
+      'status' => 'ready_for_review',
+      'ebay_title' => $mirrorRow['ebay_title'],
+      'description' => [
+        'value' => $mirrorRow['listing_description'],
+        'format' => 'basic_html',
+      ],
+      'price' => $mirrorRow['price_value'],
+      'condition_grade' => $this->mapConditionGrade($mirrorRow['condition']),
+      'condition_note' => $mirrorRow['condition_description'] ?? '',
+      'metadata_json' => $mirrorRow['aspects_json'] ?? '',
+    ]);
 
     $listing->save();
     $this->importMirrorImagesIntoListing($listing, $mirrorRow['image_urls_json'] ?? NULL);
@@ -514,6 +546,65 @@ final class EbayLegacyListingAdoptionService {
 
     $normalized = (int) $value;
     return $normalized > 0 ? $normalized : NULL;
+  }
+
+  /**
+   * @return array{
+   *   local_listing_id:int,
+   *   local_listing_code:?string,
+   *   ebay_listing_id:string,
+   *   sku:string,
+   *   offer_id:string
+   * }
+   */
+  private function adoptListingByType(string $ebayListingId, string $listingType, ?int $accountId): array {
+    $normalizedListingId = trim($ebayListingId);
+    if ($normalizedListingId === '') {
+      throw new InvalidArgumentException('eBay listing ID cannot be empty.');
+    }
+
+    $account = $this->resolveAccount($accountId);
+    $mirrorRow = $this->loadMirrorRow($account, $normalizedListingId);
+    if ($mirrorRow === NULL) {
+      throw new InvalidArgumentException(sprintf('No mirrored published offer was found for eBay listing %s.', $normalizedListingId));
+    }
+
+    $this->assertListingIsNotAlreadyAdopted($normalizedListingId, $mirrorRow['sku']);
+
+    if ($listingType === 'book') {
+      $this->assertMirrorRowIsBookCategory($normalizedListingId, $mirrorRow);
+      $listing = $this->createBookListingFromMirrorRow($mirrorRow);
+    }
+    elseif ($listingType === 'generic') {
+      $this->assertMirrorRowIsNonBookCategory($normalizedListingId, $mirrorRow);
+      $listing = $this->createGenericListingFromMirrorRow($mirrorRow);
+    }
+    else {
+      throw new InvalidArgumentException(sprintf('Unsupported adoption listing type: %s', $listingType));
+    }
+
+    $inventorySku = $this->inventorySkuResolver->setSku($listing, $mirrorRow['sku']);
+    $this->publicationRecorder->recordPublicationSnapshot(
+      $listing,
+      $inventorySku,
+      'ebay',
+      $mirrorRow['publication_type'],
+      'published',
+      $mirrorRow['offer_id'],
+      $mirrorRow['ebay_listing_id'],
+      NULL,
+      'legacy_adopted',
+      $mirrorRow['ebay_listing_started_at']
+    );
+    $this->insertLegacyLinkRow($listing, $account, $mirrorRow);
+
+    return [
+      'local_listing_id' => (int) $listing->id(),
+      'local_listing_code' => $this->normalizeNullableString($listing->get('listing_code')->value ?? NULL),
+      'ebay_listing_id' => $mirrorRow['ebay_listing_id'],
+      'sku' => $mirrorRow['sku'],
+      'offer_id' => $mirrorRow['offer_id'],
+    ];
   }
 
 }

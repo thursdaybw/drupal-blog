@@ -296,6 +296,12 @@ Adopt one mirrored migrated eBay listing into `bb_ai_listing`:
 ddev drush bb-ebay-legacy-migration:adopt-book 176582430935
 ```
 
+Adopt one mirrored migrated non-book eBay listing into `bb_ai_listing`:
+
+```bash
+ddev drush bb-ebay-legacy-migration:adopt-generic 176577811710
+```
+
 What this first pass does
 - loads one mirrored migrated eBay listing by eBay Item ID
 - creates one local `bb_ai_listing` row with bundle type `book`

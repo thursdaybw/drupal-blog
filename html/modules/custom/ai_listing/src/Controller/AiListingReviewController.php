@@ -25,7 +25,7 @@ final class AiListingReviewController implements ContainerInjectionInterface {
   }
 
   public function build(BbAiListing $bb_ai_listing): array {
-    if ($bb_ai_listing->bundle() === 'book') {
+    if (in_array($bb_ai_listing->bundle(), ['book', 'generic'], TRUE)) {
       return $this->formBuilder->getForm(AiBookListingReviewForm::class, $bb_ai_listing);
     }
 
@@ -42,10 +42,15 @@ final class AiListingReviewController implements ContainerInjectionInterface {
       return $label;
     }
 
-    return $bb_ai_listing->bundle() === 'book_bundle'
-      ? 'Review Book Bundle Listing'
-      : 'Review Book Listing';
+    if ($bb_ai_listing->bundle() === 'book_bundle') {
+      return 'Review Book Bundle Listing';
+    }
+
+    if ($bb_ai_listing->bundle() === 'generic') {
+      return 'Review Generic Listing';
+    }
+
+    return 'Review Book Listing';
   }
 
 }
-

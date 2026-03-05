@@ -42,4 +42,25 @@ final class EbayLegacyListingAdoptionCommand extends DrushCommands {
     ));
   }
 
+  /**
+   * Adopt one mirrored migrated non-book eBay listing into bb_ai_listing.
+   *
+   * @command bb-ebay-legacy-migration:adopt-generic
+   *
+   * @usage bb-ebay-legacy-migration:adopt-generic 176577811710
+   *   Adopt one mirrored migrated non-book eBay listing into bb_ai_listing.
+   */
+  public function adoptGeneric(string $ebayListingId, ?int $accountId = NULL): void {
+    $result = $this->adoptionService->adoptGenericListing($ebayListingId, $accountId);
+
+    $this->output()->writeln(sprintf(
+      'Adopted eBay listing %s into bb_ai_listing %d (listing code %s, SKU %s, offer %s).',
+      $result['ebay_listing_id'],
+      $result['local_listing_id'],
+      $result['local_listing_code'] ?? 'none',
+      $result['sku'],
+      $result['offer_id']
+    ));
+  }
+
 }

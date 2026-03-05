@@ -132,6 +132,37 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
     $service->adoptBookListing('176582430935', (int) $account->id());
   }
 
+  public function testAdoptGenericListingCreatesLocalGenericListingAndLinks(): void {
+    $account = $this->createProductionAccount();
+    $this->insertMirroredBookRows((int) $account->id(), '176577811710', '2024 September A01-M2', '261672');
+
+    $service = $this->container->get('bb_ebay_legacy_migration.adoption_service');
+    $result = $service->adoptGenericListing('176577811710', (int) $account->id());
+
+    $listing = BbAiListing::load($result['local_listing_id']);
+    $this->assertInstanceOf(BbAiListing::class, $listing);
+    $this->assertSame('generic', $listing->bundle());
+    $this->assertSame('Official AFL NAB AusKick 20 Yr T-Shirt - 2015 Celebration - Size L - Great Cond', $listing->label());
+
+    $publicationRows = $this->container->get('entity_type.manager')
+      ->getStorage('ai_marketplace_publication')
+      ->loadByProperties(['listing' => $listing->id()]);
+    $this->assertCount(1, $publicationRows);
+    $publicationRow = reset($publicationRows);
+    $this->assertSame('legacy_adopted', $publicationRow->get('source')->value);
+  }
+
+  public function testAdoptGenericListingRejectsBookCategory(): void {
+    $account = $this->createProductionAccount();
+    $this->insertMirroredBookRows((int) $account->id(), '176582430935', '2024 September A01', '261186');
+
+    $service = $this->container->get('bb_ebay_legacy_migration.adoption_service');
+    $this->expectException(\InvalidArgumentException::class);
+    $this->expectExceptionMessage('is not eligible for adopt-generic');
+
+    $service->adoptGenericListing('176582430935', (int) $account->id());
+  }
+
   private function createBookType(): void {
     BbAiListingType::create([
       'id' => 'book',

@@ -1,0 +1,13 @@
+ebay_connector.group:
+  title: 'eBay'
+  description: 'Connect and manage the eBay account.'
+  route_name: ebay_connector.authorize
+  parent: bb_platform.applications
+  weight: 20
+
+ebay_connector.authorize_menu:
+  title: 'Connect eBay Account'
+  description: 'Authorize this site to access the eBay account.'
+  route_name: ebay_connector.authorize
+  parent: ebay_connector.group
+  weight: 10

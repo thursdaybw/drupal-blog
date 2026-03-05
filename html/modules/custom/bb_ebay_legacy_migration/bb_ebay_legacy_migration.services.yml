@@ -30,3 +30,6 @@ services:
       - '@drupal.ebay_infrastructure.account_manager'
       - '@ai_listing.inventory_sku_resolver'
       - '@drupal.listing_publishing.marketplace_publication_recorder'
+      - '@http_client'
+      - '@file.repository'
+      - '@file_system'

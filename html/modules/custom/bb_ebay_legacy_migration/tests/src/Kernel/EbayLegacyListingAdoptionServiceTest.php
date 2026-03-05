@@ -24,6 +24,7 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
     'system',
     'user',
     'field',
+    'file',
     'text',
     'filter',
     'options',
@@ -40,12 +41,13 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
     parent::setUp();
 
     $this->installEntitySchema('user');
+    $this->installEntitySchema('file');
     $this->installEntitySchema('ebay_account');
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_listing_inventory_sku');
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);
-    $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing_link']);
+    $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing', 'bb_ebay_legacy_listing_link']);
     $this->installConfig(['field', 'ai_listing']);
 
     $this->createBookType();
@@ -57,7 +59,7 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
 
   public function testAdoptBookListingCreatesLocalListingAndLinks(): void {
     $account = $this->createProductionAccount();
-    $this->insertMirroredBookRows((int) $account->id(), '176582430935', '2024 September A01');
+    $this->insertMirroredBookRows((int) $account->id(), '176582430935', '2024 September A01', '261186');
 
     $service = $this->container->get('bb_ebay_legacy_migration.adoption_service');
     $result = $service->adoptBookListing('176582430935', (int) $account->id());
@@ -89,6 +91,8 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
     $this->assertSame('FIXED_PRICE', $publicationRow->get('publication_type')->value);
     $this->assertSame('125857702011', $publicationRow->get('marketplace_publication_id')->value);
     $this->assertSame('176582430935', $publicationRow->get('marketplace_listing_id')->value);
+    $this->assertSame('legacy_adopted', $publicationRow->get('source')->value);
+    $this->assertSame(1727747606, (int) $publicationRow->get('marketplace_started_at')->value);
 
     $legacyLinkRow = $this->container->get('database')
       ->select('bb_ebay_legacy_listing_link', 'legacy_link')
@@ -100,18 +104,30 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
     $this->assertIsArray($legacyLinkRow);
     $this->assertSame('legacy_ebay_migrated', $legacyLinkRow['origin_type']);
     $this->assertSame('176582430935', $legacyLinkRow['ebay_listing_id']);
+    $this->assertSame('1727747606', $legacyLinkRow['ebay_listing_started_at']);
     $this->assertSame('2024 September A01', $legacyLinkRow['source_sku']);
   }
 
   public function testAdoptBookListingRejectsAlreadyLinkedSku(): void {
     $account = $this->createProductionAccount();
-    $this->insertMirroredBookRows((int) $account->id(), '176582430935', '2024 September A01');
+    $this->insertMirroredBookRows((int) $account->id(), '176582430935', '2024 September A01', '261186');
 
     $service = $this->container->get('bb_ebay_legacy_migration.adoption_service');
     $service->adoptBookListing('176582430935', (int) $account->id());
 
     $this->expectException(\InvalidArgumentException::class);
     $this->expectExceptionMessage('eBay listing 176582430935 has already been adopted.');
+
+    $service->adoptBookListing('176582430935', (int) $account->id());
+  }
+
+  public function testAdoptBookListingRejectsNonBookCategory(): void {
+    $account = $this->createProductionAccount();
+    $this->insertMirroredBookRows((int) $account->id(), '176582430935', '2024 September A01', '261672');
+
+    $service = $this->container->get('bb_ebay_legacy_migration.adoption_service');
+    $this->expectException(\InvalidArgumentException::class);
+    $this->expectExceptionMessage('is not eligible for adopt-book');
 
     $service->adoptBookListing('176582430935', (int) $account->id());
   }
@@ -162,7 +178,7 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
     return $account;
   }
 
-  private function insertMirroredBookRows(int $accountId, string $listingId, string $sku): void {
+  private function insertMirroredBookRows(int $accountId, string $listingId, string $sku, string $categoryId): void {
     $this->container->get('database')->insert('bb_ebay_inventory_item')
       ->fields([
         'account_id' => $accountId,
@@ -196,9 +212,24 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
         'price_value' => '19.99',
         'price_currency' => 'AUD',
         'listing_id' => $listingId,
+        'category_id' => $categoryId,
         'listing_status' => 'ACTIVE',
         'status' => 'PUBLISHED',
         'raw_json' => json_encode(['offerId' => '125857702011'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        'last_seen' => time(),
+      ])
+      ->execute();
+
+    $this->container->get('database')->insert('bb_ebay_legacy_listing')
+      ->fields([
+        'account_id' => $accountId,
+        'ebay_listing_id' => $listingId,
+        'sku' => $sku,
+        'title' => 'Official AFL NAB AusKick 20 Yr T-Shirt - 2015 Celebration - Size L - Great Cond',
+        'ebay_listing_started_at' => 1727747606,
+        'listing_status' => 'Active',
+        'primary_category_id' => '261186',
+        'raw_xml' => '<Item/>',
         'last_seen' => time(),
       ])
       ->execute();

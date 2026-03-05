@@ -96,6 +96,8 @@ Current state
 Next planned work
 - Keep this module focused on mirror sync, audits, and report UI.
 - Put `bulkMigrateListing` work in `bb_ebay_legacy_migration`.
+- Legacy adoption rule lives in `bb_ebay_legacy_migration`:
+  - adopt legacy eBay book listings as local `book` (not `book_bundle`).
 
 Why Drush first
 - These reports will likely want an admin UI later.

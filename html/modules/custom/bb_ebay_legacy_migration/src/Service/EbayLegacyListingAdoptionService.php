@@ -9,12 +9,28 @@ use Drupal\ai_listing\Service\AiListingInventorySkuResolver;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\File\Exception\FileException;
+use Drupal\Core\File\FileExists;
+use Drupal\Core\File\FileSystemInterface;
+use Drupal\file\FileRepositoryInterface;
 use Drupal\ebay_connector\Entity\EbayAccount;
 use Drupal\ebay_infrastructure\Service\EbayAccountManager;
+use GuzzleHttp\ClientInterface;
 use Drupal\listing_publishing\Service\MarketplacePublicationRecorder;
 use InvalidArgumentException;
+use Throwable;
 
 final class EbayLegacyListingAdoptionService {
+
+  /**
+   * eBay AU Books, Comics & Magazines > Books.
+   *
+   * Legacy adoption is category-led. If we later expand book categories, extend
+   * this list in one place.
+   */
+  private const BOOK_CATEGORY_IDS = [
+    '261186',
+  ];
 
   public function __construct(
     private readonly Connection $database,
@@ -23,6 +39,9 @@ final class EbayLegacyListingAdoptionService {
     private readonly EbayAccountManager $accountManager,
     private readonly AiListingInventorySkuResolver $inventorySkuResolver,
     private readonly MarketplacePublicationRecorder $publicationRecorder,
+    private readonly ClientInterface $httpClient,
+    private readonly FileRepositoryInterface $fileRepository,
+    private readonly FileSystemInterface $fileSystem,
   ) {}
 
   /**
@@ -55,6 +74,7 @@ final class EbayLegacyListingAdoptionService {
       throw new InvalidArgumentException(sprintf('No mirrored published offer was found for eBay listing %s.', $normalizedListingId));
     }
 
+    $this->assertMirrorRowIsBookCategory($normalizedListingId, $mirrorRow);
     $this->assertListingIsNotAlreadyAdopted($normalizedListingId, $mirrorRow['sku']);
 
     $listing = $this->createLocalListingFromMirrorRow($mirrorRow);
@@ -66,7 +86,10 @@ final class EbayLegacyListingAdoptionService {
       $mirrorRow['publication_type'],
       'published',
       $mirrorRow['offer_id'],
-      $mirrorRow['ebay_listing_id']
+      $mirrorRow['ebay_listing_id'],
+      NULL,
+      'legacy_adopted',
+      $mirrorRow['ebay_listing_started_at']
     );
     $this->insertLegacyLinkRow($listing, $account, $mirrorRow);
 
@@ -100,10 +123,13 @@ final class EbayLegacyListingAdoptionService {
    *   condition:?string,
    *   condition_description:?string,
    *   aspects_json:?string,
+   *   image_urls_json:?string,
    *   price_value:?string,
    *   offer_id:string,
    *   ebay_listing_id:string,
-   *   publication_type:string
+   *   publication_type:string,
+   *   ebay_listing_started_at:?int,
+   *   category_id:?string
    * }|null
    */
   private function loadMirrorRow(EbayAccount $account, string $ebayListingId): ?array {
@@ -113,8 +139,14 @@ final class EbayLegacyListingAdoptionService {
       'inventory',
       'inventory.account_id = offer.account_id AND inventory.sku = offer.sku'
     );
-    $query->fields('offer', ['sku', 'listing_description', 'price_value', 'offer_id', 'listing_id', 'format']);
-    $query->fields('inventory', ['title', 'condition', 'condition_description', 'aspects_json']);
+    $query->leftJoin(
+      'bb_ebay_legacy_listing',
+      'legacy',
+      'legacy.account_id = offer.account_id AND legacy.ebay_listing_id = offer.listing_id'
+    );
+    $query->fields('offer', ['sku', 'listing_description', 'price_value', 'offer_id', 'listing_id', 'format', 'category_id']);
+    $query->fields('inventory', ['title', 'condition', 'condition_description', 'aspects_json', 'image_urls_json']);
+    $query->fields('legacy', ['ebay_listing_started_at']);
     $query->condition('offer.account_id', (int) $account->id());
     $query->condition('offer.listing_id', $ebayListingId);
     $query->condition('offer.status', 'PUBLISHED');
@@ -132,10 +164,13 @@ final class EbayLegacyListingAdoptionService {
       'condition' => $this->normalizeNullableString($row['condition'] ?? NULL),
       'condition_description' => $this->normalizeNullableString($row['condition_description'] ?? NULL),
       'aspects_json' => $this->normalizeNullableString($row['aspects_json'] ?? NULL),
+      'image_urls_json' => $this->normalizeNullableString($row['image_urls_json'] ?? NULL),
       'price_value' => $this->normalizeNullableString($row['price_value'] ?? NULL),
       'offer_id' => (string) ($row['offer_id'] ?? ''),
       'ebay_listing_id' => (string) ($row['listing_id'] ?? ''),
       'publication_type' => (string) ($row['format'] ?? 'FIXED_PRICE'),
+      'ebay_listing_started_at' => $this->normalizeNullableInt($row['ebay_listing_started_at'] ?? NULL),
+      'category_id' => $this->normalizeNullableString($row['category_id'] ?? NULL),
     ];
   }
 
@@ -165,6 +200,23 @@ final class EbayLegacyListingAdoptionService {
   }
 
   /**
+   * @param array{category_id:?string} $mirrorRow
+   */
+  private function assertMirrorRowIsBookCategory(string $ebayListingId, array $mirrorRow): void {
+    $categoryId = (string) ($mirrorRow['category_id'] ?? '');
+    if ($categoryId !== '' && in_array($categoryId, self::BOOK_CATEGORY_IDS, TRUE)) {
+      return;
+    }
+
+    $readableCategory = $categoryId === '' ? 'none' : $categoryId;
+    throw new InvalidArgumentException(sprintf(
+      'eBay listing %s is category %s and is not eligible for adopt-book.',
+      $ebayListingId,
+      $readableCategory
+    ));
+  }
+
+  /**
    * @param array{
    *   sku:string,
    *   ebay_title:string,
@@ -172,10 +224,12 @@ final class EbayLegacyListingAdoptionService {
    *   condition:?string,
    *   condition_description:?string,
    *   aspects_json:?string,
+   *   image_urls_json:?string,
    *   price_value:?string,
    *   offer_id:string,
    *   ebay_listing_id:string,
-   *   publication_type:string
+   *   publication_type:string,
+   *   ebay_listing_started_at:?int
    * } $mirrorRow
    */
   private function createLocalListingFromMirrorRow(array $mirrorRow): BbAiListing {
@@ -204,8 +258,141 @@ final class EbayLegacyListingAdoptionService {
     $this->setFieldIfAvailable($listing, 'field_isbn', $isbn);
 
     $listing->save();
+    $this->importMirrorImagesIntoListing($listing, $mirrorRow['image_urls_json'] ?? NULL);
 
     return $listing;
+  }
+
+  private function importMirrorImagesIntoListing(BbAiListing $listing, ?string $imageUrlsJson): void {
+    if (!$this->entityTypeManager->hasDefinition('listing_image')) {
+      return;
+    }
+
+    $imageUrls = $this->decodeImageUrls($imageUrlsJson);
+    if ($imageUrls === []) {
+      return;
+    }
+
+    $targetDirectory = 'public://ai-listings/' . $listing->uuid();
+    $this->fileSystem->prepareDirectory(
+      $targetDirectory,
+      FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS
+    );
+
+    $weight = 0;
+    foreach ($imageUrls as $imageUrl) {
+      $downloadedFile = $this->downloadImageFile($imageUrl, $targetDirectory, $weight);
+      if ($downloadedFile === NULL) {
+        continue;
+      }
+
+      $this->createListingImageRecord((int) $listing->id(), (int) $downloadedFile->id(), $weight, TRUE);
+      $weight++;
+    }
+  }
+
+  /**
+   * @return string[]
+   */
+  private function decodeImageUrls(?string $imageUrlsJson): array {
+    if ($imageUrlsJson === NULL || trim($imageUrlsJson) === '') {
+      return [];
+    }
+
+    $decoded = json_decode($imageUrlsJson, TRUE);
+    if (!is_array($decoded)) {
+      return [];
+    }
+
+    $urls = [];
+    foreach ($decoded as $url) {
+      $normalized = trim((string) $url);
+      if ($normalized === '') {
+        continue;
+      }
+
+      $urls[] = $normalized;
+    }
+
+    return array_values(array_unique($urls));
+  }
+
+  private function downloadImageFile(string $imageUrl, string $targetDirectory, int $index): ?\Drupal\file\FileInterface {
+    try {
+      $response = $this->httpClient->request('GET', $imageUrl, [
+        'http_errors' => FALSE,
+        'timeout' => 30,
+      ]);
+    }
+    catch (Throwable) {
+      return NULL;
+    }
+
+    if ($response->getStatusCode() !== 200) {
+      return NULL;
+    }
+
+    $bytes = (string) $response->getBody();
+    if ($bytes === '') {
+      return NULL;
+    }
+
+    $extension = $this->resolveImageExtension(
+      $imageUrl,
+      (string) $response->getHeaderLine('Content-Type')
+    );
+    $filename = sprintf('legacy-%03d.%s', $index + 1, $extension);
+    $destination = $targetDirectory . '/' . $filename;
+
+    try {
+      $file = $this->fileRepository->writeData($bytes, $destination, FileExists::Rename);
+    }
+    catch (FileException|Throwable) {
+      return NULL;
+    }
+
+    if ($file === FALSE) {
+      return NULL;
+    }
+
+    $file->setPermanent();
+    $file->save();
+
+    return $file;
+  }
+
+  private function resolveImageExtension(string $imageUrl, string $contentTypeHeader): string {
+    $path = (string) parse_url($imageUrl, PHP_URL_PATH);
+    $pathExtension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    if (in_array($pathExtension, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff'], TRUE)) {
+      return $pathExtension === 'jpeg' ? 'jpg' : $pathExtension;
+    }
+
+    $contentType = strtolower(trim(explode(';', $contentTypeHeader)[0] ?? ''));
+    return match ($contentType) {
+      'image/png' => 'png',
+      'image/webp' => 'webp',
+      'image/gif' => 'gif',
+      'image/bmp' => 'bmp',
+      'image/tiff' => 'tif',
+      default => 'jpg',
+    };
+  }
+
+  private function createListingImageRecord(int $listingId, int $fileId, int $weight, bool $isMetadataSource): void {
+    if (!$this->entityTypeManager->hasDefinition('listing_image')) {
+      return;
+    }
+
+    $this->entityTypeManager->getStorage('listing_image')->create([
+      'owner' => [
+        'target_type' => 'bb_ai_listing',
+        'target_id' => $listingId,
+      ],
+      'file' => $fileId,
+      'weight' => $weight,
+      'is_metadata_source' => $isMetadataSource,
+    ])->save();
   }
 
   /**
@@ -219,7 +406,8 @@ final class EbayLegacyListingAdoptionService {
    *   price_value:?string,
    *   offer_id:string,
    *   ebay_listing_id:string,
-   *   publication_type:string
+   *   publication_type:string,
+   *   ebay_listing_started_at:?int
    * } $mirrorRow
    */
   private function insertLegacyLinkRow(BbAiListing $listing, EbayAccount $account, array $mirrorRow): void {
@@ -231,7 +419,7 @@ final class EbayLegacyListingAdoptionService {
         'account_id' => (int) $account->id(),
         'origin_type' => 'legacy_ebay_migrated',
         'ebay_listing_id' => $mirrorRow['ebay_listing_id'],
-        'ebay_listing_started_at' => NULL,
+        'ebay_listing_started_at' => $mirrorRow['ebay_listing_started_at'],
         'source_sku' => $mirrorRow['sku'],
         'created' => $timestamp,
         'changed' => $timestamp,
@@ -317,6 +505,15 @@ final class EbayLegacyListingAdoptionService {
   private function normalizeNullableString(?string $value): ?string {
     $normalizedValue = trim((string) $value);
     return $normalizedValue === '' ? NULL : $normalizedValue;
+  }
+
+  private function normalizeNullableInt(mixed $value): ?int {
+    if ($value === NULL) {
+      return NULL;
+    }
+
+    $normalized = (int) $value;
+    return $normalized > 0 ? $normalized : NULL;
   }
 
 }

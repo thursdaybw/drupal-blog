@@ -301,6 +301,8 @@ What this first pass does
 - creates one local `bb_ai_listing` row with bundle type `book`
 - creates one local active SKU row using the mirrored SKU
 - creates one local published eBay publication row
+- downloads mirrored eBay image URLs into local managed files
+- creates `listing_image` rows so review UI shows local images
 - writes one provenance row to `bb_ebay_legacy_listing_link`
 
 What this first pass does not do
@@ -315,6 +317,7 @@ Current adoption rule (locked)
 - leave anything missing for manual review later
 - for legacy imports, treat all eBay book-category listings as local `book`
 - do not create local `book_bundle` rows from legacy imports
+- `adopt-book` is now hard-gated by eBay category (book categories only)
 - reason:
   - eBay does not reliably separate single-book vs bundle in a way we can trust
   - legacy listings are already live, so AI bundle ingestion flow is not needed

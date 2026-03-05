@@ -16,24 +16,24 @@ final class AiBookListingReviewForm extends AiListingReviewFormBase {
   }
 
   protected function resolveListing(?BbAiListing $listing): BbAiListing {
-    if ($listing instanceof BbAiListing && $listing->bundle() === 'book') {
+    if ($listing instanceof BbAiListing && in_array($listing->bundle(), ['book', 'generic'], TRUE)) {
       return $listing;
     }
 
     $routeValue = $this->getRouteMatch()->getParameter('bb_ai_listing');
-    if ($routeValue instanceof BbAiListing && $routeValue->bundle() === 'book') {
+    if ($routeValue instanceof BbAiListing && in_array($routeValue->bundle(), ['book', 'generic'], TRUE)) {
       return $routeValue;
     }
 
     $routeId = (int) $routeValue;
     if ($routeId > 0) {
       $loaded = $this->entityTypeManager->getStorage('bb_ai_listing')->load($routeId);
-      if ($loaded instanceof BbAiListing && $loaded->bundle() === 'book') {
+      if ($loaded instanceof BbAiListing && in_array($loaded->bundle(), ['book', 'generic'], TRUE)) {
         return $loaded;
       }
     }
 
-    throw new NotFoundHttpException('Book listing not found.');
+    throw new NotFoundHttpException('Book or generic listing not found.');
   }
 
   protected function buildPhotoItems(BbAiListing $listing): array {

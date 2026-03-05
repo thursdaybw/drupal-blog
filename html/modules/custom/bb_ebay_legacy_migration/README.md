@@ -309,10 +309,16 @@ What this first pass does not do
 - it does not infer bundle items
 - it does not support non-book adoption yet
 
-Current adoption rule
+Current adoption rule (locked)
 - keep the first pass conservative
 - use mirrored title, description, price, condition, and aspects where present
 - leave anything missing for manual review later
+- for legacy imports, treat all eBay book-category listings as local `book`
+- do not create local `book_bundle` rows from legacy imports
+- reason:
+  - eBay does not reliably separate single-book vs bundle in a way we can trust
+  - legacy listings are already live, so AI bundle ingestion flow is not needed
+  - this keeps adoption deterministic and reduces misclassification risk
 
 ## Listing date gap
 
@@ -366,18 +372,13 @@ Current state
 
 ## Next planned work
 
-1. Keep the classification audits current in `bb_ebay_mirror`
+1. Keep the migration-readiness audits current in `bb_ebay_mirror`
 2. Add migration run logging in this module
-3. Build a pipeline command that:
-   - reads one or more legacy listing IDs
-   - skips already migrated rows
-   - normalizes duplicate SKU rows when needed
-   - generates migration SKUs for missing-SKU rows
-   - migrates through Sell API
-   - resyncs mirrors
-   - records old SKU, new SKU, result, and errors
+3. Expand adoption from one-off to batch:
+   - adopt migrated legacy book listings as local `book`
+   - keep non-book listings mirror-only for now
 4. Wire original legacy `StartTime` into `bb_ebay_legacy_listing_link`
-5. Keep non-book listings mirror-only until a broader local listing model exists
+5. Add a second adoption path for non-book rows later (without forcing book schema)
 
 ## Current migration mutation rules
 

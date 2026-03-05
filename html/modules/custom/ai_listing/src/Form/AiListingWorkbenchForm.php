@@ -34,6 +34,8 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   private ?PagerParametersInterface $pagerParameters = null;
   private ?AiListingBatchDatasetProvider $batchDatasetProvider = null;
   private ?AiListingBatchSelectionManager $batchSelectionManager = null;
+  /** @var array<string,string>|null */
+  private ?array $listingTypeLabels = null;
 
   public static function create(ContainerInterface $container): self {
     $form = new self();
@@ -351,7 +353,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     foreach ($selection as $item) {
       if (is_int($item) || (is_string($item) && ctype_digit($item))) {
         $item = [
-          'listing_type' => 'book',
+          'listing_type' => self::resolveListingTypeForBatchItem((int) $item),
           'id' => (int) $item,
         ];
       }
@@ -384,11 +386,6 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   public static function processBatchOperation(string $listingType, int $listingId, bool $setLocation, string $location, string $operationMode, array &$context): void {
-    if (!in_array($listingType, ['book', 'book_bundle'], TRUE)) {
-      $context['message'] = (string) \Drupal::translation()->translate('Skipping unsupported listing type @type:@id.', ['@type' => $listingType, '@id' => $listingId]);
-      return;
-    }
-
     $entityTypeManager = \Drupal::entityTypeManager();
     $storage = $entityTypeManager->getStorage('bb_ai_listing');
     /** @var \Drupal\ai_listing\Entity\BbAiListing|null $listing */
@@ -534,7 +531,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
 
     $title = $listing->label() ?: 'Untitled';
 
-    if ($listingType === 'book' && self::listingHasInventoryAndMarketplaceData($listingId)) {
+    if (self::listingHasInventoryAndMarketplaceData($listingId)) {
       $context['results']['errors'][] = (string) \Drupal::translation()->translate(
         'Listing %title was not deleted because Drupal has inventory and marketplace publication records for it.',
         ['%title' => $title]
@@ -771,7 +768,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       );
 
       $options[$selectionKey] = [
-        'type' => $listingType === 'book_bundle' ? $this->t('Book bundle') : $this->t('Book'),
+        'type' => $this->buildTypeLabel($listingType),
         'entity_id' => $listingId,
         'listing_code' => trim((string) ($listing->get('listing_code')->value ?? '')) ?: $this->t('Unset'),
         'sku' => $row['sku'] !== '' ? $row['sku'] : $this->t('—'),
@@ -796,7 +793,53 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       return (string) ($listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled bundle'));
     }
 
-    return (string) ($listing->get('field_full_title')->value ?: $listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled listing'));
+    if ($listingType === 'book') {
+      return (string) ($listing->get('field_full_title')->value ?: $listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled listing'));
+    }
+
+    return (string) ($listing->label() ?: $listing->get('ebay_title')->value ?: $this->t('Untitled listing'));
+  }
+
+  private function buildTypeLabel(string $listingType): string {
+    $label = $this->getListingTypeLabels()[$listingType] ?? NULL;
+    if (is_string($label) && $label !== '') {
+      return $label;
+    }
+
+    return ucfirst(str_replace('_', ' ', $listingType));
+  }
+
+  /**
+   * @return array<string,string>
+   */
+  private function getListingTypeLabels(): array {
+    if ($this->listingTypeLabels !== null) {
+      return $this->listingTypeLabels;
+    }
+
+    $labels = [];
+    $types = $this->getEntityTypeManager()->getStorage('bb_ai_listing_type')->loadMultiple();
+    foreach ($types as $type) {
+      $id = (string) $type->id();
+      $label = (string) $type->label();
+      if ($id === '' || $label === '') {
+        continue;
+      }
+
+      $labels[$id] = $label;
+    }
+
+    $this->listingTypeLabels = $labels;
+    return $this->listingTypeLabels;
+  }
+
+  private static function resolveListingTypeForBatchItem(int $listingId): string {
+    $listing = \Drupal::entityTypeManager()->getStorage('bb_ai_listing')->load($listingId);
+    if ($listing instanceof BbAiListing) {
+      return (string) $listing->bundle();
+    }
+
+    return '';
   }
 
   private function getCurrentPage(): int {

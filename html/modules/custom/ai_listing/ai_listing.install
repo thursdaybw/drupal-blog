@@ -2,4 +2,85 @@
 
 declare(strict_types=1);
 
-// Intentionally empty: legacy install/update hooks were retired after direct migration.
+/**
+ * Adds publication provenance fields to ai_marketplace_publication.
+ */
+function ai_listing_update_11001(): void {
+  $schema = \Drupal::database()->schema();
+
+  if (!$schema->fieldExists('ai_marketplace_publication', 'marketplace_started_at')) {
+    $schema->addField('ai_marketplace_publication', 'marketplace_started_at', [
+      'description' => 'Unix timestamp from the marketplace for when the listing first started.',
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => FALSE,
+      'default' => NULL,
+    ]);
+  }
+
+  if (!$schema->fieldExists('ai_marketplace_publication', 'source')) {
+    $schema->addField('ai_marketplace_publication', 'source', [
+      'description' => 'How this publication row was created.',
+      'type' => 'varchar',
+      'length' => 64,
+      'not null' => TRUE,
+      'default' => 'local_publish',
+    ]);
+  }
+
+  \Drupal::database()->update('ai_marketplace_publication')
+    ->fields(['source' => 'local_publish'])
+    ->isNull('source')
+    ->execute();
+
+  \Drupal::database()->update('ai_marketplace_publication')
+    ->fields(['source' => 'local_publish'])
+    ->condition('source', '')
+    ->execute();
+}
+
+/**
+ * Backfills publication provenance for previously adopted legacy eBay rows.
+ */
+function ai_listing_update_11002(): void {
+  $database = \Drupal::database();
+
+  $rows = $database->select('bb_ebay_legacy_listing_link', 'legacy_link')
+    ->fields('legacy_link', ['listing', 'ebay_listing_started_at'])
+    ->execute()
+    ->fetchAllAssoc('listing');
+
+  foreach ($rows as $listingId => $row) {
+    $fields = [
+      'source' => 'legacy_adopted',
+    ];
+
+    $startedAt = (int) ($row->ebay_listing_started_at ?? 0);
+    if ($startedAt > 0) {
+      $fields['marketplace_started_at'] = $startedAt;
+    }
+
+    $database->update('ai_marketplace_publication')
+      ->fields($fields)
+      ->condition('listing', (int) $listingId)
+      ->condition('marketplace_key', 'ebay')
+      ->execute();
+  }
+}
+
+/**
+ * Creates the generic bb_ai_listing bundle.
+ */
+function ai_listing_update_11003(): void {
+  $storage = \Drupal::entityTypeManager()->getStorage('bb_ai_listing_type');
+  $existing = $storage->load('generic');
+  if ($existing !== NULL) {
+    return;
+  }
+
+  $storage->create([
+    'id' => 'generic',
+    'label' => 'Generic',
+    'description' => 'General listing type for non-book marketplace items.',
+  ])->save();
+}

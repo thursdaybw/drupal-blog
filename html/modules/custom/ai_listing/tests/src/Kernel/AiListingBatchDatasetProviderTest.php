@@ -214,13 +214,61 @@ final class AiListingBatchDatasetProviderTest extends KernelTestBase {
   }
 
   /**
+   * Checks that newly added listing bundles are not hard-filtered out.
+   *
+   * This protects against reintroducing bundle allow-lists like
+   * ['book', 'book_bundle'] in dataset code. If we add a new listing bundle,
+   * it should still appear in the workbench dataset.
+   */
+  public function testDatasetIncludesGenericBundleListings(): void {
+    $bookListing = $this->createListing('book', 'Book row', 'shelved', 'BDMAA01', 100);
+    $genericListing = $this->createListing('generic', 'Generic row', 'shelved', 'BOX-01', 200);
+
+    $filter = new AiListingBatchFilter(
+      status: 'shelved',
+      bargainBinFilterMode: 'any',
+      publishedToEbayFilterMode: 'any',
+      searchQuery: '',
+      storageLocationFilter: '',
+      itemsPerPage: 50,
+      currentPage: 0,
+    );
+
+    $dataset = $this->datasetProvider->buildDataset($filter);
+
+    $this->assertSame(2, $dataset->filteredCount);
+
+    $rowById = [];
+    foreach ($dataset->pagedRows as $row) {
+      $rowById[(int) $row['listing_id']] = $row;
+    }
+
+    $this->assertArrayHasKey((int) $bookListing->id(), $rowById);
+    $this->assertArrayHasKey((int) $genericListing->id(), $rowById);
+    $this->assertSame('generic', (string) $rowById[(int) $genericListing->id()]['listing_type']);
+  }
+
+  /**
    * Creates a small real book listing for the test dataset.
    *
    * We keep this helper small so the test setup stays easy to read.
    */
   private function createBookListing(string $ebayTitle, string $status, string $storageLocation, int $created): BbAiListing {
+    return $this->createListing('book', $ebayTitle, $status, $storageLocation, $created);
+  }
+
+  /**
+   * Creates a small real listing for the test dataset.
+   */
+  private function createListing(
+    string $listingType,
+    string $ebayTitle,
+    string $status,
+    string $storageLocation,
+    int $created,
+  ): BbAiListing {
     $listing = BbAiListing::create([
-      'listing_type' => 'book',
+      'listing_type' => $listingType,
       'ebay_title' => $ebayTitle,
       'status' => $status,
       'storage_location' => $storageLocation,

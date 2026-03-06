@@ -22,3 +22,15 @@ services:
       - '@bb_ebay_legacy_migration.adoption_service'
     tags:
       - { name: drush.command }
+
+  bb_ebay_legacy_migration.pipeline_command:
+    class: Drupal\bb_ebay_legacy_migration\Command\EbayLegacyPipelineCommand
+    arguments:
+      - '@bb_ebay_legacy_migration.legacy_listing_mirror_sync_service'
+      - '@bb_ebay_legacy_migration.migration_service'
+      - '@bb_ebay_legacy_migration.adoption_service'
+      - '@bb_ebay_legacy_migration.import_blocklist_service'
+      - '@bb_ebay_mirror.audit_service'
+      - '@drupal.ebay_infrastructure.account_manager'
+    tags:
+      - { name: drush.command }

@@ -1,0 +1,7 @@
+bb_ebay_legacy_migration.blocked_report:
+  path: '/admin/ebay-legacy-migration/blocked'
+  defaults:
+    _controller: '\Drupal\bb_ebay_legacy_migration\Controller\EbayLegacyBlockedReportController::report'
+    _title: 'Blocked legacy imports'
+  requirements:
+    _permission: 'administer site configuration'

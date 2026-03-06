@@ -12,6 +12,7 @@ use Drupal\ebay_infrastructure\Service\EbayAccountManager;
 use Drupal\ebay_infrastructure\Service\SellApiClient;
 use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
 
 final class EbayLegacyMigrationService {
 
@@ -65,7 +66,7 @@ final class EbayLegacyMigrationService {
    *   migrate_response:?array
    * }
    */
-  public function prepareAndMigrateListingId(string $listingId): array {
+  public function prepareAndMigrateListingId(string $listingId, bool $resyncMirror = TRUE): array {
     $normalizedListingId = trim($listingId);
     if ($normalizedListingId === '') {
       throw new InvalidArgumentException('A legacy eBay Item ID is required.');
@@ -106,12 +107,16 @@ final class EbayLegacyMigrationService {
       $this->updateLegacyMirrorSku($account, $normalizedListingId, $preparedSku);
     }
 
-    $response = $this->sellApiClient->bulkMigrateListingsForAccount($account, [$normalizedListingId]);
-    $this->resyncMirror($account);
+    $response = $this->migrateListingIdWithRetry($account, $normalizedListingId);
+    $migrationSucceeded = $this->didMigrationSucceed($response, $normalizedListingId);
+
+    if ($resyncMirror && $migrationSucceeded && $preparedSku !== NULL) {
+      $this->syncMirrorsForSku($account, $preparedSku);
+    }
 
     return [
       'listing_id' => $normalizedListingId,
-      'status' => $this->didMigrationSucceed($response, $normalizedListingId) ? 'migrated' : 'failed_migration',
+      'status' => $migrationSucceeded ? 'migrated' : 'failed_migration',
       'previous_sku' => $previousSku,
       'prepared_sku' => $preparedSku,
       'sku_change_reason' => $skuChangeReason,
@@ -142,6 +147,16 @@ final class EbayLegacyMigrationService {
   private function resyncMirror(EbayAccount $account): void {
     $this->inventoryMirrorSyncService->syncAll($account);
     $this->offerMirrorSyncService->syncAll($account);
+  }
+
+  private function syncMirrorsForSku(EbayAccount $account, string $sku): void {
+    $normalizedSku = trim($sku);
+    if ($normalizedSku === '') {
+      return;
+    }
+
+    $this->inventoryMirrorSyncService->syncSku($account, $normalizedSku);
+    $this->offerMirrorSyncService->syncSku($account, $normalizedSku);
   }
 
   /**
@@ -292,6 +307,165 @@ final class EbayLegacyMigrationService {
   private function normalizeNullableString(string $value): ?string {
     $trimmed = trim($value);
     return $trimmed === '' ? NULL : $trimmed;
+  }
+
+  public function resyncMirrorsForPrimaryAccount(): void {
+    $account = $this->accountManager->loadPrimaryAccount();
+    $this->resyncMirror($account);
+  }
+
+  /**
+   * @param string[] $skus
+   */
+  public function syncMirrorsForPrimaryAccountSkus(array $skus): array {
+    $account = $this->accountManager->loadPrimaryAccount();
+    $normalizedSkus = array_values(array_unique(array_filter(
+      array_map(static fn (mixed $sku): string => is_scalar($sku) ? trim((string) $sku) : '', $skus),
+      static fn (string $sku): bool => $sku !== ''
+    )));
+
+    $result = [
+      'synced_skus' => [],
+      'failed_skus' => [],
+    ];
+
+    foreach ($normalizedSkus as $sku) {
+      $syncSucceeded = $this->syncMirrorsForSkuWithRetry($account, $sku);
+      if ($syncSucceeded) {
+        $result['synced_skus'][] = $sku;
+      }
+      else {
+        $result['failed_skus'][] = $sku;
+      }
+    }
+
+    return $result;
+  }
+
+  private function syncMirrorsForSkuWithRetry(EbayAccount $account, string $sku): bool {
+    $attemptDelaysSeconds = [0, 1, 3, 7];
+
+    foreach ($attemptDelaysSeconds as $attemptIndex => $delaySeconds) {
+      if ($delaySeconds > 0) {
+        sleep($delaySeconds);
+      }
+
+      try {
+        $this->syncMirrorsForSku($account, $sku);
+        return TRUE;
+      }
+      catch (Throwable $e) {
+        if (!$this->isRetryableSellSystemError($e)) {
+          return FALSE;
+        }
+
+        if ($attemptIndex === array_key_last($attemptDelaysSeconds)) {
+          return FALSE;
+        }
+      }
+    }
+
+    return FALSE;
+  }
+
+  private function isRetryableSellSystemError(Throwable $e): bool {
+    $message = $e->getMessage();
+
+    if (!str_contains($message, '"errorId":25001')) {
+      return FALSE;
+    }
+
+    return str_contains($message, '"category":"System"')
+      || str_contains($message, '"category":"REQUEST"')
+      || str_contains($message, '"category":"Request"');
+  }
+
+  private function migrateListingIdWithRetry(EbayAccount $account, string $listingId): array {
+    $attemptDelaysSeconds = [0, 1, 3, 7];
+    $lastResponse = [];
+
+    foreach ($attemptDelaysSeconds as $attemptIndex => $delaySeconds) {
+      if ($delaySeconds > 0) {
+        sleep($delaySeconds);
+      }
+
+      try {
+        $response = $this->sellApiClient->bulkMigrateListingsForAccount($account, [$listingId]);
+        $lastResponse = is_array($response) ? $response : [];
+      }
+      catch (Throwable $e) {
+        if (!$this->isRetryableSellSystemError($e)) {
+          throw $e;
+        }
+
+        if ($attemptIndex === array_key_last($attemptDelaysSeconds)) {
+          throw $e;
+        }
+
+        continue;
+      }
+
+      if ($this->didMigrationSucceed($lastResponse, $listingId)) {
+        return $lastResponse;
+      }
+
+      if (!$this->isRetryableMigrationResponse($lastResponse, $listingId)) {
+        return $lastResponse;
+      }
+
+      if ($attemptIndex === array_key_last($attemptDelaysSeconds)) {
+        return $lastResponse;
+      }
+    }
+
+    return $lastResponse;
+  }
+
+  private function isRetryableMigrationResponse(array $response, string $listingId): bool {
+    $responses = $response['responses'] ?? NULL;
+    if (!is_array($responses)) {
+      return FALSE;
+    }
+
+    foreach ($responses as $listingResponse) {
+      if (!is_array($listingResponse)) {
+        continue;
+      }
+
+      if ((string) ($listingResponse['listingId'] ?? '') !== $listingId) {
+        continue;
+      }
+
+      $statusCode = (int) ($listingResponse['statusCode'] ?? 0);
+      if ($statusCode < 500) {
+        return FALSE;
+      }
+
+      $errors = $listingResponse['errors'] ?? NULL;
+      if (!is_array($errors) || $errors === []) {
+        return FALSE;
+      }
+
+      foreach ($errors as $error) {
+        if (!is_array($error)) {
+          continue;
+        }
+
+        $errorId = (int) ($error['errorId'] ?? 0);
+        if ($errorId !== 25001) {
+          continue;
+        }
+
+        $category = strtoupper((string) ($error['category'] ?? ''));
+        if ($category === 'SYSTEM' || $category === 'REQUEST') {
+          return TRUE;
+        }
+      }
+
+      return FALSE;
+    }
+
+    return FALSE;
   }
 
 }

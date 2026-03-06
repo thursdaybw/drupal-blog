@@ -257,6 +257,73 @@ What this does
 - runs the normalize-and-migrate pipeline per listing
 - prints a run summary bucketed by outcome
 
+## Single command for full pipeline
+
+Run convert + adopt in one command:
+
+```bash
+ddev drush bb-ebay-legacy-migration:run-ready-pipeline --limit=25
+```
+
+Dry run preview:
+
+```bash
+ddev drush bb-ebay-legacy-migration:run-ready-pipeline --limit=25 --dry-run
+```
+
+Optional flags:
+- `--account-id=<id>` to target a specific eBay account instead of primary
+
+## One command for full legacy import
+
+Run full legacy import end-to-end:
+
+```bash
+ddev drush bb-ebay-legacy-migration:import-all --batch-size=50
+```
+
+What this command does:
+- syncs legacy Trading listings into `bb_ebay_legacy_listing`
+- takes the current unmigrated legacy set (missing mirrored Sell offer)
+- prepares SKU when needed (missing or duplicate) and converts to Sell
+- syncs mirror rows only for SKUs touched in the batch
+- adopts converted listings into `bb_ai_listing`
+- loops until no unmigrated legacy listings remain (or max-batches limit)
+
+Usage intent:
+- this is an onboarding/import pipeline, not a recurring background sync loop
+- run until migration is complete, then stop
+
+Control options:
+- `--batch-size=<n>` default `50`
+- `--max-batches=<n>` default `0` (no limit)
+- `--dry-run` prints current scope only
+- `--skip-sell-refresh` skips the initial full Sell mirror refresh
+
+Import behavior notes:
+- blocked listings are skipped automatically (from blocked import report)
+- successful migrations clear their blocked entry
+
+## Blocked import report
+
+When a listing fails import (for example missing required item specifics in
+Trading revise), it is recorded as a blocked row.
+
+Review blocked rows at:
+
+- `/admin/ebay-legacy-migration/blocked`
+
+The report includes:
+- eBay Item ID
+- mirrored title and SKU
+- first/last failure timestamps
+- failure count
+- last error message
+- direct link to open the eBay item page for manual fixes
+
+After fixing a listing in eBay, rerun import and the block entry is cleared
+automatically on successful migration.
+
 ## Current migration-readiness buckets
 
 These buckets now exist in `bb_ebay_mirror` and on `/admin/ebay-mirror/report`.
@@ -302,6 +369,16 @@ Adopt one mirrored migrated non-book eBay listing into `bb_ai_listing`:
 ddev drush bb-ebay-legacy-migration:adopt-generic 176577811710
 ```
 
+Adopt migrated legacy listings in batch using category-based routing:
+
+```bash
+ddev drush bb-ebay-legacy-migration:adopt-ready-batch --limit=25 --dry-run
+```
+
+```bash
+ddev drush bb-ebay-legacy-migration:adopt-ready-batch --limit=25
+```
+
 What this first pass does
 - loads one mirrored migrated eBay listing by eBay Item ID
 - creates one local `bb_ai_listing` row with bundle type `book`
@@ -315,7 +392,6 @@ What this first pass does not do
 - it does not use the old Trading API
 - it does not preserve original listing start date in local adoption yet
 - it does not infer bundle items
-- it does not support non-book adoption yet
 
 Current adoption rule (locked)
 - keep the first pass conservative

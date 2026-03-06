@@ -63,4 +63,116 @@ final class EbayLegacyListingAdoptionCommand extends DrushCommands {
     ));
   }
 
+  /**
+   * Adopt migrated legacy listings that are ready in mirror data.
+   *
+   * Routing rule:
+   * - book categories => adopt-book path
+   * - everything else => adopt-generic path
+   *
+   * @command bb-ebay-legacy-migration:adopt-ready-batch
+   * @option account-id Adopt from this eBay account ID (defaults to primary).
+   * @option limit Maximum number of listings to adopt in this run.
+   * @option dry-run Print what would be adopted without writing local entities.
+   *
+   * @usage bb-ebay-legacy-migration:adopt-ready-batch --limit=25 --dry-run
+   *   Preview the next 25 ready legacy listings and their adoption route.
+   */
+  public function adoptReadyBatch(array $options = [
+    'account-id' => NULL,
+    'limit' => 0,
+    'dry-run' => FALSE,
+  ]): void {
+    $accountId = isset($options['account-id']) && $options['account-id'] !== NULL
+      ? (int) $options['account-id']
+      : NULL;
+    $limit = (int) ($options['limit'] ?? 0);
+    $dryRun = (bool) ($options['dry-run'] ?? FALSE);
+
+    $rows = $this->adoptionService->findReadyToAdoptListings($accountId);
+    if ($limit > 0) {
+      $rows = array_slice($rows, 0, $limit);
+    }
+
+    if ($rows === []) {
+      $this->output()->writeln('No migrated legacy listings are ready for adoption.');
+      return;
+    }
+
+    $this->output()->writeln(sprintf(
+      'Processing %d ready listing(s). dryRun=%s',
+      count($rows),
+      $dryRun ? 'true' : 'false'
+    ));
+
+    $summary = [
+      'book_adopted' => 0,
+      'generic_adopted' => 0,
+      'failed' => 0,
+    ];
+
+    foreach ($rows as $row) {
+      $listingId = (string) ($row['ebay_listing_id'] ?? '');
+      if ($listingId === '') {
+        continue;
+      }
+
+      $categoryId = is_string($row['category_id'] ?? NULL) ? $row['category_id'] : NULL;
+      $adoptionType = $this->adoptionService->resolveAdoptionTypeForCategory($categoryId);
+
+      if ($dryRun) {
+        $this->output()->writeln(sprintf(
+          '- [dry-run] listingId %s | type %s | category %s | sku %s | offer %s | %s',
+          $listingId,
+          $adoptionType,
+          $categoryId ?? 'none',
+          (string) ($row['sku'] ?? ''),
+          (string) ($row['offer_id'] ?? ''),
+          (string) ($row['title'] ?? '')
+        ));
+        continue;
+      }
+
+      try {
+        $result = $adoptionType === 'book'
+          ? $this->adoptionService->adoptBookListing($listingId, $accountId)
+          : $this->adoptionService->adoptGenericListing($listingId, $accountId);
+
+        if ($adoptionType === 'book') {
+          $summary['book_adopted']++;
+        }
+        else {
+          $summary['generic_adopted']++;
+        }
+
+        $this->output()->writeln(sprintf(
+          '- listingId %s | adopted_as %s | local %d | sku %s | offer %s',
+          $result['ebay_listing_id'],
+          $adoptionType,
+          $result['local_listing_id'],
+          $result['sku'],
+          $result['offer_id']
+        ));
+      }
+      catch (\Throwable $e) {
+        $summary['failed']++;
+        $this->output()->writeln(sprintf(
+          '- listingId %s | failed | %s',
+          $listingId,
+          $e->getMessage()
+        ));
+      }
+    }
+
+    if ($dryRun) {
+      $this->output()->writeln(sprintf('Dry run complete. Would process %d listing(s).', count($rows)));
+      return;
+    }
+
+    $this->output()->writeln('Batch summary:');
+    $this->output()->writeln(sprintf('- book_adopted: %d', $summary['book_adopted']));
+    $this->output()->writeln(sprintf('- generic_adopted: %d', $summary['generic_adopted']));
+    $this->output()->writeln(sprintf('- failed: %d', $summary['failed']));
+  }
+
 }

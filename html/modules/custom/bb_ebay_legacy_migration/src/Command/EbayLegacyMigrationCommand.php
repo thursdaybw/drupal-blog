@@ -163,6 +163,7 @@ final class EbayLegacyMigrationCommand extends DrushCommands {
       'missing_sku_fixed_then_migrated' => 0,
       'duplicate_sku_fixed_then_migrated' => 0,
     ];
+    $migratedSkus = [];
 
     foreach ($readyRows as $readyRow) {
       $listingId = (string) ($readyRow['ebay_listing_id'] ?? '');
@@ -175,9 +176,10 @@ final class EbayLegacyMigrationCommand extends DrushCommands {
         continue;
       }
 
-      $result = $this->migrationService->prepareAndMigrateListingId($listingId);
+      $result = $this->migrationService->prepareAndMigrateListingId($listingId, FALSE);
       $this->writePipelineResultSummary($result);
       $this->incrementBucketCounts($bucketCounts, $result);
+      $this->collectMigratedSku($migratedSkus, $result);
     }
 
     if ($dryRun) {
@@ -187,6 +189,20 @@ final class EbayLegacyMigrationCommand extends DrushCommands {
       ));
     }
     else {
+      if ($migratedSkus !== []) {
+        $this->output()->writeln(sprintf(
+          'Syncing mirrors for migrated SKUs (%d touched)...',
+          count($migratedSkus)
+        ));
+        $syncResult = $this->migrationService->syncMirrorsForPrimaryAccountSkus($migratedSkus);
+        if ($syncResult['failed_skus'] !== []) {
+          $this->output()->writeln(sprintf(
+            'Mirror sync failed for %d SKU(s): %s',
+            count($syncResult['failed_skus']),
+            implode(', ', $syncResult['failed_skus'])
+          ));
+        }
+      }
       $this->output()->writeln('Batch summary:');
       foreach ($bucketCounts as $bucket => $count) {
         $this->output()->writeln(sprintf('- %s: %d', $bucket, $count));
@@ -364,6 +380,23 @@ final class EbayLegacyMigrationCommand extends DrushCommands {
     }
 
     $bucketCounts['migrated']++;
+  }
+
+  /**
+   * @param string[] $migratedSkus
+   * @param array{status:string,prepared_sku:?string} $result
+   */
+  private function collectMigratedSku(array &$migratedSkus, array $result): void {
+    if (($result['status'] ?? '') !== 'migrated') {
+      return;
+    }
+
+    $preparedSku = $result['prepared_sku'] ?? NULL;
+    if (!is_string($preparedSku) || trim($preparedSku) === '') {
+      return;
+    }
+
+    $migratedSkus[] = trim($preparedSku);
   }
 
 }

@@ -1,0 +1,13 @@
+bb_ebay_legacy_migration.group:
+  title: 'eBay migration'
+  description: 'Legacy eBay listing import and migration tools'
+  route_name: bb_ebay_legacy_migration.blocked_report
+  parent: bb_platform.applications
+  weight: 45
+
+bb_ebay_legacy_migration.blocked_report:
+  title: 'Blocked legacy imports'
+  description: 'Review legacy listings that failed import and open each eBay item for manual fixes.'
+  route_name: bb_ebay_legacy_migration.blocked_report
+  parent: bb_ebay_legacy_migration.group
+  weight: 10

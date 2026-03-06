@@ -80,6 +80,94 @@ final class EbayLegacyListingAdoptionService {
     return $this->adoptListingByType($ebayListingId, 'generic', $accountId);
   }
 
+  /**
+   * Returns migrated listings that are ready for local adoption.
+   *
+   * Ready means:
+   * - listing is visible in legacy mirror
+   * - listing has a published mirrored offer
+   * - listing has not already been adopted into bb_ai_listing
+   *
+   * @return array<int,array{
+   *   ebay_listing_id:string,
+   *   sku:string,
+   *   title:?string,
+   *   offer_id:string,
+   *   category_id:?string
+   * }>
+   */
+  public function findReadyToAdoptListings(?int $accountId = NULL): array {
+    $account = $this->resolveAccount($accountId);
+
+    $query = $this->database->select('bb_ebay_legacy_listing', 'legacy');
+    $query->innerJoin(
+      'bb_ebay_offer',
+      'offer',
+      'offer.account_id = legacy.account_id AND offer.listing_id = legacy.ebay_listing_id'
+    );
+    $query->leftJoin(
+      'bb_ebay_legacy_listing_link',
+      'legacy_link',
+      'legacy_link.account_id = legacy.account_id AND legacy_link.ebay_listing_id = legacy.ebay_listing_id'
+    );
+    $query->leftJoin(
+      'ai_marketplace_publication',
+      'publication_by_listing',
+      'publication_by_listing.marketplace_key = :marketplace_key_listing'
+      . ' AND publication_by_listing.status IN (:statuses_listing[])'
+      . ' AND publication_by_listing.marketplace_listing_id = legacy.ebay_listing_id',
+      [
+        ':marketplace_key_listing' => 'ebay',
+        ':statuses_listing[]' => ['published', 'publishing'],
+      ]
+    );
+    $query->leftJoin(
+      'ai_marketplace_publication',
+      'publication_by_sku',
+      'publication_by_sku.marketplace_key = :marketplace_key_sku'
+      . ' AND publication_by_sku.status IN (:statuses_sku[])'
+      . ' AND publication_by_sku.inventory_sku_value = legacy.sku',
+      [
+        ':marketplace_key_sku' => 'ebay',
+        ':statuses_sku[]' => ['published', 'publishing'],
+      ]
+    );
+
+    $query->fields('legacy', ['ebay_listing_id', 'sku', 'title']);
+    $query->fields('offer', ['offer_id', 'category_id']);
+    $query->condition('legacy.account_id', (int) $account->id());
+    $query->condition('offer.status', 'PUBLISHED');
+    $query->isNull('legacy_link.id');
+    $query->isNull('publication_by_listing.id');
+    $query->isNull('publication_by_sku.id');
+    $query->isNotNull('legacy.sku');
+    $query->where("TRIM(legacy.sku) <> ''");
+    $query->orderBy('legacy.ebay_listing_id', 'ASC');
+
+    $results = $query->execute()->fetchAll();
+    $rows = [];
+
+    foreach ($results as $result) {
+      $rows[] = [
+        'ebay_listing_id' => (string) ($result->ebay_listing_id ?? ''),
+        'sku' => (string) ($result->sku ?? ''),
+        'title' => $this->normalizeNullableString($result->title ?? NULL),
+        'offer_id' => (string) ($result->offer_id ?? ''),
+        'category_id' => $this->normalizeNullableString($result->category_id ?? NULL),
+      ];
+    }
+
+    return $rows;
+  }
+
+  public function resolveAdoptionTypeForCategory(?string $categoryId): string {
+    if ($categoryId !== NULL && in_array($categoryId, self::BOOK_CATEGORY_IDS, TRUE)) {
+      return 'book';
+    }
+
+    return 'generic';
+  }
+
   private function resolveAccount(?int $accountId): EbayAccount {
     if ($accountId !== NULL) {
       $account = $this->entityTypeManager->getStorage('ebay_account')->load($accountId);

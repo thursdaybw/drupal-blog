@@ -33,3 +33,9 @@ services:
       - '@http_client'
       - '@file.repository'
       - '@file_system'
+
+  bb_ebay_legacy_migration.import_blocklist_service:
+    class: Drupal\bb_ebay_legacy_migration\Service\EbayLegacyImportBlocklistService
+    arguments:
+      - '@keyvalue'
+      - '@database'

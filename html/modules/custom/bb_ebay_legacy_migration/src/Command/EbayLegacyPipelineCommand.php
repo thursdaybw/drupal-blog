@@ -74,7 +74,10 @@ final class EbayLegacyPipelineCommand extends DrushCommands {
     ));
 
     if ($dryRun) {
-      $unmigratedRows = $this->mirrorAuditService->findLegacyListingsMissingMirroredSellOffer($accountId);
+      $this->blocklistService->pruneNonActiveFailuresForAccount($accountId);
+      $unmigratedRows = $this->filterRowsToActiveLegacyListings(
+        $this->mirrorAuditService->findLegacyListingsMissingMirroredSellOffer($accountId)
+      );
       $blockedListingIds = $this->blocklistService->getBlockedListingIdsForAccount($accountId);
       $eligibleRows = $this->filterRowsExcludingBlockedListings($unmigratedRows, $blockedListingIds, $batchSize);
       $this->output()->writeln(sprintf('Current unmigrated legacy listings: %d', count($unmigratedRows)));
@@ -99,6 +102,7 @@ final class EbayLegacyPipelineCommand extends DrushCommands {
       $legacySyncResult['pages'],
       $legacySyncResult['deleted_count']
     ));
+    $this->blocklistService->pruneNonActiveFailuresForAccount($accountId);
 
     if ($skipSellRefresh) {
       $this->output()->writeln('Skipping initial full Sell mirror refresh (--skip-sell-refresh).');
@@ -126,7 +130,9 @@ final class EbayLegacyPipelineCommand extends DrushCommands {
     ];
 
     while (TRUE) {
-      $unmigratedRows = $this->mirrorAuditService->findLegacyListingsMissingMirroredSellOffer($accountId);
+      $unmigratedRows = $this->filterRowsToActiveLegacyListings(
+        $this->mirrorAuditService->findLegacyListingsMissingMirroredSellOffer($accountId)
+      );
       if ($unmigratedRows === []) {
         break;
       }
@@ -165,7 +171,9 @@ final class EbayLegacyPipelineCommand extends DrushCommands {
       }
     }
 
-    $remaining = count($this->mirrorAuditService->findLegacyListingsMissingMirroredSellOffer($accountId));
+    $remaining = count($this->filterRowsToActiveLegacyListings(
+      $this->mirrorAuditService->findLegacyListingsMissingMirroredSellOffer($accountId)
+    ));
 
     $this->output()->writeln('Full import summary:');
     $this->output()->writeln(sprintf('- batches: %d', $totalSummary['batches']));
@@ -603,6 +611,28 @@ final class EbayLegacyPipelineCommand extends DrushCommands {
     }
 
     return $filteredRows;
+  }
+
+  /**
+   * Keep only ACTIVE legacy rows for import.
+   *
+   * @param array<int,array<string,mixed>> $rows
+   *
+   * @return array<int,array<string,mixed>>
+   */
+  private function filterRowsToActiveLegacyListings(array $rows): array {
+    $activeRows = [];
+
+    foreach ($rows as $row) {
+      $status = strtoupper(trim((string) ($row['listing_status'] ?? '')));
+      if ($status !== '' && $status !== 'ACTIVE') {
+        continue;
+      }
+
+      $activeRows[] = $row;
+    }
+
+    return $activeRows;
   }
 
   /**

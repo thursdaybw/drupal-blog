@@ -5,3 +5,12 @@ bb_ebay_legacy_migration.blocked_report:
     _title: 'Blocked legacy imports'
   requirements:
     _permission: 'administer site configuration'
+
+bb_ebay_legacy_migration.clear_blocked_listing:
+  path: '/admin/ebay-legacy-migration/blocked/{listing_id}/clear'
+  defaults:
+    _form: '\Drupal\bb_ebay_legacy_migration\Form\ClearLegacyBlockedListingForm'
+    _title: 'Clear blocked legacy listing'
+  requirements:
+    _permission: 'administer site configuration'
+    listing_id: '\d+'

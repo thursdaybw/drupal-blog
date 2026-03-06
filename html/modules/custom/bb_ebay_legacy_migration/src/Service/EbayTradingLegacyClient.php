@@ -124,13 +124,16 @@ final class EbayTradingLegacyClient {
 
   private function parseListingItem(SimpleXMLElement $item): array {
     $namespaced = $item->children(self::XML_NAMESPACE);
+    $listingStatus = $this->normalizeNullableString((string) $namespaced->SellingStatus->ListingStatus);
 
     return [
       'ebay_listing_id' => trim((string) $namespaced->ItemID),
       'sku' => $this->normalizeNullableString((string) $namespaced->SKU),
       'title' => $this->normalizeNullableString((string) $namespaced->Title),
       'ebay_listing_started_at' => $this->parseDateTime((string) $namespaced->ListingDetails->StartTime),
-      'listing_status' => $this->normalizeNullableString((string) $namespaced->SellingStatus->ListingStatus),
+      // GetMyeBaySelling ActiveList rows are active even when ListingStatus is
+      // omitted in the item payload.
+      'listing_status' => strtoupper((string) ($listingStatus ?? 'ACTIVE')),
       'primary_category_id' => $this->normalizeNullableString((string) $namespaced->PrimaryCategory->CategoryID),
       'raw_xml' => $item->asXML() ?: NULL,
     ];

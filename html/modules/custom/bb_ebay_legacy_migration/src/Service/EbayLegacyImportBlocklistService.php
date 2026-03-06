@@ -53,6 +53,23 @@ final class EbayLegacyImportBlocklistService {
     $this->keyValueFactory->get(self::COLLECTION)->delete($normalizedListingId);
   }
 
+  public function markClearedForRetry(string $listingId): void {
+    $normalizedListingId = trim($listingId);
+    if ($normalizedListingId === '') {
+      return;
+    }
+
+    $collection = $this->keyValueFactory->get(self::COLLECTION);
+    $existing = $collection->get($normalizedListingId, []);
+    if (!is_array($existing) || $existing === []) {
+      return;
+    }
+
+    $existing['status'] = 'cleared';
+    $existing['cleared_at'] = time();
+    $collection->set($normalizedListingId, $existing);
+  }
+
   /**
    * @return array<int,array{
    *   listing_id:string,
@@ -108,6 +125,10 @@ final class EbayLegacyImportBlocklistService {
     $listingIds = [];
 
     foreach ($rows as $row) {
+      if (($row['status'] ?? '') !== 'needs_manual_fix') {
+        continue;
+      }
+
       $listingId = trim((string) ($row['listing_id'] ?? ''));
       if ($listingId !== '') {
         $listingIds[] = $listingId;
@@ -115,6 +136,45 @@ final class EbayLegacyImportBlocklistService {
     }
 
     return array_values(array_unique($listingIds));
+  }
+
+  /**
+   * Remove blocked rows that no longer need manual fixing.
+   *
+   * A row is pruned when its legacy listing is not ACTIVE (for example ended)
+   * or no longer exists in the legacy mirror for this account.
+   */
+  public function pruneNonActiveFailuresForAccount(int $accountId): int {
+    $collection = $this->keyValueFactory->get(self::COLLECTION);
+    $all = $collection->getAll();
+    if ($all === []) {
+      return 0;
+    }
+
+    $listingIds = array_values(array_filter(array_keys($all), static fn (string $listingId): bool => trim($listingId) !== ''));
+    if ($listingIds === []) {
+      return 0;
+    }
+
+    $legacyRows = $this->loadLegacyRows($accountId, $listingIds);
+    $deleted = 0;
+
+    foreach ($listingIds as $listingId) {
+      $legacy = $legacyRows[$listingId] ?? NULL;
+      if (!is_array($legacy)) {
+        $collection->delete($listingId);
+        $deleted++;
+        continue;
+      }
+
+      $legacyStatus = $this->normalizeNullableString($legacy['listing_status'] ?? NULL);
+      if ($legacyStatus !== NULL && strtoupper($legacyStatus) !== 'ACTIVE') {
+        $collection->delete($listingId);
+        $deleted++;
+      }
+    }
+
+    return $deleted;
   }
 
   private function normalizeErrorMessage(string $errorMessage): string {
@@ -159,11 +219,11 @@ final class EbayLegacyImportBlocklistService {
   /**
    * @param string[] $listingIds
    *
-   * @return array<string,array{title:?string,sku:?string}>
+   * @return array<string,array{title:?string,sku:?string,listing_status:?string}>
    */
   private function loadLegacyRows(int $accountId, array $listingIds): array {
     $query = $this->database->select('bb_ebay_legacy_listing', 'legacy')
-      ->fields('legacy', ['ebay_listing_id', 'title', 'sku'])
+      ->fields('legacy', ['ebay_listing_id', 'title', 'sku', 'listing_status'])
       ->condition('legacy.account_id', $accountId)
       ->condition('legacy.ebay_listing_id', $listingIds, 'IN');
 
@@ -179,6 +239,7 @@ final class EbayLegacyImportBlocklistService {
       $rows[$listingId] = [
         'title' => $this->normalizeNullableString($row->title ?? NULL),
         'sku' => $this->normalizeNullableString($row->sku ?? NULL),
+        'listing_status' => strtoupper((string) ($this->normalizeNullableString($row->listing_status ?? NULL) ?? '')),
       ];
     }
 

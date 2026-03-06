@@ -8,6 +8,7 @@ use Drupal\bb_ebay_legacy_migration\Service\EbayLegacyImportBlocklistService;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\Link;
+use Drupal\Core\Render\Markup;
 use Drupal\Core\Url;
 use Drupal\ebay_infrastructure\Service\EbayAccountManager;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -33,6 +34,7 @@ final class EbayLegacyBlockedReportController extends ControllerBase {
    */
   public function report(): array {
     $account = $this->accountManager->loadPrimaryAccount();
+    $this->blocklistService->pruneNonActiveFailuresForAccount((int) $account->id());
     $rows = $this->blocklistService->getFailuresForAccount((int) $account->id());
 
     $build = [
@@ -56,9 +58,26 @@ final class EbayLegacyBlockedReportController extends ControllerBase {
     $tableRows = [];
     foreach ($rows as $row) {
       $listingId = $row['listing_id'];
+      $status = (string) ($row['status'] ?? 'needs_manual_fix');
+
+      $clearAction = '';
+      if ($status === 'needs_manual_fix') {
+        $clearAction = Link::fromTextAndUrl(
+          $this->t('Clear'),
+          Url::fromRoute('bb_ebay_legacy_migration.clear_blocked_listing', [
+            'listing_id' => $listingId,
+          ], [
+            'attributes' => ['class' => ['button', 'button--small']],
+          ])
+        )->toString();
+      }
+      elseif ($status === 'cleared') {
+        $clearAction = Markup::create('<span class="button button--small button--disabled" aria-disabled="true">Cleared</span>');
+      }
+
       $tableRows[] = [
         $listingId,
-        $this->formatStatus((string) ($row['status'] ?? 'needs_manual_fix')),
+        $this->formatStatus($status),
         $row['title'] ?? 'Untitled listing',
         $row['sku'] ?? 'unset',
         (string) $row['failure_count'],
@@ -66,6 +85,7 @@ final class EbayLegacyBlockedReportController extends ControllerBase {
         $this->formatTimestamp($row['last_failed_at']),
         $row['last_error_message'],
         Link::fromTextAndUrl($this->t('Open eBay item'), Url::fromUri('https://www.ebay.com.au/itm/' . $listingId, ['attributes' => ['target' => '_blank', 'rel' => 'noopener noreferrer']]))->toString(),
+        $clearAction,
       ];
     }
 
@@ -81,6 +101,7 @@ final class EbayLegacyBlockedReportController extends ControllerBase {
         $this->t('Last failed'),
         $this->t('Last error'),
         $this->t('eBay link'),
+        $this->t('Actions'),
       ],
       '#rows' => $tableRows,
       '#empty' => $this->t('No blocked legacy imports are currently recorded.'),
@@ -100,6 +121,7 @@ final class EbayLegacyBlockedReportController extends ControllerBase {
   private function formatStatus(string $status): string {
     return match ($status) {
       'retry_next_run' => 'Retry next run',
+      'cleared' => 'Cleared',
       'already_migrated' => 'Already migrated',
       default => 'Needs manual fix',
     };

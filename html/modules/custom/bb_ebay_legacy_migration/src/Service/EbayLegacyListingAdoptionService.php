@@ -323,7 +323,7 @@ final class EbayLegacyListingAdoptionService {
 
     $listing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'ready_for_review',
+      'status' => 'shelved',
       'ebay_title' => $mirrorRow['ebay_title'],
       'description' => [
         'value' => $mirrorRow['listing_description'],
@@ -365,7 +365,7 @@ final class EbayLegacyListingAdoptionService {
   private function createGenericListingFromMirrorRow(array $mirrorRow): BbAiListing {
     $listing = BbAiListing::create([
       'listing_type' => 'generic',
-      'status' => 'ready_for_review',
+      'status' => 'shelved',
       'ebay_title' => $mirrorRow['ebay_title'],
       'description' => [
         'value' => $mirrorRow['listing_description'],

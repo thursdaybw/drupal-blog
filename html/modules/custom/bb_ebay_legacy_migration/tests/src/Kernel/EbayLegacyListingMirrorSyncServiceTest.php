@@ -37,6 +37,7 @@ final class EbayLegacyListingMirrorSyncServiceTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'file',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -89,6 +90,8 @@ final class EbayLegacyListingMirrorSyncServiceTest extends KernelTestBase {
     $this->assertCount(2, $rows);
     $this->assertSame('Official AFL NAB AusKick 20 Yr T-Shirt - 2015 Celebration - Size L - Great Cond', $rows['176582430935']->title);
     $this->assertSame('2024 September A01', $rows['176582430935']->sku);
+    $this->assertSame('ACTIVE', $rows['176582430935']->listing_status);
+    $this->assertSame('ACTIVE', $rows['176779515895']->listing_status);
 
     // Second sync changes the title for one listing and drops the other one.
     $this->httpClient->queueResponse(new Response(200, ['Content-Type' => 'text/xml'], $this->buildActiveListingsResponse([
@@ -109,7 +112,30 @@ final class EbayLegacyListingMirrorSyncServiceTest extends KernelTestBase {
     $rows = $this->loadLegacyRows();
     $this->assertCount(1, $rows);
     $this->assertSame('Official AFL NAB AusKick 20 Yr T-Shirt Updated', $rows['176582430935']->title);
+    $this->assertSame('ACTIVE', $rows['176582430935']->listing_status);
     $this->assertArrayNotHasKey('176779515895', $rows);
+  }
+
+  public function testSyncDefaultsListingStatusToActiveWhenMissingFromPayload(): void {
+    $service = $this->createSyncService();
+    $account = $this->createPrimaryAccount();
+
+    $this->httpClient->queueResponse(new Response(200, ['Content-Type' => 'text/xml'], $this->buildActiveListingsResponse([
+      [
+        'ItemID' => '177175105338',
+        'SKU' => 'legacy-example-001',
+        'Title' => 'Legacy listing without explicit listing status',
+        'StartTime' => '2025-06-01T00:00:00.000Z',
+        'PrimaryCategoryID' => '261186',
+      ],
+    ], 1)));
+
+    $result = $service->syncAccount($account);
+    $this->assertSame(1, $result['synced_count']);
+
+    $rows = $this->loadLegacyRows();
+    $this->assertCount(1, $rows);
+    $this->assertSame('ACTIVE', $rows['177175105338']->listing_status);
   }
 
   private function createPrimaryAccount(): EbayAccount {
@@ -170,12 +196,17 @@ final class EbayLegacyListingMirrorSyncServiceTest extends KernelTestBase {
   private function buildActiveListingsResponse(array $items, int $totalPages): string {
     $itemXml = '';
     foreach ($items as $item) {
+      $listingStatusXml = '';
+      if (isset($item['ListingStatus']) && trim((string) $item['ListingStatus']) !== '') {
+        $listingStatusXml = '<ListingStatus>' . htmlspecialchars($item['ListingStatus'], ENT_XML1) . '</ListingStatus>';
+      }
+
       $itemXml .= '<Item>'
         . '<ItemID>' . htmlspecialchars($item['ItemID'], ENT_XML1) . '</ItemID>'
         . '<SKU>' . htmlspecialchars($item['SKU'], ENT_XML1) . '</SKU>'
         . '<Title>' . htmlspecialchars($item['Title'], ENT_XML1) . '</Title>'
         . '<ListingDetails><StartTime>' . htmlspecialchars($item['StartTime'], ENT_XML1) . '</StartTime></ListingDetails>'
-        . '<SellingStatus><ListingStatus>' . htmlspecialchars($item['ListingStatus'], ENT_XML1) . '</ListingStatus></SellingStatus>'
+        . '<SellingStatus>' . $listingStatusXml . '</SellingStatus>'
         . '<PrimaryCategory><CategoryID>' . htmlspecialchars($item['PrimaryCategoryID'], ENT_XML1) . '</CategoryID></PrimaryCategory>'
         . '</Item>';
     }

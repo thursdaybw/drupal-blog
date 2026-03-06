@@ -459,7 +459,7 @@ final class EbayLegacyPipelineCommand extends DrushCommands {
   }
 
   /**
-   * @param array{listing_id:string,status:string,prepared_sku:?string,sku_change_reason:?string,migrate_response:?array} $result
+   * @param array{listing_id:string,status:string,prepared_sku:?string,sku_change_reason:?string,migration_attempts?:int,migrate_response:?array} $result
    */
   private function writeConversionResultLine(array $result): void {
     $line = sprintf(
@@ -477,6 +477,11 @@ final class EbayLegacyPipelineCommand extends DrushCommands {
     $errorMessage = $this->extractFirstErrorMessage($result['migrate_response'] ?? NULL);
     if ($errorMessage !== NULL) {
       $line .= ' | error ' . $errorMessage;
+    }
+
+    $attempts = (int) ($result['migration_attempts'] ?? 0);
+    if ($attempts > 1) {
+      $line .= ' | attempts ' . $attempts;
     }
 
     $this->output()->writeln($line);
@@ -624,7 +629,7 @@ final class EbayLegacyPipelineCommand extends DrushCommands {
   }
 
   /**
-   * @param array{status:string,migrate_response:?array} $result
+   * @param array{status:string,migration_attempts?:int,migrate_response:?array} $result
    */
   private function recordOrClearBlocklistFromResult(string $listingId, array $result): void {
     $status = $result['status'] ?? '';
@@ -638,7 +643,17 @@ final class EbayLegacyPipelineCommand extends DrushCommands {
     }
 
     $errorMessage = $this->extractFirstErrorMessage($result['migrate_response'] ?? NULL) ?? 'Legacy migration failed.';
+
+    if ($this->isAlreadyMigratedFailureMessage($errorMessage)) {
+      $this->blocklistService->clearFailure($listingId);
+      return;
+    }
+
     $this->blocklistService->recordFailure($listingId, $errorMessage);
+  }
+
+  private function isAlreadyMigratedFailureMessage(string $errorMessage): bool {
+    return str_contains(strtolower($errorMessage), 'already migrated');
   }
 
   private function extractFirstErrorMessage(?array $migrateResponse): ?string {

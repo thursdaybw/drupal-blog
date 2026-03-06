@@ -322,6 +322,7 @@ final class EbayLegacyMigrationCommand extends DrushCommands {
    *   previous_sku:?string,
    *   prepared_sku:?string,
    *   sku_change_reason:?string,
+   *   migration_attempts?:int,
    *   migrate_response:?array
    * } $result
    */
@@ -339,6 +340,11 @@ final class EbayLegacyMigrationCommand extends DrushCommands {
 
     if ($result['sku_change_reason'] !== NULL) {
       $this->output()->writeln('- skuChangeReason ' . $result['sku_change_reason']);
+    }
+
+    $attempts = (int) ($result['migration_attempts'] ?? 0);
+    if ($attempts > 1) {
+      $this->output()->writeln('- attempts ' . $attempts);
     }
 
     if (is_array($result['migrate_response'])) {

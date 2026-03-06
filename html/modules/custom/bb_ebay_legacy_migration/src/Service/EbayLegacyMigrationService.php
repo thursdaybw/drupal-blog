@@ -63,6 +63,7 @@ final class EbayLegacyMigrationService {
    *   previous_sku:?string,
    *   prepared_sku:?string,
    *   sku_change_reason:?string,
+   *   migration_attempts:int,
    *   migrate_response:?array
    * }
    */
@@ -85,6 +86,7 @@ final class EbayLegacyMigrationService {
         'previous_sku' => $legacyListing['sku'],
         'prepared_sku' => $legacyListing['sku'],
         'sku_change_reason' => NULL,
+        'migration_attempts' => 0,
         'migrate_response' => NULL,
       ];
     }
@@ -107,7 +109,8 @@ final class EbayLegacyMigrationService {
       $this->updateLegacyMirrorSku($account, $normalizedListingId, $preparedSku);
     }
 
-    $response = $this->migrateListingIdWithRetry($account, $normalizedListingId);
+    $migrationResult = $this->migrateListingIdWithRetry($account, $normalizedListingId);
+    $response = $migrationResult['response'];
     $migrationSucceeded = $this->didMigrationSucceed($response, $normalizedListingId);
 
     if ($resyncMirror && $migrationSucceeded && $preparedSku !== NULL) {
@@ -120,6 +123,7 @@ final class EbayLegacyMigrationService {
       'previous_sku' => $previousSku,
       'prepared_sku' => $preparedSku,
       'sku_change_reason' => $skuChangeReason,
+      'migration_attempts' => $migrationResult['attempts'],
       'migrate_response' => $response,
     ];
   }
@@ -380,11 +384,16 @@ final class EbayLegacyMigrationService {
       || str_contains($message, '"category":"Request"');
   }
 
+  /**
+   * @return array{response:array,attempts:int}
+   */
   private function migrateListingIdWithRetry(EbayAccount $account, string $listingId): array {
     $attemptDelaysSeconds = [0, 1, 3, 7];
     $lastResponse = [];
+    $attempts = 0;
 
     foreach ($attemptDelaysSeconds as $attemptIndex => $delaySeconds) {
+      $attempts++;
       if ($delaySeconds > 0) {
         sleep($delaySeconds);
       }
@@ -406,19 +415,31 @@ final class EbayLegacyMigrationService {
       }
 
       if ($this->didMigrationSucceed($lastResponse, $listingId)) {
-        return $lastResponse;
+        return [
+          'response' => $lastResponse,
+          'attempts' => $attempts,
+        ];
       }
 
       if (!$this->isRetryableMigrationResponse($lastResponse, $listingId)) {
-        return $lastResponse;
+        return [
+          'response' => $lastResponse,
+          'attempts' => $attempts,
+        ];
       }
 
       if ($attemptIndex === array_key_last($attemptDelaysSeconds)) {
-        return $lastResponse;
+        return [
+          'response' => $lastResponse,
+          'attempts' => $attempts,
+        ];
       }
     }
 
-    return $lastResponse;
+    return [
+      'response' => $lastResponse,
+      'attempts' => $attempts,
+    ];
   }
 
   private function isRetryableMigrationResponse(array $response, string $listingId): bool {

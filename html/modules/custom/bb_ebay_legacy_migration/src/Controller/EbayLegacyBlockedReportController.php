@@ -58,6 +58,7 @@ final class EbayLegacyBlockedReportController extends ControllerBase {
       $listingId = $row['listing_id'];
       $tableRows[] = [
         $listingId,
+        $this->formatStatus((string) ($row['status'] ?? 'needs_manual_fix')),
         $row['title'] ?? 'Untitled listing',
         $row['sku'] ?? 'unset',
         (string) $row['failure_count'],
@@ -72,6 +73,7 @@ final class EbayLegacyBlockedReportController extends ControllerBase {
       '#type' => 'table',
       '#header' => [
         $this->t('eBay Item ID'),
+        $this->t('Status'),
         $this->t('Title'),
         $this->t('SKU'),
         $this->t('Failures'),
@@ -93,6 +95,14 @@ final class EbayLegacyBlockedReportController extends ControllerBase {
     }
 
     return $this->dateFormatter->format($timestamp, 'custom', 'Y-m-d H:i:s');
+  }
+
+  private function formatStatus(string $status): string {
+    return match ($status) {
+      'retry_next_run' => 'Retry next run',
+      'already_migrated' => 'Already migrated',
+      default => 'Needs manual fix',
+    };
   }
 
 }

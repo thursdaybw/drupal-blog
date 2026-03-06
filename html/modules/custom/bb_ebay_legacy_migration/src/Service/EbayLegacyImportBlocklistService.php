@@ -26,11 +26,18 @@ final class EbayLegacyImportBlocklistService {
     $existing = $collection->get($normalizedListingId, []);
     $now = time();
 
+    $status = $this->classifyFailureStatus($errorMessage);
+    if ($status === 'already_migrated') {
+      $this->clearFailure($normalizedListingId);
+      return;
+    }
+
     $record = [
       'listing_id' => $normalizedListingId,
       'first_failed_at' => (int) ($existing['first_failed_at'] ?? $now),
       'last_failed_at' => $now,
       'failure_count' => (int) ($existing['failure_count'] ?? 0) + 1,
+      'status' => $status,
       'last_error_message' => $this->normalizeErrorMessage($errorMessage),
     ];
 
@@ -51,6 +58,7 @@ final class EbayLegacyImportBlocklistService {
    *   listing_id:string,
    *   title:?string,
    *   sku:?string,
+   *   status:string,
    *   first_failed_at:int,
    *   last_failed_at:int,
    *   failure_count:int,
@@ -80,6 +88,7 @@ final class EbayLegacyImportBlocklistService {
         'listing_id' => $listingId,
         'title' => $legacy['title'] ?? NULL,
         'sku' => $legacy['sku'] ?? NULL,
+        'status' => $this->normalizeFailureStatus((string) ($record['status'] ?? ''), (string) ($record['last_error_message'] ?? '')),
         'first_failed_at' => (int) ($record['first_failed_at'] ?? 0),
         'last_failed_at' => (int) ($record['last_failed_at'] ?? 0),
         'failure_count' => (int) ($record['failure_count'] ?? 0),
@@ -119,6 +128,32 @@ final class EbayLegacyImportBlocklistService {
     }
 
     return mb_substr($normalized, 0, 997) . '...';
+  }
+
+  private function classifyFailureStatus(string $errorMessage): string {
+    $normalized = strtolower($errorMessage);
+
+    if (str_contains($normalized, 'already migrated')) {
+      return 'already_migrated';
+    }
+
+    if (str_contains($normalized, 'a system error has occurred')
+      || str_contains($normalized, 'dependent service failure')
+      || str_contains($normalized, '"statuscode":500')
+      || str_contains($normalized, '"errorid":25001')) {
+      return 'retry_next_run';
+    }
+
+    return 'needs_manual_fix';
+  }
+
+  private function normalizeFailureStatus(string $storedStatus, string $errorMessage): string {
+    $normalizedStoredStatus = trim($storedStatus);
+    if ($normalizedStoredStatus !== '') {
+      return $normalizedStoredStatus;
+    }
+
+    return $this->classifyFailureStatus($errorMessage);
   }
 
   /**

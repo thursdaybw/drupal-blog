@@ -315,6 +315,7 @@ Review blocked rows at:
 
 The report includes:
 - eBay Item ID
+- status (`Needs manual fix` or `Retry next run`)
 - mirrored title and SKU
 - first/last failure timestamps
 - failure count

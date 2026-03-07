@@ -77,3 +77,25 @@ ddev deploy
 ### 3) If activation fails on missing env keys
 
 Re-open `ops/compose/staging/.env` and ensure all required keys above are set to non-empty values, then rerun.
+
+## Staging DB import
+
+Why:
+- After first staging bring-up, Drupal points to `/core/install.php` until a DB is loaded.
+
+Command:
+
+```bash
+ddev deploy-db-staging
+```
+
+What it does:
+- exports current local dev DB to `.ddev/.artifacts/staging-db-current.sql.gz` (if no file is provided),
+- uploads the dump to the staging host,
+- imports it into staging MySQL.
+
+Optional:
+
+```bash
+ddev deploy-db-staging --sql-file=/path/to/dump.sql.gz
+```

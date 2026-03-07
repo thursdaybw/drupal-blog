@@ -1,19 +1,22 @@
 ---
-# `deploy_image.yml` handles one deploy stage only:
+# `deploy_image.yml` handles activation for staging:
 # 1) verify artifact exists on the remote host
 # 2) load that artifact into Docker on the remote host
-#
-# It intentionally does NOT restart services yet.
-# That keeps rollout control separate while we stabilize infrastructure.
+# 3) copy staging compose file
+# 4) run docker compose up -d for staging
 
 - name: Load release image artifact on production target
-  hosts: prod
+  hosts: staging
   become: false
   gather_facts: false
 
   vars:
-    # Default workspace path on the remote host.
+    # Artifact workspace path on the remote host.
     release_workspace: /home/bevan/workspace/bb-platform-prod
+    staging_workspace: /home/bevan/workspace/bb-platform-staging
+    local_staging_env_src: "{{ playbook_dir }}/../compose/staging/.env"
+    staging_env_path: "{{ staging_workspace }}/.env"
+    staging_compose_path: "{{ staging_workspace }}/docker-compose.yml"
 
     # Directory where deploy artifacts are uploaded.
     # Can be overridden from CLI with:
@@ -90,9 +93,133 @@
         content: |
           {{ release_image_ref }}
 
+    - name: Ensure staging workspace exists
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ staging_workspace }}"
+        - "{{ staging_workspace }}/html"
+        - "{{ staging_workspace }}/html/sites"
+        - "{{ staging_workspace }}/html/sites/default"
+        - "{{ staging_workspace }}/html/sites/default/files"
+
+    - name: Copy staging docker-compose file to remote workspace
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../compose/staging/docker-compose.yml"
+        dest: "{{ staging_compose_path }}"
+        mode: "0644"
+
+    - name: Check local staging .env exists on control machine
+      ansible.builtin.stat:
+        path: "{{ local_staging_env_src }}"
+      register: local_staging_env_stat
+      delegate_to: localhost
+      run_once: true
+
+    - name: Fail when local staging .env is missing
+      ansible.builtin.assert:
+        that:
+          - local_staging_env_stat.stat.exists
+        fail_msg: |
+          Missing local staging env file.
+
+          Expected:
+          {{ local_staging_env_src }}
+
+          Create it from:
+          ops/compose/staging/.env.example
+
+          See:
+          ops/ansible/BOOTSTRAP.md
+          Section: "Staging env file"
+
+    - name: Copy local staging .env to remote workspace
+      ansible.builtin.copy:
+        src: "{{ local_staging_env_src }}"
+        dest: "{{ staging_env_path }}"
+        mode: "0600"
+
+    - name: Ensure staging .env exists on remote host
+      ansible.builtin.stat:
+        path: "{{ staging_env_path }}"
+      register: staging_env_stat
+
+    - name: Fail when staging .env is missing on remote host
+      ansible.builtin.assert:
+        that:
+          - staging_env_stat.stat.exists
+        fail_msg: |
+          Missing staging env file on remote host after copy.
+
+          Expected:
+          {{ staging_env_path }}
+
+          See:
+          ops/ansible/BOOTSTRAP.md
+          Section: "Staging env file"
+
+    - name: Set APP_IMAGE in staging .env for this release
+      ansible.builtin.lineinfile:
+        path: "{{ staging_env_path }}"
+        regexp: '^APP_IMAGE='
+        line: "APP_IMAGE={{ release_image_ref }}"
+        create: true
+        mode: "0600"
+
+    - name: Read staging .env content
+      ansible.builtin.slurp:
+        path: "{{ staging_env_path }}"
+      register: staging_env_content
+
+    - name: Assert required MySQL variables exist in staging .env
+      ansible.builtin.assert:
+        that:
+          - "(staging_env_content.content | b64decode) is regex('(?m)^MYSQL_ROOT_PASSWORD=.+$')"
+          - "(staging_env_content.content | b64decode) is regex('(?m)^MYSQL_USER=.+$')"
+          - "(staging_env_content.content | b64decode) is regex('(?m)^MYSQL_PASSWORD=.+$')"
+          - "(staging_env_content.content | b64decode) is regex('(?m)^MYSQL_DATABASE=.+$')"
+        fail_msg: |
+          Staging .env is present but missing required MySQL values.
+
+          Required non-empty keys:
+          - MYSQL_ROOT_PASSWORD
+          - MYSQL_USER
+          - MYSQL_PASSWORD
+          - MYSQL_DATABASE
+
+          File:
+          {{ staging_env_path }}
+
+          See:
+          ops/ansible/BOOTSTRAP.md
+          Section: "Staging env file"
+
+    - name: Validate staging compose configuration
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ staging_compose_path }}
+          --env-file {{ staging_env_path }}
+          config -q
+      changed_when: false
+
+    - name: Start staging services with docker compose
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ staging_compose_path }}
+          --env-file {{ staging_env_path }}
+          up -d
+      register: compose_up_result
+      changed_when: true
+
     - name: Output docker load summary
       ansible.builtin.debug:
         msg:
           - "Loaded image: {{ release_image_ref }}"
           - "Artifact: {{ release_remote_dir }}/{{ release_artifact_name }}"
           - "Docker load output: {{ docker_load_result.stdout | default('') }}"
+          - "Compose file: {{ staging_compose_path }}"
+          - "Compose up output: {{ compose_up_result.stdout | default('') }}"

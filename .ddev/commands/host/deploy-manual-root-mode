@@ -57,10 +57,7 @@ validate_github_token_on_prod
 
 git push origin main
 
-# Function to generate drush cset commands from secrets.txt
-# the bit about the id_rsa_sftp key doesn't belong in here.
-# we need to move it, it's only here because here was the
-# only place reading the secrets.txt previously.
+# Function to generate drush cset commands from secrets.txt.
 generate_drush_commands() {
   while IFS= read -r line; do
     entity=$(echo "$line" | cut -d ' ' -f 1)
@@ -77,7 +74,6 @@ DRUSH_COMMANDS=$(generate_drush_commands)
 SSH_COMMANDS=$(cat <<EOF
 
 cd /root/workspace/drupal-blog
-umount -f /root/workspace/drupal-blog/html/sites/default/files/receipts
 
 # Change ownership to root
 sudo chown -R root:root .

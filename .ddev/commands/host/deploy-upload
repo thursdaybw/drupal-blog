@@ -69,19 +69,20 @@ prune_local_artifacts() {
 prune_remote_artifacts() {
   local keep_count=3
 
-  ssh "${SSH_TARGET}" bash -lc "'
+  ssh "${SSH_TARGET}" "
 set -euo pipefail
-shopt -s nullglob
-files=(\"${REMOTE_RELEASE_DIR}/${IMAGE_REPOSITORY}-\"*.tar.gz)
-if [ \"\${#files[@]}\" -le ${keep_count} ]; then
+mapfile -t files < <(
+  find \"${REMOTE_RELEASE_DIR}\" -maxdepth 1 -type f -name \"${IMAGE_REPOSITORY}-*.tar.gz\" \
+    -printf '%T@ %p\n' | sort -nr | awk '{print \$2}'
+)
+if [ \${#files[@]} -le ${keep_count} ]; then
   exit 0
 fi
-IFS=\$'\\n' files=(\$(ls -1t \"\${files[@]}\" ))
 for old_file in \"\${files[@]:${keep_count}}\"; do
   rm -f \"\${old_file}\"
   echo \"- pruned remote artifact: \${old_file}\"
 done
-'"
+"
 }
 
 echo "Upload phase"

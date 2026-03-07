@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## #ddev-generated
+## Description: Push a local SQL dump to staging and import it into staging MySQL.
+## Usage: deploy-db-staging [--sql-file=/abs/or/rel/path.sql[.gz]] [--dry-run]
+## Example: ddev deploy-db-staging
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+ARTIFACT_DIR="${PROJECT_ROOT}/.ddev/.artifacts"
+DEFAULT_DUMP_PATH="${ARTIFACT_DIR}/staging-db-current.sql.gz"
+SSH_TARGET="bb-drupal-prod"
+REMOTE_DB_DIR="/home/bevan/workspace/bb-platform-staging/releases/db"
+ANSIBLE_INVENTORY="${PROJECT_ROOT}/ops/ansible/inventory.ini"
+ANSIBLE_PLAYBOOK="${PROJECT_ROOT}/ops/ansible/deploy_db_staging.yml"
+
+DRY_RUN=false
+SQL_FILE_ARG=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    --sql-file=*)
+      SQL_FILE_ARG="${arg#*=}"
+      ;;
+    *)
+      echo "Unknown argument: $arg"
+      exit 1
+      ;;
+  esac
+done
+
+resolve_path() {
+  local input_path="$1"
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$input_path"
+    return
+  fi
+  readlink -f "$input_path"
+}
+
+absolutize_path_without_check() {
+  local input_path="$1"
+  if [[ "${input_path}" = /* ]]; then
+    echo "${input_path}"
+  else
+    echo "${PROJECT_ROOT}/${input_path}"
+  fi
+}
+
+determine_sql_file() {
+  if [ -n "${SQL_FILE_ARG}" ]; then
+    echo "${SQL_FILE_ARG}"
+    return
+  fi
+
+  mkdir -p "${ARTIFACT_DIR}"
+  echo "No --sql-file provided. Exporting current ddev DB to:" >&2
+  echo "- ${DEFAULT_DUMP_PATH}" >&2
+
+  if [ "${DRY_RUN}" = true ]; then
+    echo "[dry-run] ddev export-db --gzip --file=${DEFAULT_DUMP_PATH}" >&2
+  else
+    ddev export-db --gzip --file="${DEFAULT_DUMP_PATH}"
+  fi
+
+  echo "${DEFAULT_DUMP_PATH}"
+}
+
+validate_sql_file_extension() {
+  local file_path="$1"
+  if [[ "${file_path}" != *.sql && "${file_path}" != *.sql.gz ]]; then
+    echo "Unsupported SQL file extension: ${file_path}"
+    echo "Expected one of: .sql or .sql.gz"
+    exit 1
+  fi
+}
+
+SQL_FILE="$(determine_sql_file)"
+validate_sql_file_extension "${SQL_FILE}"
+
+if [ "${DRY_RUN}" = false ] && [ ! -f "${SQL_FILE}" ]; then
+  echo "SQL dump not found: ${SQL_FILE}"
+  exit 1
+fi
+
+if [ -f "${SQL_FILE}" ]; then
+  SQL_FILE_ABS="$(resolve_path "${SQL_FILE}")"
+elif [ "${DRY_RUN}" = true ]; then
+  SQL_FILE_ABS="$(absolutize_path_without_check "${SQL_FILE}")"
+else
+  echo "SQL dump not found: ${SQL_FILE}"
+  exit 1
+fi
+SQL_FILE_NAME="$(basename "${SQL_FILE_ABS}")"
+REMOTE_SQL_PATH="${REMOTE_DB_DIR}/${SQL_FILE_NAME}"
+
+SQL_IS_GZIP=false
+if [[ "${SQL_FILE_NAME}" == *.gz ]]; then
+  SQL_IS_GZIP=true
+fi
+
+echo "DB deploy phase (staging)"
+echo "- local dump: ${SQL_FILE_ABS}"
+echo "- remote dump: ${SSH_TARGET}:${REMOTE_SQL_PATH}"
+echo "- dump gzip: ${SQL_IS_GZIP}"
+echo "- dry run: ${DRY_RUN}"
+
+if [ "${DRY_RUN}" = true ]; then
+  echo "[dry-run] ssh ${SSH_TARGET} mkdir -p ${REMOTE_DB_DIR}"
+  echo "[dry-run] rsync -av --progress ${SQL_FILE_ABS} ${SSH_TARGET}:${REMOTE_SQL_PATH}"
+  echo "[dry-run] ansible-playbook -i ${ANSIBLE_INVENTORY} ${ANSIBLE_PLAYBOOK} -e db_dump_remote_path=${REMOTE_SQL_PATH} -e db_dump_is_gzip=${SQL_IS_GZIP}"
+  exit 0
+fi
+
+ssh "${SSH_TARGET}" "mkdir -p ${REMOTE_DB_DIR}"
+rsync -av --progress "${SQL_FILE_ABS}" "${SSH_TARGET}:${REMOTE_SQL_PATH}"
+
+ansible-playbook \
+  -i "${ANSIBLE_INVENTORY}" \
+  "${ANSIBLE_PLAYBOOK}" \
+  -e "db_dump_remote_path=${REMOTE_SQL_PATH}" \
+  -e "db_dump_is_gzip=${SQL_IS_GZIP}"
+
+echo "DB deploy complete."
+echo "- imported dump: ${REMOTE_SQL_PATH}"

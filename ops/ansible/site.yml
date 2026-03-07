@@ -28,6 +28,8 @@
 
     # Public staging hostname.
     staging_domain: bb-drupal-staging.bevansbench.com
+    # Email used for Let's Encrypt registration/expiry notices for staging cert.
+    staging_tls_email: bevan@bevansbench.com
 
     # Staging app upstream target.
     staging_upstream_host: 127.0.0.1

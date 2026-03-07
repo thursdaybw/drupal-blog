@@ -17,11 +17,19 @@
   changed_when: false
   failed_when: false
 
+- name: Check sudo access for certbot command
+  # We test certbot access because TLS issuance is part of host setup.
+  ansible.builtin.command: sudo -n certbot --version
+  register: sudo_certbot_check
+  changed_when: false
+  failed_when: false
+
 - name: Fail with bootstrap instructions when required sudo commands are missing
   ansible.builtin.assert:
     that:
       - sudo_nginx_check.rc == 0
       - sudo_docker_check.rc == 0
+      - sudo_certbot_check.rc == 0
     fail_msg: |
       Preflight failed: required sudo command access is not configured for user '{{ ansible_user }}' on this host.
 

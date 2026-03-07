@@ -1,0 +1,14 @@
+bb_linktree.index:
+  path: '/linktree'
+  defaults:
+    _controller: '\Drupal\bb_linktree\Controller\PublicLinktreeController::buildIndex'
+    _title: 'Linktree'
+  requirements:
+    _permission: 'access content'
+
+bb_linktree.page:
+  path: '/linktree/{page_path}'
+  defaults:
+    _controller: '\Drupal\bb_linktree\Controller\PublicLinktreeController::buildPage'
+  requirements:
+    _permission: 'access content'

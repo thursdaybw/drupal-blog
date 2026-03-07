@@ -1,0 +1,13 @@
+bb_linktree.pages:
+  title: 'Linktree pages'
+  description: 'Manage public link pages.'
+  route_name: entity.bb_linktree_page.collection
+  parent: bb_platform.applications
+  weight: 40
+
+bb_linktree.items:
+  title: 'Linktree items'
+  description: 'Manage links that belong to link pages.'
+  route_name: entity.bb_linktree_item.collection
+  parent: bb_platform.applications
+  weight: 41

@@ -1,0 +1,4 @@
+administer bb linktree:
+  title: 'Administer BB Linktree'
+  description: 'Create, manage, and publish link pages and link items.'
+  restrict access: true

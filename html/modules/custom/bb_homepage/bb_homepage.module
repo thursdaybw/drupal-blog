@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @file
+ * Theme hooks for BB Homepage.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function bb_homepage_theme(array $existing, string $type, string $theme, string $path): array {
+  return [
+    'bb_homepage_page' => [
+      'variables' => [
+        'hero' => [],
+        'focus_areas' => [],
+        'featured_articles' => [],
+        'current_work' => [],
+        'about' => [],
+        'follow_links' => [],
+      ],
+      'template' => 'bb-homepage-page',
+    ],
+  ];
+}

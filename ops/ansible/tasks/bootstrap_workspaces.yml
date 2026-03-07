@@ -1,0 +1,53 @@
+---
+# This task file prepares folder structure only.
+# It does not deploy code, touch Docker, or restart services.
+#
+# Why this exists:
+# - keep first Ansible run low-risk and easy to understand
+# - establish deterministic paths for later deploy playbooks
+
+- name: Create workspace roots for prod and staging
+  # These are the top-level folders for each environment.
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  loop:
+    - "{{ prod_workspace_path }}"
+    - "{{ staging_workspace_path }}"
+
+- name: Create expected Drupal subdirectories for prod and staging
+  # Create minimal directory tree used by Drupal files storage in each env.
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  loop:
+    - "{{ prod_workspace_path }}/html"
+    - "{{ prod_workspace_path }}/html/sites"
+    - "{{ prod_workspace_path }}/html/sites/default"
+    - "{{ prod_workspace_path }}/html/sites/default/files"
+    - "{{ staging_workspace_path }}/html"
+    - "{{ staging_workspace_path }}/html/sites"
+    - "{{ staging_workspace_path }}/html/sites/default"
+    - "{{ staging_workspace_path }}/html/sites/default/files"
+
+- name: Add placeholder .env files for prod and staging
+  # We create marker files only. Real secrets should be populated separately.
+  ansible.builtin.copy:
+    dest: "{{ item.path }}/.env"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0640"
+    force: false
+    content: |
+      # {{ item.name }} environment file placeholder.
+      # Fill with real values before first deploy.
+      APP_ENV={{ item.name }}
+  loop:
+    - { name: "prod", path: "{{ prod_workspace_path }}" }
+    - { name: "staging", path: "{{ staging_workspace_path }}" }

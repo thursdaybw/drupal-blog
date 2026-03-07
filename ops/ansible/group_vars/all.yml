@@ -1,0 +1,12 @@
+# `group_vars/all.yml` = variables applied to every host/group in this inventory.
+#
+# `ansible_user`:
+# SSH username Ansible uses on the remote server.
+# This is the account on the VPS, not a local user.
+ansible_user: bevan
+
+# `ansible_python_interpreter`:
+# Python path on the REMOTE server that Ansible should use.
+# It is not the Python on your laptop.
+# We set this explicitly to avoid interpreter auto-detection drift/warnings.
+ansible_python_interpreter: /usr/bin/python3.10

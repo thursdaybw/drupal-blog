@@ -4,7 +4,7 @@ set -euo pipefail
 
 ## #ddev-generated
 ## Description: Build production image and create a release artifact tarball locally.
-## Usage: deploy-build [--dry-run] [--image-tag=<tag>]
+## Usage: deploy-build [--dry-run] [--image-tag=<tag>] [--force-rebuild]
 ## Example: ddev deploy-build --dry-run
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -14,6 +14,7 @@ IMAGE_REPOSITORY="bb-platform-drupal"
 REMOTE_RELEASE_DIR="/home/bevan/workspace/bb-platform-prod/releases"
 
 DRY_RUN=false
+FORCE_REBUILD=false
 IMAGE_TAG="git-$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD)"
 
 for arg in "$@"; do
@@ -23,6 +24,9 @@ for arg in "$@"; do
       ;;
     --image-tag=*)
       IMAGE_TAG="${arg#*=}"
+      ;;
+    --force-rebuild)
+      FORCE_REBUILD=true
       ;;
     *)
       echo "Unknown argument: $arg"
@@ -57,18 +61,31 @@ print_plan() {
   echo "- local artifact: ${LOCAL_ARTIFACT_PATH}"
   echo "- release env: ${RELEASE_ENV_PATH}"
   echo "- dry run: ${DRY_RUN}"
+  echo "- force rebuild: ${FORCE_REBUILD}"
 }
 
 print_plan
 
 if [ "${DRY_RUN}" = true ]; then
   write_release_env
-  echo "[dry-run] docker build -t ${IMAGE_REF} -f ${PROJECT_ROOT}/Dockerfile.prod ${PROJECT_ROOT}"
-  echo "[dry-run] docker save ${IMAGE_REF} | gzip > ${LOCAL_ARTIFACT_PATH}"
+  if [ -f "${LOCAL_ARTIFACT_PATH}" ] && [ "${FORCE_REBUILD}" = false ]; then
+    echo "[dry-run] artifact already exists, would skip build: ${LOCAL_ARTIFACT_PATH}"
+    echo "[dry-run] use --force-rebuild to force image build and artifact regeneration"
+  else
+    echo "[dry-run] docker build -t ${IMAGE_REF} -f ${PROJECT_ROOT}/Dockerfile.prod ${PROJECT_ROOT}"
+    echo "[dry-run] docker save ${IMAGE_REF} | gzip > ${LOCAL_ARTIFACT_PATH}"
+  fi
   exit 0
 fi
 
 write_release_env
+if [ -f "${LOCAL_ARTIFACT_PATH}" ] && [ "${FORCE_REBUILD}" = false ]; then
+  echo "Build phase skipped."
+  echo "- artifact already exists: ${LOCAL_ARTIFACT_PATH}"
+  echo "- use --force-rebuild to regenerate this artifact"
+  exit 0
+fi
+
 docker build -t "${IMAGE_REF}" -f "${PROJECT_ROOT}/Dockerfile.prod" "${PROJECT_ROOT}"
 docker save "${IMAGE_REF}" | gzip > "${LOCAL_ARTIFACT_PATH}"
 

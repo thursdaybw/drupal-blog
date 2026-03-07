@@ -4,11 +4,12 @@ set -euo pipefail
 
 ## #ddev-generated
 ## Description: Build, upload, and activate a production release.
-## Usage: deploy [--dry-run] [--image-tag=<tag>]
+## Usage: deploy [--dry-run] [--image-tag=<tag>] [--force-rebuild]
 ## Example: ddev deploy --dry-run
 
 DRY_RUN=false
 IMAGE_TAG_ARG=""
+FORCE_REBUILD=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -17,6 +18,9 @@ for arg in "$@"; do
       ;;
     --image-tag=*)
       IMAGE_TAG_ARG="$arg"
+      ;;
+    --force-rebuild)
+      FORCE_REBUILD=true
       ;;
     *)
       echo "Unknown argument: $arg"
@@ -30,6 +34,10 @@ COMMON_ARGS=()
 
 if [ -n "${IMAGE_TAG_ARG}" ]; then
   BUILD_ARGS+=("${IMAGE_TAG_ARG}")
+fi
+
+if [ "${FORCE_REBUILD}" = true ]; then
+  BUILD_ARGS+=("--force-rebuild")
 fi
 
 if [ "${DRY_RUN}" = true ]; then

@@ -1,0 +1,31 @@
+---
+# `site.yml` is the top-level Ansible playbook.
+# Think of this as the entry point: "run this to apply our server setup tasks".
+#
+# This play currently does one safe thing:
+# - create bevan-owned workspace directories for prod and staging
+# - create minimal Drupal files directory structure under each
+#
+# Target group:
+# - `staging` (from inventory.ini)
+#   We use this group first so we can prove workflow safely.
+
+- name: Bootstrap Drupal workspaces on staging target
+  hosts: staging
+  become: false
+  gather_facts: false
+
+  vars:
+    # Root folder for bevan-managed application workspaces.
+    workspace_root: /home/bevan/workspace
+
+    # Short platform slug used in directory names.
+    platform_slug: bb-platform
+
+    # Environment-specific workspaces.
+    prod_workspace_path: "{{ workspace_root }}/{{ platform_slug }}-prod"
+    staging_workspace_path: "{{ workspace_root }}/{{ platform_slug }}-staging"
+
+  tasks:
+    - name: Run workspace bootstrap tasks
+      ansible.builtin.import_tasks: tasks/bootstrap_workspaces.yml

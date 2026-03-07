@@ -1,0 +1,9 @@
+name: 'BB Linktree'
+type: module
+description: 'Provides Linktree-style link pages as first-class application entities.'
+package: 'BevansBench'
+core_version_requirement: ^10 || ^11
+dependencies:
+  - bb_platform
+  - drupal:link
+  - drupal:text

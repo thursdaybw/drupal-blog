@@ -1,0 +1,5 @@
+name: 'BB Homepage'
+type: module
+description: 'Provides the dedicated Bevan''s Bench homepage.'
+package: 'BevansBench'
+core_version_requirement: ^10 || ^11

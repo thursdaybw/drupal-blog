@@ -1,0 +1,5 @@
+services:
+  bb_homepage.theme_negotiator:
+    class: Drupal\bb_homepage\Theme\HomepageThemeNegotiator
+    tags:
+      - { name: theme_negotiator, priority: 1000 }

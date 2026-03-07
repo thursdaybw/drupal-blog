@@ -1,0 +1,126 @@
+<div class="bb-homepage">
+  <section class="bb-homepage__hero">
+    <div class="bb-homepage__hero-inner">
+      <div class="bb-homepage__hero-main">
+        <p class="bb-homepage__eyebrow">A Workshop Entrance</p>
+        <h1 class="bb-homepage__title">{{ hero.title }}</h1>
+        <p class="bb-homepage__tagline">{{ hero.tagline }}</p>
+
+        <div class="bb-homepage__actions">
+          {% for action in hero.actions %}
+            <a
+              class="bb-homepage__action bb-homepage__action--{{ action.variant }}"
+              href="{{ action.url }}"
+              {% if action.target %}
+                target="{{ action.target }}"
+              {% endif %}
+              {% if action.rel %}
+                rel="{{ action.rel }}"
+              {% endif %}
+            >
+              {{ action.label }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <aside class="bb-homepage__hero-aside">
+        <p class="bb-homepage__hero-note">Building in public</p>
+        <p class="bb-homepage__intro">{{ hero.intro }}</p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="bb-homepage__section bb-homepage__section--focus">
+    <div class="bb-homepage__section-heading">
+      <p class="bb-homepage__section-kicker">What Happens Here</p>
+      <h2>What Happens at the Bench</h2>
+      <p>This site is part workshop, part experiment log, and part place to document what keeps proving useful.</p>
+    </div>
+
+    <div class="bb-homepage__card-grid bb-homepage__card-grid--three">
+      {% for area in focus_areas %}
+        <article class="bb-homepage__card">
+          <h3>{{ area.title }}</h3>
+          <p>{{ area.description }}</p>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="bb-homepage__section">
+    <div class="bb-homepage__section-heading">
+      <p class="bb-homepage__section-kicker">Start Here</p>
+      <h2>Recent Notes from the Bench</h2>
+      <p>A few recent pieces that show what the site is about in practice.</p>
+    </div>
+
+    {% if featured_articles %}
+      <div class="bb-homepage__article-list">
+        {% for article in featured_articles %}
+          <article class="bb-homepage__article-card">
+            <p class="bb-homepage__article-date">{{ article.date }}</p>
+            <h3><a href="{{ article.url }}">{{ article.title }}</a></h3>
+            <p>{{ article.summary }}</p>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="bb-homepage__empty-state">
+        <p>No featured articles are available yet.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="bb-homepage__section">
+    <div class="bb-homepage__section-heading">
+      <p class="bb-homepage__section-kicker">Current Work</p>
+      <h2>What I’m Building Right Now</h2>
+    </div>
+
+    <div class="bb-homepage__card-grid bb-homepage__card-grid--two">
+      {% for item in current_work %}
+        <article class="bb-homepage__card bb-homepage__card--work">
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.description }}</p>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="bb-homepage__section bb-homepage__section--about">
+    <div class="bb-homepage__section-heading">
+      <p class="bb-homepage__section-kicker">About</p>
+      <h2>{{ about.title }}</h2>
+    </div>
+    <div class="bb-homepage__about-copy">
+      <p>{{ about.body }}</p>
+    </div>
+  </section>
+
+  <section class="bb-homepage__section bb-homepage__section--follow">
+    <div class="bb-homepage__section-heading">
+      <p class="bb-homepage__section-kicker">Follow Along</p>
+      <h2>Find Me Around the Internet</h2>
+      <p>The public-facing parts of the bench live in a few places. These are the main ones right now.</p>
+    </div>
+
+    <div class="bb-homepage__card-grid bb-homepage__card-grid--three">
+      {% for link in follow_links %}
+        <a
+          class="bb-homepage__card bb-homepage__card--link"
+          href="{{ link.url }}"
+          {% if link.target %}
+            target="{{ link.target }}"
+          {% endif %}
+          {% if link.rel %}
+            rel="{{ link.rel }}"
+          {% endif %}
+        >
+          <h3>{{ link.title }}</h3>
+          <p>{{ link.description }}</p>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+</div>

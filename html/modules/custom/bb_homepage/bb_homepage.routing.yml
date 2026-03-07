@@ -1,0 +1,9 @@
+bb_homepage.page:
+  path: '/home'
+  defaults:
+    _controller: '\Drupal\bb_homepage\Controller\HomepageController::build'
+    _title: ''
+  requirements:
+    _permission: 'access content'
+  options:
+    _custom_theme: 'bevansbench'

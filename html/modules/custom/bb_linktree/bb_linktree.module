@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @file
+ * Theme hooks for the BB Linktree module.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function bb_linktree_theme(array $existing, string $type, string $theme, string $path): array {
+  return [
+    'bb_linktree_page' => [
+      'variables' => [
+        'page' => NULL,
+        'items' => [],
+        'intro' => NULL,
+      ],
+      'template' => 'bb-linktree-page',
+    ],
+  ];
+}

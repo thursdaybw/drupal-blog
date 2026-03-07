@@ -1,0 +1,11 @@
+bb_linktree.page_add_action:
+  route_name: entity.bb_linktree_page.add_form
+  title: 'Add link page'
+  appears_on:
+    - entity.bb_linktree_page.collection
+
+bb_linktree.item_add_action:
+  route_name: entity.bb_linktree_item.add_form
+  title: 'Add link item'
+  appears_on:
+    - entity.bb_linktree_item.collection

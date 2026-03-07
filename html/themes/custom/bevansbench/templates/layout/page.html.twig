@@ -1,0 +1,44 @@
+<div class="bb-shell">
+  <header class="bb-shell__header">
+    <div class="bb-shell__header-inner">
+      <a class="bb-shell__brand" href="{{ front_page }}">
+        <span class="bb-shell__brand-mark">
+          <img src="/sites/default/files/bevansbenchlogo_1.png" alt="Bevan's Bench logo" />
+        </span>
+        <span class="bb-shell__brand-copy">
+          <span class="bb-shell__brand-title">Bevan's Bench</span>
+          <span class="bb-shell__brand-subtitle">Systems, experiments, and useful tools</span>
+        </span>
+      </a>
+
+      <nav class="bb-shell__nav" aria-label="Homepage navigation">
+        <a href="/node">Blog</a>
+        <a href="/linktree">Links</a>
+        <a href="https://www.youtube.com/@bevansbench" target="_blank" rel="noopener noreferrer">YouTube</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="bb-shell__main">
+    <a id="main-content" tabindex="-1"></a>
+
+    {% if page.highlighted %}
+      <div class="bb-shell__messages">
+        {{ page.highlighted }}
+      </div>
+    {% endif %}
+
+    {{ page.content }}
+  </main>
+
+  <footer class="bb-shell__footer">
+    <div class="bb-shell__footer-inner">
+      <p>Bevan's Bench</p>
+      <div class="bb-shell__footer-links">
+        <a href="/node">Blog</a>
+        <a href="/linktree">Links</a>
+        <a href="https://www.facebook.com/profile.php?id=100066474369727" target="_blank" rel="noopener noreferrer">Facebook</a>
+      </div>
+    </div>
+  </footer>
+</div>

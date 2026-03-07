@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## #ddev-generated
+## Description: Activate uploaded release artifact on production host (docker load via Ansible).
+## Usage: deploy-activate [--dry-run]
+## Example: ddev deploy-activate --dry-run
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+RELEASE_ENV_PATH="${PROJECT_ROOT}/.ddev/.artifacts/release.env"
+ANSIBLE_INVENTORY="${PROJECT_ROOT}/ops/ansible/inventory.ini"
+ANSIBLE_PLAYBOOK="${PROJECT_ROOT}/ops/ansible/deploy_image.yml"
+DRY_RUN=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    *)
+      echo "Unknown argument: $arg"
+      exit 1
+      ;;
+  esac
+done
+
+if [ ! -f "${RELEASE_ENV_PATH}" ]; then
+  echo "Release metadata not found: ${RELEASE_ENV_PATH}"
+  echo "Run: ddev deploy-build"
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "${RELEASE_ENV_PATH}"
+
+echo "Activate phase"
+echo "- image: ${IMAGE_REF}"
+echo "- artifact: ${REMOTE_ARTIFACT_PATH}"
+echo "- dry run: ${DRY_RUN}"
+
+if [ "${DRY_RUN}" = true ]; then
+  echo "[dry-run] ansible-playbook -i ${ANSIBLE_INVENTORY} ${ANSIBLE_PLAYBOOK} -e release_image_ref=${IMAGE_REF} -e release_artifact_name=${ARTIFACT_FILE} -e release_remote_dir=${REMOTE_RELEASE_DIR}"
+  exit 0
+fi
+
+ansible-playbook \
+  -i "${ANSIBLE_INVENTORY}" \
+  "${ANSIBLE_PLAYBOOK}" \
+  -e "release_image_ref=${IMAGE_REF}" \
+  -e "release_artifact_name=${ARTIFACT_FILE}" \
+  -e "release_remote_dir=${REMOTE_RELEASE_DIR}"
+
+echo "Activate phase complete."
+echo "- loaded image: ${IMAGE_REF}"

@@ -1,0 +1,98 @@
+---
+# `deploy_image.yml` handles one deploy stage only:
+# 1) verify artifact exists on the remote host
+# 2) load that artifact into Docker on the remote host
+#
+# It intentionally does NOT restart services yet.
+# That keeps rollout control separate while we stabilize infrastructure.
+
+- name: Load release image artifact on production target
+  hosts: prod
+  become: false
+  gather_facts: false
+
+  vars:
+    # Default workspace path on the remote host.
+    release_workspace: /home/bevan/workspace/bb-platform-prod
+
+    # Directory where deploy artifacts are uploaded.
+    # Can be overridden from CLI with:
+    # -e release_remote_dir=/some/path
+    release_remote_dir: "{{ release_workspace }}/releases"
+
+    # Name of the artifact file (for example: bb-platform-drupal-git-abc123.tar.gz).
+    # Must be provided by caller.
+    release_artifact_name: ""
+
+    # Docker image reference expected after load (for example: bb-platform-drupal:git-abc123).
+    # Must be provided by caller.
+    release_image_ref: ""
+
+  tasks:
+    - name: Run sudo preflight checks
+      ansible.builtin.import_tasks: tasks/preflight_sudo.yml
+
+    - name: Validate required deploy variables are present
+      ansible.builtin.assert:
+        that:
+          - release_artifact_name | length > 0
+          - release_image_ref | length > 0
+        fail_msg: |
+          Missing deploy variables.
+
+          Expected:
+          - release_artifact_name
+          - release_image_ref
+
+          Example:
+          ansible-playbook -i ops/ansible/inventory.ini ops/ansible/deploy_image.yml \
+            -e release_artifact_name=bb-platform-drupal-git-abc123.tar.gz \
+            -e release_image_ref=bb-platform-drupal:git-abc123
+
+    - name: Ensure remote release directory exists
+      ansible.builtin.file:
+        path: "{{ release_remote_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Check release artifact exists on remote host
+      ansible.builtin.stat:
+        path: "{{ release_remote_dir }}/{{ release_artifact_name }}"
+      register: release_artifact_stat
+
+    - name: Fail when release artifact is missing on remote host
+      ansible.builtin.assert:
+        that:
+          - release_artifact_stat.stat.exists
+        fail_msg: |
+          Release artifact not found on remote host.
+
+          Expected path:
+          {{ release_remote_dir }}/{{ release_artifact_name }}
+
+          Upload the artifact first, then rerun deploy_image.yml.
+
+    - name: Load release image artifact into remote Docker
+      ansible.builtin.command:
+        cmd: "sudo -n docker load -i {{ release_remote_dir }}/{{ release_artifact_name }}"
+      register: docker_load_result
+      changed_when: true
+
+    - name: Verify loaded image is addressable by expected tag
+      ansible.builtin.command:
+        cmd: "sudo -n docker image inspect {{ release_image_ref }}"
+      changed_when: false
+
+    - name: Write latest loaded image marker file
+      ansible.builtin.copy:
+        dest: "{{ release_workspace }}/latest-loaded-image.txt"
+        mode: "0644"
+        content: |
+          {{ release_image_ref }}
+
+    - name: Output docker load summary
+      ansible.builtin.debug:
+        msg:
+          - "Loaded image: {{ release_image_ref }}"
+          - "Artifact: {{ release_remote_dir }}/{{ release_artifact_name }}"
+          - "Docker load output: {{ docker_load_result.stdout | default('') }}"

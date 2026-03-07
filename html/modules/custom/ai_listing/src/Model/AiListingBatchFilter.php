@@ -14,6 +14,8 @@ final class AiListingBatchFilter {
     public readonly string $storageLocationFilter,
     public readonly int $itemsPerPage,
     public readonly int $currentPage,
+    public readonly string $sortField = 'created',
+    public readonly string $sortDirection = 'asc',
   ) {}
 
 }

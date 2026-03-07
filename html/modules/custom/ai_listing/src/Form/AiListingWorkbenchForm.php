@@ -60,6 +60,8 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $storageLocationFilter = trim($this->resolveFilterValue($form_state, 'storage_location_filter', ''));
     $searchQuery = trim($this->resolveFilterValue($form_state, 'search_query', ''));
     $itemsPerPage = $this->resolveItemsPerPage($form_state);
+    $sortField = $this->resolveSortField($form_state);
+    $sortDirection = $this->resolveSortDirection($form_state);
     $datasetFilter = new AiListingBatchFilter(
       status: $statusFilter,
       bargainBinFilterMode: $bargainFilterMode,
@@ -68,6 +70,8 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       storageLocationFilter: $storageLocationFilter,
       itemsPerPage: $itemsPerPage,
       currentPage: $this->getCurrentPage(),
+      sortField: $sortField,
+      sortDirection: $sortDirection,
     );
     $dataset = $this->getBatchDatasetProvider()->buildDataset($datasetFilter);
     $this->getPagerManager()->createPager($dataset->filteredCount, $itemsPerPage);
@@ -220,38 +224,34 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       ],
     ];
 
+    $pagerParameters = [
+      'status_filter' => $statusFilter,
+      'bargain_bin_filter' => $bargainFilterMode,
+      'published_to_ebay_filter' => $publishedToEbayFilterMode,
+      'storage_location_filter' => $storageLocationFilter,
+      'search_query' => $searchQuery,
+      'items_per_page' => (string) $itemsPerPage,
+      'sort' => $sortField,
+      'order' => $sortDirection,
+    ];
+
+    $form['listings_container']['pager_top'] = [
+      '#type' => 'pager',
+      '#parameters' => $pagerParameters,
+    ];
+
     $form['listings_container']['listings'] = [
       '#type' => 'tableselect',
-      '#header' => [
-        'type' => $this->t('Type'),
-        'entity_id' => $this->t('Entity ID'),
-        'listing_code' => $this->t('Listing code'),
-        'sku' => $this->t('SKU'),
-        'status' => $this->t('Status'),
-        'ebay' => $this->t('eBay'),
-        'title' => $this->t('Title'),
-        'author' => $this->t('Author'),
-        'price' => $this->t('Price'),
-        'location' => $this->t('Current location'),
-        'published_to_ebay' => $this->t('Published to eBay'),
-        'created' => $this->t('Created'),
-      ],
+      '#header' => $this->buildListingTableHeader($sortField, $sortDirection, $pagerParameters),
       '#options' => $this->buildListingTableOptions($dataset->pagedRows),
       '#empty' => $this->t('No listings match the selected filters.'),
       '#multiple' => TRUE,
       '#default_value' => [],
     ];
 
-    $form['listings_container']['pager'] = [
+    $form['listings_container']['pager_bottom'] = [
       '#type' => 'pager',
-      '#parameters' => [
-        'status_filter' => $statusFilter,
-        'bargain_bin_filter' => $bargainFilterMode,
-        'published_to_ebay_filter' => $publishedToEbayFilterMode,
-        'storage_location_filter' => $storageLocationFilter,
-        'search_query' => $searchQuery,
-        'items_per_page' => (string) $itemsPerPage,
-      ],
+      '#parameters' => $pagerParameters,
     ];
 
     $form['actions']['update_location'] = [
@@ -743,6 +743,89 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
 
     return $itemsPerPage;
+  }
+
+  private function resolveSortField(FormStateInterface $form_state): string {
+    $sortField = trim($this->resolveFilterValue($form_state, 'sort', 'created'));
+    $allowedSortFields = [
+      'type',
+      'entity_id',
+      'listing_code',
+      'sku',
+      'status',
+      'title',
+      'author',
+      'price',
+      'location',
+      'published_to_ebay',
+      'created',
+    ];
+
+    if (!in_array($sortField, $allowedSortFields, TRUE)) {
+      return 'created';
+    }
+
+    return $sortField;
+  }
+
+  private function resolveSortDirection(FormStateInterface $form_state): string {
+    $direction = strtolower(trim($this->resolveFilterValue($form_state, 'order', 'asc')));
+    return $direction === 'desc' ? 'desc' : 'asc';
+  }
+
+  /**
+   * @param array<string,string> $baseParameters
+   *
+   * @return array<string,\Drupal\Core\StringTranslation\TranslatableMarkup|string|\Drupal\Component\Render\MarkupInterface>
+   */
+  private function buildListingTableHeader(string $sortField, string $sortDirection, array $baseParameters): array {
+    return [
+      'type' => $this->buildSortableHeaderCell($this->t('Type'), 'type', $sortField, $sortDirection, $baseParameters),
+      'entity_id' => $this->buildSortableHeaderCell($this->t('Entity ID'), 'entity_id', $sortField, $sortDirection, $baseParameters),
+      'listing_code' => $this->buildSortableHeaderCell($this->t('Listing code'), 'listing_code', $sortField, $sortDirection, $baseParameters),
+      'sku' => $this->buildSortableHeaderCell($this->t('SKU'), 'sku', $sortField, $sortDirection, $baseParameters),
+      'status' => $this->buildSortableHeaderCell($this->t('Status'), 'status', $sortField, $sortDirection, $baseParameters),
+      'ebay' => $this->t('eBay'),
+      'title' => $this->buildSortableHeaderCell($this->t('Title'), 'title', $sortField, $sortDirection, $baseParameters),
+      'author' => $this->buildSortableHeaderCell($this->t('Author'), 'author', $sortField, $sortDirection, $baseParameters),
+      'price' => $this->buildSortableHeaderCell($this->t('Price'), 'price', $sortField, $sortDirection, $baseParameters),
+      'location' => $this->buildSortableHeaderCell($this->t('Current location'), 'location', $sortField, $sortDirection, $baseParameters),
+      'published_to_ebay' => $this->buildSortableHeaderCell($this->t('Published to eBay'), 'published_to_ebay', $sortField, $sortDirection, $baseParameters),
+      'created' => $this->buildSortableHeaderCell($this->t('Created'), 'created', $sortField, $sortDirection, $baseParameters),
+    ];
+  }
+
+  /**
+   * @param array<string,string> $baseParameters
+   */
+  private function buildSortableHeaderCell(
+    string|\Stringable $label,
+    string $field,
+    string $currentSortField,
+    string $currentSortDirection,
+    array $baseParameters,
+  ): string|MarkupInterface {
+    $labelText = (string) $label;
+    $isCurrentSortField = $field === $currentSortField;
+    $nextDirection = 'asc';
+    if ($isCurrentSortField && $currentSortDirection === 'asc') {
+      $nextDirection = 'desc';
+    }
+
+    $sortSuffix = '';
+    if ($isCurrentSortField) {
+      $sortSuffix = $currentSortDirection === 'asc' ? ' ↑' : ' ↓';
+    }
+
+    $query = $baseParameters;
+    $query['sort'] = $field;
+    $query['order'] = $nextDirection;
+    unset($query['page']);
+
+    return Link::fromTextAndUrl(
+      $labelText . $sortSuffix,
+      Url::fromRoute('ai_listing.workbench', [], ['query' => $query])
+    )->toString();
   }
 
   /**

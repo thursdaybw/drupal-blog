@@ -27,5 +27,8 @@
     staging_workspace_path: "{{ workspace_root }}/{{ platform_slug }}-staging"
 
   tasks:
+    - name: Run sudo preflight checks
+      ansible.builtin.import_tasks: tasks/preflight_sudo.yml
+
     - name: Run workspace bootstrap tasks
       ansible.builtin.import_tasks: tasks/bootstrap_workspaces.yml

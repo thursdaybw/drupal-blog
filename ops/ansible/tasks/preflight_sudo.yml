@@ -1,0 +1,35 @@
+---
+# Preflight checks that run before any configuration tasks.
+# These checks fail early with clear messages when required host bootstrap
+# steps are missing.
+
+- name: Check sudo access for nginx status command
+  # We test an explicitly allow-listed sudo command.
+  ansible.builtin.command: sudo -n systemctl status nginx
+  register: sudo_nginx_check
+  changed_when: false
+  failed_when: false
+
+- name: Check sudo access for docker ps command
+  # We test docker access through sudo (not docker group membership).
+  ansible.builtin.command: sudo -n docker ps
+  register: sudo_docker_check
+  changed_when: false
+  failed_when: false
+
+- name: Fail with bootstrap instructions when required sudo commands are missing
+  ansible.builtin.assert:
+    that:
+      - sudo_nginx_check.rc == 0
+      - sudo_docker_check.rc == 0
+    fail_msg: |
+      Preflight failed: required sudo command access is not configured for user '{{ ansible_user }}' on this host.
+
+      Why this matters:
+      - upcoming reverse-proxy / TLS tasks write to /etc and manage system services.
+      - those tasks require non-interactive sudo.
+
+      Fix this first, then re-run the playbook.
+      See: ops/ansible/BOOTSTRAP.md
+      Section: "Bootstrap sudo for bevan"
+    success_msg: "Preflight ok: required sudo command access is available for '{{ ansible_user }}'."

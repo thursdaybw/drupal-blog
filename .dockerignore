@@ -1,8 +1,43 @@
+# Git and local tooling
 .git
 .ddev
+
+# Dependencies installed at runtime on target
 node_modules
-vendor
+**/node_modules
+
+# Mutable Drupal files are mounted, not baked into image
 html/sites/default/files/**
 !html/sites/default/files/.htaccess
 !html/sites/default/files/README.txt
 
+# Local backups and dumps
+backups/
+backup.sql
+backup.sql.gz
+pre-migration.backup.sql
+*.sql
+*.sql.gz
+
+# Local one-off scripts and inventories not needed in production image
+inventory.txt
+failed-reasons.txt
+test_ebay_curl.sh
+setup_ffmpeg.sh
+skus.sh
+
+# Local test artifacts/fixtures
+html/sites/simpletest/
+html/modules/custom/bevansbench_test/tests/fixtures/
+tests/
+
+# Legacy frontend app is deprecated; exclude from prod image.
+video-react/
+
+# Build/deploy artifacts
+.ddev/.artifacts/
+
+# Editor and cache noise
+*.swp
+*.swo
+*~

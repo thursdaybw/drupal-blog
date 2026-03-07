@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## #ddev-generated
+## Description: Upload the latest release artifact to production host.
+## Usage: deploy-upload [--dry-run]
+## Example: ddev deploy-upload --dry-run
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+RELEASE_ENV_PATH="${PROJECT_ROOT}/.ddev/.artifacts/release.env"
+SSH_TARGET="bb-drupal-prod"
+DRY_RUN=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    *)
+      echo "Unknown argument: $arg"
+      exit 1
+      ;;
+  esac
+done
+
+if [ ! -f "${RELEASE_ENV_PATH}" ]; then
+  echo "Release metadata not found: ${RELEASE_ENV_PATH}"
+  echo "Run: ddev deploy-build"
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "${RELEASE_ENV_PATH}"
+
+if [ ! -f "${LOCAL_ARTIFACT_PATH}" ] && [ "${DRY_RUN}" = false ]; then
+  echo "Local artifact not found: ${LOCAL_ARTIFACT_PATH}"
+  echo "Run: ddev deploy-build"
+  exit 1
+fi
+
+prune_local_artifacts() {
+  local keep_count=3
+  local files=()
+  local delete_list=()
+
+  shopt -s nullglob
+  files=( "${PROJECT_ROOT}/.ddev/.artifacts/${IMAGE_REPOSITORY}-"*.tar.gz )
+  shopt -u nullglob
+
+  if [ "${#files[@]}" -eq 0 ]; then
+    return
+  fi
+
+  IFS=$'\n' files=( $(ls -1t "${files[@]}") )
+
+  if [ "${#files[@]}" -le "${keep_count}" ]; then
+    return
+  fi
+
+  delete_list=( "${files[@]:${keep_count}}" )
+
+  for artifact_path in "${delete_list[@]}"; do
+    rm -f "${artifact_path}"
+    echo "- pruned local artifact: ${artifact_path}"
+  done
+}
+
+prune_remote_artifacts() {
+  local keep_count=3
+
+  ssh "${SSH_TARGET}" bash -lc "'
+set -euo pipefail
+shopt -s nullglob
+files=(\"${REMOTE_RELEASE_DIR}/${IMAGE_REPOSITORY}-\"*.tar.gz)
+if [ \"\${#files[@]}\" -le ${keep_count} ]; then
+  exit 0
+fi
+IFS=\$'\\n' files=(\$(ls -1t \"\${files[@]}\" ))
+for old_file in \"\${files[@]:${keep_count}}\"; do
+  rm -f \"\${old_file}\"
+  echo \"- pruned remote artifact: \${old_file}\"
+done
+'"
+}
+
+echo "Upload phase"
+echo "- source: ${LOCAL_ARTIFACT_PATH}"
+echo "- target: ${SSH_TARGET}:${REMOTE_ARTIFACT_PATH}"
+echo "- dry run: ${DRY_RUN}"
+
+if [ "${DRY_RUN}" = true ]; then
+  echo "[dry-run] ssh ${SSH_TARGET} mkdir -p ${REMOTE_RELEASE_DIR}"
+  echo "[dry-run] rsync -av --progress ${LOCAL_ARTIFACT_PATH} ${SSH_TARGET}:${REMOTE_ARTIFACT_PATH}"
+  echo "[dry-run] keep newest 3 local artifacts matching ${PROJECT_ROOT}/.ddev/.artifacts/${IMAGE_REPOSITORY}-*.tar.gz"
+  echo "[dry-run] keep newest 3 remote artifacts matching ${REMOTE_RELEASE_DIR}/${IMAGE_REPOSITORY}-*.tar.gz"
+  exit 0
+fi
+
+ssh "${SSH_TARGET}" "mkdir -p ${REMOTE_RELEASE_DIR}"
+rsync -av --progress "${LOCAL_ARTIFACT_PATH}" "${SSH_TARGET}:${REMOTE_ARTIFACT_PATH}"
+prune_local_artifacts
+prune_remote_artifacts
+
+echo "Upload phase complete."
+echo "- uploaded: ${REMOTE_ARTIFACT_PATH}"

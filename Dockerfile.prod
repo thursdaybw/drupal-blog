@@ -1,0 +1,87 @@
+# Production image for Drupal runtime only.
+# Intentionally excludes deprecated tooling:
+# - ffmpeg / melt
+# - Node.js toolchain
+# - Python/pip + vastai
+
+FROM php:8.1-apache-bullseye
+
+# Install only runtime packages we still need in production.
+RUN apt-get update && apt-get install -y \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
+    libpng-dev \
+    libwebp-dev \
+    libzip-dev \
+    libicu-dev \
+    libonig-dev \
+    libxml2-dev \
+    zlib1g-dev \
+    fonts-dejavu-core \
+    fontconfig \
+    sshfs \
+    msmtp \
+    mailutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Enable required PHP extensions for Drupal runtime.
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp && \
+    docker-php-ext-install -j"$(nproc)" \
+      bcmath \
+      gd \
+      intl \
+      mbstring \
+      mysqli \
+      pdo_mysql \
+      soap \
+      zip \
+      opcache
+
+# Enable `user_allow_other` in `/etc/fuse.conf`.
+RUN echo "user_allow_other" > /etc/fuse.conf && chmod 644 /etc/fuse.conf
+
+# Ensure correct permissions for /home/http/.cache.
+RUN mkdir -p /home/http/.cache && \
+    chown -R www-data:www-data /home/http/.cache
+
+# Copy msmtp configuration file.
+COPY msmtprc /etc/msmtprc
+RUN chmod 644 /etc/msmtprc
+
+# Create msmtp log file and set permissions.
+RUN touch /var/log/msmtp.log && chmod 666 /var/log/msmtp.log
+RUN echo "sendmail_path = /usr/bin/msmtp -t" > /usr/local/etc/php/conf.d/sendmail.ini
+
+# Set home directory.
+ENV HOME=/home/http
+RUN mkdir -p "$HOME" && chown www-data:www-data "$HOME"
+
+# Enable Apache rewrite.
+RUN a2enmod rewrite
+
+# Apache vhost config.
+COPY ./apache-config.conf /etc/apache2/sites-enabled/000-default.conf
+
+# Copy app source into image with final ownership in one layer.
+COPY --chown=www-data:www-data . /var/www/
+
+# Copy fonts and refresh cache.
+COPY ./fonts /usr/share/fonts/custom
+RUN fc-cache -f -v
+
+COPY php-uploads.ini /usr/local/etc/php/conf.d/uploads.ini
+
+# SSH and mount directories used by runtime processes.
+RUN mkdir -p /home/http/.ssh && \
+    chown www-data:www-data /home/http/.ssh && \
+    chmod 700 /home/http/.ssh
+
+RUN mkdir -p /var/tmp/sftp_mount && \
+    chown www-data:www-data /var/tmp/sftp_mount && \
+    chmod 700 /var/tmp/sftp_mount
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+USER root
+ENTRYPOINT ["/entrypoint.sh"]

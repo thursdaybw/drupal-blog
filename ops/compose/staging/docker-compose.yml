@@ -11,13 +11,6 @@ services:
     volumes:
       # Persist Drupal files across container/image updates.
       - ./html/sites/default/files:/var/www/html/sites/default/files
-    cap_add:
-      - SYS_ADMIN
-    devices:
-      - /dev/fuse
-    security_opt:
-      - seccomp:unconfined
-      - apparmor:unconfined
     depends_on:
       db:
         condition: service_healthy

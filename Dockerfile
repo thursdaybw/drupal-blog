@@ -3,7 +3,6 @@ FROM devwithlando/php:8.1-apache-4
 
 # Install msmtp and other necessary packages
 RUN apt-get update && apt-get install -y \
-    sshfs \
     msmtp \
     mailutils \
     python3-venv \
@@ -22,9 +21,6 @@ RUN echo "⚠️  WARNING: vastai pinned at 0.3.0 — newer releases require Pyt
     pip uninstall -y vastai || true && \
     pip install --no-cache-dir "vastai==0.3.0" && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/${username}/.bashrc
-
-# Enable `user_allow_other` in `/etc/fuse.conf`
-RUN echo "user_allow_other" > /etc/fuse.conf && chmod 644 /etc/fuse.conf
 
 # Ensure correct permissions for /home/http/.cache
 RUN mkdir -p /home/http/.cache && \
@@ -72,12 +68,6 @@ COPY php-uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 RUN mkdir -p /home/http/.ssh && \
     chown www-data:www-data /home/http/.ssh && \
     chmod 700 /home/http/.ssh
-
-
-# Create SSHFS mount point
-RUN mkdir -p /var/tmp/sftp_mount && \
-    chown www-data:www-data /var/tmp/sftp_mount && \
-    chmod 700 /var/tmp/sftp_mount
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

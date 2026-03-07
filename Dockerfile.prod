@@ -19,7 +19,6 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     fonts-dejavu-core \
     fontconfig \
-    sshfs \
     msmtp \
     mailutils \
     && rm -rf /var/lib/apt/lists/*
@@ -36,9 +35,6 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp && \
       soap \
       zip \
       opcache
-
-# Enable `user_allow_other` in `/etc/fuse.conf`.
-RUN echo "user_allow_other" > /etc/fuse.conf && chmod 644 /etc/fuse.conf
 
 # Ensure correct permissions for /home/http/.cache.
 RUN mkdir -p /home/http/.cache && \
@@ -75,10 +71,6 @@ COPY php-uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 RUN mkdir -p /home/http/.ssh && \
     chown www-data:www-data /home/http/.ssh && \
     chmod 700 /home/http/.ssh
-
-RUN mkdir -p /var/tmp/sftp_mount && \
-    chown www-data:www-data /var/tmp/sftp_mount && \
-    chmod 700 /var/tmp/sftp_mount
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

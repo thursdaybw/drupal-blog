@@ -50,3 +50,4 @@ html/sites/default/development.services.yml
 known_hosts
 .env
 gpt-oauth.yml
+ops/compose/staging/.env

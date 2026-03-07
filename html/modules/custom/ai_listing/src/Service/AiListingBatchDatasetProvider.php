@@ -25,6 +25,7 @@ final class AiListingBatchDatasetProvider {
       $filter->searchQuery,
       $filter->storageLocationFilter,
     );
+    $this->sortRows($filteredRows, $filter->sortField, $filter->sortDirection);
 
     $totalCount = count($allRows);
     $filteredCount = count($filteredRows);
@@ -186,6 +187,129 @@ final class AiListingBatchDatasetProvider {
     }
 
     return TRUE;
+  }
+
+  /**
+   * @param array<string,array{
+   *   selection_key:string,
+   *   listing_type:string,
+   *   listing_id:int,
+   *   entity:\Drupal\ai_listing\Entity\BbAiListing,
+   *   created:int,
+   *   sku:string,
+   *   is_published_to_ebay:bool,
+   *   ebay_listing_id:?string
+   * }> $rows
+   */
+  private function sortRows(array &$rows, string $requestedSortField, string $requestedSortDirection): void {
+    if ($rows === []) {
+      return;
+    }
+
+    $sortField = $this->normalizeSortField($requestedSortField);
+    $sortDirection = $this->normalizeSortDirection($requestedSortDirection);
+
+    uasort(
+      $rows,
+      function (array $left, array $right) use ($sortField, $sortDirection): int {
+        $leftValue = $this->extractSortValue($left, $sortField);
+        $rightValue = $this->extractSortValue($right, $sortField);
+
+        $comparison = $this->compareSortValues($leftValue, $rightValue);
+        if ($comparison === 0) {
+          $leftFallback = (int) ($left['listing_id'] ?? 0);
+          $rightFallback = (int) ($right['listing_id'] ?? 0);
+          $comparison = $leftFallback <=> $rightFallback;
+        }
+
+        return $sortDirection === 'asc' ? $comparison : -$comparison;
+      }
+    );
+  }
+
+  private function normalizeSortField(string $requestedSortField): string {
+    $allowedFields = [
+      'type',
+      'entity_id',
+      'listing_code',
+      'sku',
+      'status',
+      'title',
+      'author',
+      'price',
+      'location',
+      'published_to_ebay',
+      'created',
+    ];
+
+    return in_array($requestedSortField, $allowedFields, TRUE)
+      ? $requestedSortField
+      : 'created';
+  }
+
+  private function normalizeSortDirection(string $requestedSortDirection): string {
+    return strtolower($requestedSortDirection) === 'desc' ? 'desc' : 'asc';
+  }
+
+  /**
+   * @param array{
+   *   selection_key:string,
+   *   listing_type:string,
+   *   listing_id:int,
+   *   entity:\Drupal\ai_listing\Entity\BbAiListing,
+   *   created:int,
+   *   sku:string,
+   *   is_published_to_ebay:bool,
+   *   ebay_listing_id:?string
+   * } $row
+   *
+   * @return int|float|string
+   */
+  private function extractSortValue(array $row, string $sortField): int|float|string {
+    $listing = $row['entity'] ?? NULL;
+    if (!$listing instanceof BbAiListing) {
+      return '';
+    }
+
+    return match ($sortField) {
+      'type' => (string) ($row['listing_type'] ?? ''),
+      'entity_id' => (int) ($row['listing_id'] ?? 0),
+      'listing_code' => trim((string) ($listing->get('listing_code')->value ?? '')),
+      'sku' => trim((string) ($row['sku'] ?? '')),
+      'status' => trim((string) ($listing->get('status')->value ?? '')),
+      'title' => $this->buildSortTitle($listing),
+      'author' => trim((string) ($listing->get('field_author')->value ?? '')),
+      'price' => (float) ($listing->get('price')->value ?? 0),
+      'location' => trim((string) ($listing->get('storage_location')->value ?? '')),
+      'published_to_ebay' => !empty($row['is_published_to_ebay']) ? 1 : 0,
+      'created' => (int) ($row['created'] ?? 0),
+      default => (int) ($row['created'] ?? 0),
+    };
+  }
+
+  private function buildSortTitle(BbAiListing $listing): string {
+    $label = trim((string) ($listing->label() ?? ''));
+    if ($label !== '') {
+      return $label;
+    }
+
+    return trim((string) ($listing->get('ebay_title')->value ?? ''));
+  }
+
+  /**
+   * @param int|float|string $leftValue
+   * @param int|float|string $rightValue
+   */
+  private function compareSortValues(int|float|string $leftValue, int|float|string $rightValue): int {
+    if (is_int($leftValue) && is_int($rightValue)) {
+      return $leftValue <=> $rightValue;
+    }
+
+    if ((is_int($leftValue) || is_float($leftValue)) && (is_int($rightValue) || is_float($rightValue))) {
+      return $leftValue <=> $rightValue;
+    }
+
+    return strnatcasecmp((string) $leftValue, (string) $rightValue);
   }
 
   private function resolveCurrentPage(int $requestedPage, int $filteredCount, int $itemsPerPage): int {

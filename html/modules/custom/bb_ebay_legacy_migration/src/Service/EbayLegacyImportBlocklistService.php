@@ -200,7 +200,11 @@ final class EbayLegacyImportBlocklistService {
     if (str_contains($normalized, 'a system error has occurred')
       || str_contains($normalized, 'dependent service failure')
       || str_contains($normalized, '"statuscode":500')
-      || str_contains($normalized, '"errorid":25001')) {
+      || str_contains($normalized, '"errorid":25001')
+      || str_contains($normalized, '"domain":"oauth"')
+      || str_contains($normalized, '"errorid":1001')
+      || str_contains($normalized, 'invalid access token')
+      || str_contains($normalized, 'access token has expired')) {
       return 'retry_next_run';
     }
 
@@ -209,11 +213,21 @@ final class EbayLegacyImportBlocklistService {
 
   private function normalizeFailureStatus(string $storedStatus, string $errorMessage): string {
     $normalizedStoredStatus = trim($storedStatus);
+    $classifiedStatus = $this->classifyFailureStatus($errorMessage);
+
+    if ($normalizedStoredStatus === 'cleared') {
+      return 'cleared';
+    }
+
+    if ($normalizedStoredStatus === 'needs_manual_fix' && $classifiedStatus !== 'needs_manual_fix') {
+      return $classifiedStatus;
+    }
+
     if ($normalizedStoredStatus !== '') {
       return $normalizedStoredStatus;
     }
 
-    return $this->classifyFailureStatus($errorMessage);
+    return $classifiedStatus;
   }
 
   /**

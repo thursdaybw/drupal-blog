@@ -320,11 +320,12 @@ final class EbayLegacyListingAdoptionService {
     $bookTitle = $this->extractFirstAspectValue($aspects, 'Book Title');
     $author = $this->joinAspectValues($aspects, 'Author');
     $isbn = $this->extractFirstAspectValue($aspects, 'ISBN');
+    $ebayTitle = $this->truncateForField('book', 'ebay_title', $mirrorRow['ebay_title']);
 
     $listing = BbAiListing::create([
       'listing_type' => 'book',
       'status' => 'shelved',
-      'ebay_title' => $mirrorRow['ebay_title'],
+      'ebay_title' => $ebayTitle,
       'description' => [
         'value' => $mirrorRow['listing_description'],
         'format' => 'basic_html',
@@ -363,10 +364,11 @@ final class EbayLegacyListingAdoptionService {
    * } $mirrorRow
    */
   private function createGenericListingFromMirrorRow(array $mirrorRow): BbAiListing {
+    $ebayTitle = $this->truncateForField('generic', 'ebay_title', $mirrorRow['ebay_title']);
     $listing = BbAiListing::create([
       'listing_type' => 'generic',
       'status' => 'shelved',
-      'ebay_title' => $mirrorRow['ebay_title'],
+      'ebay_title' => $ebayTitle,
       'description' => [
         'value' => $mirrorRow['listing_description'],
         'format' => 'basic_html',
@@ -619,7 +621,42 @@ final class EbayLegacyListingAdoptionService {
       return;
     }
 
-    $listing->set($fieldName, $value);
+    $bundle = (string) $listing->bundle();
+    $listing->set($fieldName, $this->truncateForField($bundle, $fieldName, $value));
+  }
+
+  private function truncateForField(string $bundle, string $fieldName, ?string $value): ?string {
+    if ($value === NULL) {
+      return NULL;
+    }
+
+    $trimmedValue = trim($value);
+    if ($trimmedValue === '') {
+      return NULL;
+    }
+
+    $maxLength = $this->resolveFieldMaxLength($bundle, $fieldName);
+    if ($maxLength === NULL || mb_strlen($trimmedValue) <= $maxLength) {
+      return $trimmedValue;
+    }
+
+    return mb_substr($trimmedValue, 0, $maxLength);
+  }
+
+  private function resolveFieldMaxLength(string $bundle, string $fieldName): ?int {
+    $fieldDefinitions = $this->entityFieldManager->getFieldDefinitions('bb_ai_listing', $bundle);
+    $fieldDefinition = $fieldDefinitions[$fieldName] ?? NULL;
+    if ($fieldDefinition === NULL) {
+      return NULL;
+    }
+
+    $maxLength = $fieldDefinition->getSetting('max_length');
+    if (!is_int($maxLength) && !is_numeric($maxLength)) {
+      return NULL;
+    }
+
+    $normalizedMaxLength = (int) $maxLength;
+    return $normalizedMaxLength > 0 ? $normalizedMaxLength : NULL;
   }
 
   private function normalizeNullableString(?string $value): ?string {

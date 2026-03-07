@@ -1,0 +1,11 @@
+name: "BevansBench"
+type: theme
+description: "Custom public-facing theme for the Bevan's Bench homepage."
+package: Custom
+core_version_requirement: ^10 || ^11
+base theme: stable9
+libraries:
+  - bevansbench/global
+regions:
+  content: Content
+  highlighted: Highlighted

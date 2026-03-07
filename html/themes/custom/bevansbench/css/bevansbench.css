@@ -1,0 +1,177 @@
+:root {
+  --bb-shell-top: #766674;
+  --bb-shell-top-shadow: #5e4d5a;
+  --bb-shell-plum-dark: #301632;
+  --bb-shell-plum-deep: #221024;
+  --bb-shell-cream: #f5efe2;
+  --bb-shell-wash: #e7dcc7;
+  --bb-shell-paper: #fffaf1;
+  --bb-shell-gold: #cfb566;
+  --bb-shell-gold-soft: #e3d09a;
+  --bb-shell-teal: #86aab2;
+  --bb-shell-ink: #2a182a;
+  --bb-shell-muted: #6e615d;
+}
+
+body {
+  margin: 0;
+  background: var(--bb-shell-cream);
+  color: var(--bb-shell-ink);
+  font-family: "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+}
+
+body a {
+  color: inherit;
+}
+
+.bb-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 14% 9%, rgba(227, 208, 154, 0.34), transparent 15rem),
+    radial-gradient(circle at 82% 6%, rgba(134, 170, 178, 0.12), transparent 18rem),
+    linear-gradient(180deg, var(--bb-shell-top) 0 33rem, transparent 33rem),
+    linear-gradient(180deg, #efe6d4 33rem, #f7f2e8 58%, #f1eadf 100%);
+}
+
+.bb-shell__header {
+  padding: 24px 24px 0;
+}
+
+.bb-shell__header-inner,
+.bb-shell__footer-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.bb-shell__header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 0 10px;
+}
+
+.bb-shell__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  color: #f7f1e8;
+  text-decoration: none;
+}
+
+.bb-shell__brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  border: 1px solid rgba(255, 248, 230, 0.16);
+  border-radius: 50%;
+  background: rgba(255, 250, 241, 0.08);
+  box-shadow: 0 10px 24px rgba(34, 16, 36, 0.12);
+  overflow: hidden;
+}
+
+.bb-shell__brand-mark img {
+  display: block;
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+}
+
+.bb-shell__brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bb-shell__brand-title {
+  font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.bb-shell__brand-subtitle {
+  color: rgba(247, 241, 232, 0.72);
+  font-size: 0.9rem;
+}
+
+.bb-shell__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 0;
+}
+
+.bb-shell__nav a,
+.bb-shell__footer-links a {
+  color: #f4e6be;
+  font-size: 0.96rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.bb-shell__nav a:hover,
+.bb-shell__nav a:focus,
+.bb-shell__footer-links a:hover,
+.bb-shell__footer-links a:focus {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.bb-shell__main {
+  display: block;
+}
+
+.bb-shell__messages {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.bb-shell__footer {
+  margin-top: 44px;
+  padding: 24px 24px 32px;
+  background: var(--bb-shell-plum-deep);
+}
+
+.bb-shell__footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.bb-shell__footer-inner p {
+  margin: 0;
+  color: rgba(247, 241, 232, 0.85);
+  font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-size: 1rem;
+}
+
+.bb-shell__footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+@media (max-width: 760px) {
+  .bb-shell {
+    background:
+      radial-gradient(circle at 20% 10%, rgba(227, 208, 154, 0.3), transparent 10rem),
+      linear-gradient(180deg, var(--bb-shell-top) 0 28rem, transparent 28rem),
+      linear-gradient(180deg, #efe6d4 28rem, #f7f2e8 56%, #f1eadf 100%);
+  }
+
+  .bb-shell__header-inner,
+  .bb-shell__footer-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bb-shell__nav {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

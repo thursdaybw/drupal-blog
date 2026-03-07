@@ -138,7 +138,7 @@
           -f {{ staging_compose_path }}
           --env-file {{ staging_env_path }}
           exec -T db sh -lc "gunzip -c \"{{ container_import_path }}\" |
-          mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" \"\$MYSQL_DATABASE\""
+          mysql -u root -p\"$MYSQL_ROOT_PASSWORD\" \"$MYSQL_DATABASE\""
       when: db_dump_is_gzip | bool
       changed_when: true
 
@@ -148,7 +148,7 @@
           sudo -n docker compose
           -f {{ staging_compose_path }}
           --env-file {{ staging_env_path }}
-          exec -T db sh -lc "mysql -u root -p\"\$MYSQL_ROOT_PASSWORD\" \"\$MYSQL_DATABASE\"
+          exec -T db sh -lc "mysql -u root -p\"$MYSQL_ROOT_PASSWORD\" \"$MYSQL_DATABASE\"
           < \"{{ container_import_path }}\""
       when: not (db_dump_is_gzip | bool)
       changed_when: true

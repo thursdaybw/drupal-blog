@@ -1,0 +1,21 @@
+uuid: 53d55f8f-10e8-4e04-b012-41222806a7c0
+langcode: en
+status: true
+dependencies:
+  module:
+    - ai_listing
+id: bb_ai_listing.field_genre
+field_name: field_genre
+entity_type: bb_ai_listing
+type: string
+settings:
+  max_length: 128
+  case_sensitive: false
+  is_ascii: false
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

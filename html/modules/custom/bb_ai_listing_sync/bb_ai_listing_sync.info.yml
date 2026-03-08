@@ -1,0 +1,7 @@
+name: BB AI Listing Sync
+type: module
+description: Architecture-aware export utilities for bb_ai_listing sync workflows.
+core_version_requirement: ^10 || ^11
+package: Custom
+dependencies:
+  - drupal:ai_listing

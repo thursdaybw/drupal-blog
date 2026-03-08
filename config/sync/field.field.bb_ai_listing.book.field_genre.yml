@@ -1,0 +1,19 @@
+uuid: 0fb50a49-d390-4e2b-af70-647d88311fee
+langcode: en
+status: true
+dependencies:
+  config:
+    - ai_listing.bb_ai_listing_type.book
+    - field.storage.bb_ai_listing.field_genre
+id: bb_ai_listing.book.field_genre
+field_name: field_genre
+entity_type: bb_ai_listing
+bundle: book
+label: Genre
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

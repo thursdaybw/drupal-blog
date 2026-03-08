@@ -1,4 +1,9 @@
 services:
+  drupal.ebay_connector.config_override:
+    class: Drupal\ebay_connector\Config\EbayConnectorConfigOverride
+    tags:
+      - { name: config.factory.override, priority: 100 }
+
   drupal.ebay_connector.marketplace_publisher:
     class: Drupal\ebay_connector\Service\EbayMarketplacePublisher
     arguments:

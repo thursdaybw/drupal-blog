@@ -1,0 +1,17 @@
+services:
+  bb_ai_listing_sync.export_graph_builder:
+    class: Drupal\bb_ai_listing_sync\Service\ListingSyncExportGraphBuilder
+    arguments:
+      - '@entity_type.manager'
+      - '@database'
+      - '@datetime.time'
+
+  bb_ai_listing_sync.command:
+    class: Drupal\bb_ai_listing_sync\Command\BbAiListingSyncCommand
+    arguments:
+      - '@entity_type.manager'
+      - '@file_system'
+      - '@datetime.time'
+      - '@bb_ai_listing_sync.export_graph_builder'
+    tags:
+      - { name: drush.command }

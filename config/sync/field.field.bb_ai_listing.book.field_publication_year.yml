@@ -1,0 +1,19 @@
+uuid: 38f0e912-e971-43ff-92e6-61d4a9f65d00
+langcode: en
+status: true
+dependencies:
+  config:
+    - ai_listing.bb_ai_listing_type.book
+    - field.storage.bb_ai_listing.field_publication_year
+id: bb_ai_listing.book.field_publication_year
+field_name: field_publication_year
+entity_type: bb_ai_listing
+bundle: book
+label: 'Publication year'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

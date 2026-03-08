@@ -1,0 +1,21 @@
+uuid: d323d923-b28d-427a-bac2-c58fca1558d3
+langcode: en
+status: true
+dependencies:
+  module:
+    - ai_listing
+id: bb_ai_listing.field_language
+field_name: field_language
+entity_type: bb_ai_listing
+type: string
+settings:
+  max_length: 64
+  case_sensitive: false
+  is_ascii: false
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

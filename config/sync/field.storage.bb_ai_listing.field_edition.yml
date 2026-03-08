@@ -1,0 +1,21 @@
+uuid: 9bc9391a-05e8-4c9d-90af-eaab2495c870
+langcode: en
+status: true
+dependencies:
+  module:
+    - ai_listing
+id: bb_ai_listing.field_edition
+field_name: field_edition
+entity_type: bb_ai_listing
+type: string
+settings:
+  max_length: 64
+  case_sensitive: false
+  is_ascii: false
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

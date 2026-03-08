@@ -1,0 +1,22 @@
+uuid: c6755cb3-8db8-485b-8c81-0e2ce26d707c
+langcode: en
+status: true
+dependencies:
+  module:
+    - system
+  theme:
+    - bevansbench
+_core:
+  default_config_hash: cKJex5Uorm1TxwCjWyrhCpoj35radobSfy6Ub1zGBoo
+id: bevansbench_content
+theme: bevansbench
+region: content
+weight: -3
+provider: null
+plugin: system_main_block
+settings:
+  id: system_main_block
+  label: 'Main page content'
+  label_display: '0'
+  provider: system
+visibility: {  }

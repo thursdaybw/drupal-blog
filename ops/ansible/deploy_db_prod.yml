@@ -1,0 +1,164 @@
+---
+# Import a SQL dump into production MySQL.
+# Caller must upload a dump file first, then pass:
+# -e db_dump_remote_path=/remote/path/to/dump.sql[.gz]
+# -e db_dump_is_gzip=true|false
+
+- name: Import production database dump
+  hosts: prod
+  become: false
+  gather_facts: false
+
+  vars:
+    prod_workspace: /home/bevan/workspace/bb-platform-prod
+    prod_compose_path: "{{ prod_workspace }}/docker-compose.yml"
+    prod_env_path: "{{ prod_workspace }}/.env"
+
+    db_dump_remote_path: ""
+    db_dump_is_gzip: false
+
+  tasks:
+    - name: Run sudo preflight checks
+      ansible.builtin.import_tasks: tasks/preflight_sudo.yml
+
+    - name: Validate required DB import variables are present
+      ansible.builtin.assert:
+        that:
+          - db_dump_remote_path | length > 0
+        fail_msg: |
+          Missing required variable: db_dump_remote_path
+
+    - name: Check remote dump file exists
+      ansible.builtin.stat:
+        path: "{{ db_dump_remote_path }}"
+      register: db_dump_stat
+
+    - name: Fail when remote dump file is missing
+      ansible.builtin.assert:
+        that:
+          - db_dump_stat.stat.exists
+        fail_msg: |
+          DB dump file is missing on remote host.
+
+          Expected:
+          {{ db_dump_remote_path }}
+
+    - name: Check production docker-compose file exists
+      ansible.builtin.stat:
+        path: "{{ prod_compose_path }}"
+      register: compose_stat
+
+    - name: Fail when production docker-compose file is missing
+      ansible.builtin.assert:
+        that:
+          - compose_stat.stat.exists
+        fail_msg: |
+          Production docker-compose file is missing.
+
+          Expected:
+          {{ prod_compose_path }}
+
+    - name: Check production env file exists
+      ansible.builtin.stat:
+        path: "{{ prod_env_path }}"
+      register: env_stat
+
+    - name: Fail when production env file is missing
+      ansible.builtin.assert:
+        that:
+          - env_stat.stat.exists
+        fail_msg: |
+          Production env file is missing.
+
+          Expected:
+          {{ prod_env_path }}
+
+    - name: Ensure production DB service is running
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ prod_compose_path }}
+          --env-file {{ prod_env_path }}
+          up -d db
+      changed_when: true
+
+    - name: Wait for production DB to accept connections
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ prod_compose_path }}
+          --env-file {{ prod_env_path }}
+          exec -T db sh -lc
+          'mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD"'
+      register: db_ready_check
+      retries: 30
+      delay: 2
+      until: db_ready_check.rc == 0
+      changed_when: false
+
+    - name: Resolve production DB container id
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ prod_compose_path }}
+          --env-file {{ prod_env_path }}
+          ps -q db
+      register: db_container_id
+      changed_when: false
+
+    - name: Fail when production DB container id cannot be resolved
+      ansible.builtin.assert:
+        that:
+          - db_container_id.stdout | trim | length > 0
+        fail_msg: |
+          Could not resolve production DB container id.
+          Check production compose state and retry.
+
+    - name: Set container import path
+      ansible.builtin.set_fact:
+        container_import_path: "/tmp/{{ db_dump_remote_path | basename }}"
+
+    - name: Copy dump file into production DB container
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker cp
+          {{ db_dump_remote_path }}
+          {{ db_container_id.stdout | trim }}:{{ container_import_path }}
+      changed_when: true
+
+    - name: Import gzip SQL dump into production DB
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ prod_compose_path }}
+          --env-file {{ prod_env_path }}
+          exec -T db sh -lc "gunzip -c \"{{ container_import_path }}\" |
+          mysql -u root -p\"$MYSQL_ROOT_PASSWORD\" \"$MYSQL_DATABASE\""
+      when: db_dump_is_gzip | bool
+      changed_when: true
+
+    - name: Import plain SQL dump into production DB
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ prod_compose_path }}
+          --env-file {{ prod_env_path }}
+          exec -T db sh -lc "mysql -u root -p\"$MYSQL_ROOT_PASSWORD\" \"$MYSQL_DATABASE\"
+          < \"{{ container_import_path }}\""
+      when: not (db_dump_is_gzip | bool)
+      changed_when: true
+
+    - name: Remove imported dump from production DB container
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ prod_compose_path }}
+          --env-file {{ prod_env_path }}
+          exec -T db sh -lc "rm -f \"{{ container_import_path }}\""
+      changed_when: false
+
+    - name: Report DB import completion
+      ansible.builtin.debug:
+        msg:
+          - "Imported dump: {{ db_dump_remote_path }}"
+          - "Dump gzip: {{ db_dump_is_gzip | bool }}"

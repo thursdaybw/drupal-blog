@@ -99,3 +99,65 @@ Optional:
 ```bash
 ddev deploy-db-staging --sql-file=/path/to/dump.sql.gz
 ```
+
+## Production env file
+
+Create local prod env file from template:
+
+```bash
+cp ops/compose/prod/.env.example ops/compose/prod/.env
+```
+
+Fill real values for:
+- `MYSQL_ROOT_PASSWORD`
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
+- `MYSQL_DATABASE`
+
+Notes:
+- `ops/compose/prod/.env` is gitignored.
+- `APP_IMAGE` is auto-updated by `deploy-prod-activate`.
+
+## Production deployment
+
+Build/upload/activate production stack (container + DB service), without nginx cutover:
+
+```bash
+ddev deploy-prod
+```
+
+Or step-by-step:
+
+```bash
+ddev deploy-build
+ddev deploy-upload
+ddev deploy-prod-activate
+```
+
+## Production DB import
+
+Import current local dev DB into production DB container:
+
+```bash
+ddev deploy-db-prod
+```
+
+Optional file override:
+
+```bash
+ddev deploy-db-prod --sql-file=/path/to/dump.sql.gz
+```
+
+## Production proxy cutover
+
+After prod stack is healthy, switch nginx to point at new prod upstream:
+
+```bash
+ddev deploy-prod-proxy-cutover
+```
+
+Optional: disable old nginx site symlink in same run:
+
+```bash
+ddev deploy-prod-proxy-cutover --disable-old-site=<old-site-filename>
+```

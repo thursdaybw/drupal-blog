@@ -51,3 +51,4 @@ known_hosts
 .env
 gpt-oauth.yml
 ops/compose/staging/.env
+ops/compose/prod/.env

@@ -6,7 +6,6 @@
 # - validate sudo preflight state
 # - create bevan-owned workspace directories for prod and staging
 # - create minimal Drupal files directory structure under each
-# - configure nginx reverse proxy for staging hostname
 #
 # It intentionally does NOT deploy application code.
 
@@ -26,24 +25,9 @@
     prod_workspace_path: "{{ workspace_root }}/{{ platform_slug }}-prod"
     staging_workspace_path: "{{ workspace_root }}/{{ platform_slug }}-staging"
 
-    # Public staging hostname.
-    staging_domain: bb-drupal-staging.bevansbench.com
-    # Email used for Let's Encrypt registration/expiry notices for staging cert.
-    staging_tls_email: bevan@bevansbench.com
-
-    # Staging app upstream target.
-    staging_upstream_host: 127.0.0.1
-    staging_upstream_port: 18082
-
-    # Nginx vhost filename for staging.
-    nginx_staging_site_filename: bb-drupal-staging.conf
-
   tasks:
     - name: Run sudo preflight checks
       ansible.builtin.import_tasks: tasks/preflight_sudo.yml
 
     - name: Run workspace bootstrap tasks
       ansible.builtin.import_tasks: tasks/bootstrap_workspaces.yml
-
-    - name: Run staging reverse proxy tasks
-      ansible.builtin.import_tasks: tasks/reverse_proxy_staging.yml

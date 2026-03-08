@@ -1,11 +1,12 @@
 ---
-# `deploy_image.yml` handles activation for staging:
+# Activate a release image for staging:
 # 1) verify artifact exists on the remote host
 # 2) load that artifact into Docker on the remote host
 # 3) copy staging compose file
 # 4) run docker compose up -d for staging
+# 5) ensure staging reverse proxy/TLS are configured
 
-- name: Load release image artifact on production target
+- name: Activate release image on staging target
   hosts: staging
   become: false
   gather_facts: false
@@ -30,6 +31,11 @@
     # Docker image reference expected after load (for example: bb-platform-drupal:git-abc123).
     # Must be provided by caller.
     release_image_ref: ""
+    staging_domain: bb-drupal-staging.bevansbench.com
+    staging_upstream_host: 127.0.0.1
+    staging_upstream_port: 18082
+    staging_tls_email: bevan@bevansbench.com
+    nginx_staging_site_filename: bb-drupal-staging.conf
 
   tasks:
     - name: Run sudo preflight checks
@@ -214,6 +220,9 @@
           up -d
       register: compose_up_result
       changed_when: true
+
+    - name: Run staging reverse proxy tasks
+      ansible.builtin.import_tasks: tasks/reverse_proxy_staging.yml
 
     - name: Output docker load summary
       ansible.builtin.debug:

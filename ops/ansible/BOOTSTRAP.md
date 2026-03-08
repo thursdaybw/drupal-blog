@@ -120,7 +120,7 @@ Notes:
 
 ## Production deployment
 
-Build/upload/activate production stack (container + DB service), without nginx cutover:
+Build/upload/activate production stack (container + DB service + nginx/TLS):
 
 ```bash
 ddev deploy-prod
@@ -146,18 +146,4 @@ Optional file override:
 
 ```bash
 ddev deploy-db-prod --sql-file=/path/to/dump.sql.gz
-```
-
-## Production proxy cutover
-
-After prod stack is healthy, switch nginx to point at new prod upstream:
-
-```bash
-ddev deploy-prod-proxy-cutover
-```
-
-Optional: disable old nginx site symlink in same run:
-
-```bash
-ddev deploy-prod-proxy-cutover --disable-old-site=<old-site-filename>
 ```

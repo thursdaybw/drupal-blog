@@ -1,6 +1,5 @@
 ---
 # Configure nginx reverse proxy for production domain.
-# This play is intended for cutover, not for every deploy.
 
 - name: Write production nginx site config
   ansible.builtin.command:
@@ -27,12 +26,6 @@
       sudo -n ln -sfn
       /etc/nginx/sites-available/{{ nginx_prod_site_filename }}
       /etc/nginx/sites-enabled/{{ nginx_prod_site_filename }}
-  changed_when: true
-
-- name: Optionally disable old production nginx site symlink
-  ansible.builtin.command:
-    cmd: sudo -n rm -f /etc/nginx/sites-enabled/{{ old_prod_site_filename }}
-  when: old_prod_site_filename | length > 0
   changed_when: true
 
 - name: Validate nginx config

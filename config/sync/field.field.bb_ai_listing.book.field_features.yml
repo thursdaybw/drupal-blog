@@ -1,0 +1,19 @@
+uuid: 705b61cd-5b52-44a0-8733-8adcc59f44a6
+langcode: en
+status: true
+dependencies:
+  config:
+    - ai_listing.bb_ai_listing_type.book
+    - field.storage.bb_ai_listing.field_features
+id: bb_ai_listing.book.field_features
+field_name: field_features
+entity_type: bb_ai_listing
+bundle: book
+label: Features
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

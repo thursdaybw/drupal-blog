@@ -1,0 +1,19 @@
+uuid: ed4eeaaa-cbba-4870-9361-fe1cdd0b69ac
+langcode: en
+status: true
+dependencies:
+  config:
+    - ai_listing.bb_ai_listing_type.book
+    - field.storage.bb_ai_listing.field_condition_issues
+id: bb_ai_listing.book.field_condition_issues
+field_name: field_condition_issues
+entity_type: bb_ai_listing
+bundle: book
+label: 'Condition issues'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

@@ -1,0 +1,9 @@
+environment: production
+production:
+  client_id: ''
+  client_secret: ''
+  ru_name: ''
+sandbox:
+  client_id: ''
+  client_secret: ''
+  ru_name: ''

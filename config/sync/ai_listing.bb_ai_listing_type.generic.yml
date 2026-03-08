@@ -1,0 +1,7 @@
+uuid: 3b63eaf9-5c60-47ba-a295-b31c839c9c24
+langcode: en
+status: true
+dependencies: {  }
+id: generic
+label: Generic
+description: 'General listing type for non-book marketplace items.'

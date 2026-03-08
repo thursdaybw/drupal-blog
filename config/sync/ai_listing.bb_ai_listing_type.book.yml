@@ -1,0 +1,7 @@
+uuid: 906812de-fef3-49ba-aee3-3ae12db1066a
+langcode: en
+status: true
+dependencies: {  }
+id: book
+label: Book
+description: 'Single book listing.'

@@ -1,0 +1,19 @@
+uuid: a01ff771-0f41-49b0-b20b-56e6ef57ef9a
+langcode: en
+status: true
+dependencies:
+  config:
+    - ai_listing.bb_ai_listing_type.book
+    - field.storage.bb_ai_listing.field_narrative_type
+id: bb_ai_listing.book.field_narrative_type
+field_name: field_narrative_type
+entity_type: bb_ai_listing
+bundle: book
+label: 'Narrative type'
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

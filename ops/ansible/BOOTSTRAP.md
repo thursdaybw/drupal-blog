@@ -57,10 +57,15 @@ Fill real values for:
 - `MYSQL_USER`
 - `MYSQL_PASSWORD`
 - `MYSQL_DATABASE`
+- `EBAY_CONNECTOR_ENVIRONMENT`
+- `EBAY_CONNECTOR_PRODUCTION_CLIENT_ID`
+- `EBAY_CONNECTOR_PRODUCTION_CLIENT_SECRET`
+- `EBAY_CONNECTOR_PRODUCTION_RU_NAME`
 
 Notes:
 - `ops/compose/staging/.env` is gitignored.
 - `APP_IMAGE` is auto-updated by `deploy-activate`.
+- `ebay_connector.settings` is config-ignored and runtime-overridden from env.
 
 ### 2) Run activate/deploy
 
@@ -113,10 +118,15 @@ Fill real values for:
 - `MYSQL_USER`
 - `MYSQL_PASSWORD`
 - `MYSQL_DATABASE`
+- `EBAY_CONNECTOR_ENVIRONMENT`
+- `EBAY_CONNECTOR_PRODUCTION_CLIENT_ID`
+- `EBAY_CONNECTOR_PRODUCTION_CLIENT_SECRET`
+- `EBAY_CONNECTOR_PRODUCTION_RU_NAME`
 
 Notes:
 - `ops/compose/prod/.env` is gitignored.
 - `APP_IMAGE` is auto-updated by `deploy-prod-activate`.
+- `ebay_connector.settings` is config-ignored and runtime-overridden from env.
 
 ## Production deployment
 

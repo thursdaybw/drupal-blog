@@ -30,6 +30,7 @@
         "drupal/config_devel": "^1.9",
         "drupal/config_ignore": "^3.3",
         "drupal/config_update": "^2.0@alpha",
+        "drupal/content_sync": "^3.0",
         "drupal/core-composer-scaffold": "^10.1",
         "drupal/core-project-message": "^10.1",
         "drupal/core-recommended": "^10.1",

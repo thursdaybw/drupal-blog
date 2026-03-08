@@ -1,8 +1,17 @@
 _core:
   default_config_hash: R4IF-ClDHXxblLcG0L7MgsLvfBIMAvi_skumNFQwkDc
 module:
+  admin_toolbar: 0
+  ai_listing: 0
+  ai_listing_inference: 0
   automated_cron: 0
   basic_auth: 0
+  bb_ai_listing_sync: 0
+  bb_ebay_legacy_migration: 0
+  bb_ebay_mirror: 0
+  bb_homepage: 0
+  bb_linktree: 0
+  bb_platform: 0
   big_pipe: 0
   block: 0
   block_content: 0
@@ -11,18 +20,25 @@ module:
   captcha: 0
   ckeditor5: 0
   comment: 0
+  compute_orchestrator: 0
   config: 0
   config_devel: 0
   config_ignore: 0
   consumers: 0
   contact: 0
+  content_sync: 0
   contextual: 0
   custom_content_update: 0
   datetime: 0
   dblog: 0
   default_content: 0
+  devel: 0
+  devel_entity_updates: 0
   drupal_blog: 0
+  dynamic_entity_reference: 0
   dynamic_page_cache: 0
+  ebay_connector: 0
+  ebay_infrastructure: 0
   editor: 0
   field: 0
   field_ui: 0
@@ -34,6 +50,7 @@ module:
   jsonapi: 0
   jsonapi_extras: 0
   link: 0
+  listing_publishing: 0
   markdown: 0
   matomo: 0
   media: 0
@@ -82,4 +99,5 @@ theme:
   claro: 0
   stable9: 0
   vani: 0
+  bevansbench: 0
 profile: minimal

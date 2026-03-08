@@ -1,0 +1,19 @@
+uuid: d40633a9-a022-47cd-9910-ede3803b6a05
+langcode: en
+status: true
+dependencies:
+  config:
+    - ai_listing.bb_ai_listing_type.book
+    - field.storage.bb_ai_listing.field_edition
+id: bb_ai_listing.book.field_edition
+field_name: field_edition
+entity_type: bb_ai_listing
+bundle: book
+label: Edition
+description: ''
+required: false
+translatable: true
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

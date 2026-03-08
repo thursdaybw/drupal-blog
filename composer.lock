@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8ac2605b2130edf4077d782c5f6bbe51",
+    "content-hash": "fc44f1d27030201487e9ca6ca013569b",
     "packages": [
         {
             "name": "asm89/stack-cors",
@@ -1913,6 +1913,81 @@
             "homepage": "https://www.drupal.org/project/consumers",
             "support": {
                 "source": "https://git.drupalcode.org/project/consumers"
+            }
+        },
+        {
+            "name": "drupal/content_sync",
+            "version": "dev-3.0.x",
+            "source": {
+                "type": "git",
+                "url": "https://git.drupalcode.org/project/content_sync.git",
+                "reference": "69630a854462ceb60aa550b5a018fc8b523290ec"
+            },
+            "require": {
+                "drupal/core": "^9.4 || ^10.0"
+            },
+            "type": "drupal-module",
+            "extra": {
+                "branch-alias": {
+                    "dev-3.0.x": "3.0.x-dev"
+                },
+                "drupal": {
+                    "version": "3.0.0-beta1+28-dev",
+                    "datestamp": "1727231699",
+                    "security-coverage": {
+                        "status": "not-covered",
+                        "message": "Dev releases are not covered by Drupal security advisories."
+                    }
+                },
+                "drush": {
+                    "services": {
+                        "drush.services.yml": "^10 || ^11"
+                    }
+                }
+            },
+            "notification-url": "https://packages.drupal.org/8/downloads",
+            "license": [
+                "GPL-2.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "Blanca.Esqueda",
+                    "homepage": "https://www.drupal.org/u/blancaesqueda",
+                    "role": "Maintainer"
+                },
+                {
+                    "name": "David Gil Hidalgo",
+                    "homepage": "https://www.drupal.org/u/dabito",
+                    "role": "Maintainer"
+                },
+                {
+                    "name": "David Nova",
+                    "homepage": "https://www.drupal.org/u/david4lim",
+                    "role": "Maintainer"
+                },
+                {
+                    "name": "Andrés Moncada",
+                    "homepage": "https://www.drupal.org/u/acmoncadab4",
+                    "role": "Contributor"
+                },
+                {
+                    "name": "See contributors",
+                    "homepage": "https://www.drupal.org/node/2865869/committers"
+                },
+                {
+                    "name": "ridefree",
+                    "homepage": "https://www.drupal.org/user/49148"
+                },
+                {
+                    "name": "tobias märz",
+                    "homepage": "https://www.drupal.org/user/1776082"
+                }
+            ],
+            "description": "Content Sync functionality.",
+            "homepage": "http://drupal.org/project/content_sync",
+            "support": {
+                "source": "https://git.drupalcode.org/project/content_sync",
+                "issues": "http://drupal.org/project/content_sync"
             }
         },
         {

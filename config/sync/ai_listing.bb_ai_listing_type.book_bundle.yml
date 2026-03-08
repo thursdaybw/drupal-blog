@@ -1,0 +1,7 @@
+uuid: e92aa677-08e9-4d5e-9f5c-4b5f7be5a0b6
+langcode: en
+status: true
+dependencies: {  }
+id: book_bundle
+label: 'Book bundle'
+description: 'Book bundle listing sold as one sale unit.'

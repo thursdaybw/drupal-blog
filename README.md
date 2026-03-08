@@ -1,5 +1,15 @@
 ## Initial Setup and History
 
+## Local Development Setup (DDEV)
+
+Canonical documentation for local setup now lives here:
+
+- [docs/dev/README.md](docs/dev/README.md)
+
+Troubleshooting notes live here:
+
+- [docs/dev/TROUBLESHOOTING.md](docs/dev/TROUBLESHOOTING.md)
+
 Nice tips for lando setup https://evolvingweb.com/working-drupal-lando
 specifically:
 ```
@@ -332,4 +342,3 @@ Whereas unit and kernel tests can target the brittle seams we identified.
   $task = $this->loadTaskByVideoId($uuid);
   $this->assertNotEmpty($task->get('video')->target_id);
   ```
-

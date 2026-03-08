@@ -1,23 +1,19 @@
 ---
-# Activate a release image for staging:
+# Activate a release image for an environment (staging or prod):
 # 1) verify artifact exists on the remote host
 # 2) load that artifact into Docker on the remote host
-# 3) copy staging compose file
-# 4) run docker compose up -d for staging
-# 5) ensure staging reverse proxy/TLS are configured
+# 3) copy environment compose file
+# 4) run docker compose up -d
+# 5) ensure environment reverse proxy/TLS are configured
 
-- name: Activate release image on staging target
-  hosts: staging
+- name: Activate release image on target environment
+  hosts: "{{ deploy_env | default('staging') }}"
   become: false
   gather_facts: false
 
   vars:
     # Artifact workspace path on the remote host.
     release_workspace: /home/bevan/workspace/bb-platform-prod
-    staging_workspace: /home/bevan/workspace/bb-platform-staging
-    local_staging_env_src: "{{ playbook_dir }}/../compose/staging/.env"
-    staging_env_path: "{{ staging_workspace }}/.env"
-    staging_compose_path: "{{ staging_workspace }}/docker-compose.yml"
 
     # Directory where deploy artifacts are uploaded.
     # Can be overridden from CLI with:
@@ -31,13 +27,57 @@
     # Docker image reference expected after load (for example: bb-platform-drupal:git-abc123).
     # Must be provided by caller.
     release_image_ref: ""
-    staging_domain: bb-drupal-staging.bevansbench.com
-    staging_upstream_host: 127.0.0.1
-    staging_upstream_port: 18082
-    staging_tls_email: bevan@bevansbench.com
-    nginx_staging_site_filename: bb-drupal-staging.conf
+
+    deploy_targets:
+      staging:
+        name: staging
+        workspace: /home/bevan/workspace/bb-platform-staging
+        compose_src: "{{ playbook_dir }}/../compose/staging/docker-compose.yml"
+        compose_path: /home/bevan/workspace/bb-platform-staging/docker-compose.yml
+        local_env_src: "{{ playbook_dir }}/../compose/staging/.env"
+        env_path: /home/bevan/workspace/bb-platform-staging/.env
+        env_example: ops/compose/staging/.env.example
+        domain: bb-drupal-staging.bevansbench.com
+        upstream_host: 127.0.0.1
+        upstream_port: 18082
+        tls_email: bevan@bevansbench.com
+        nginx_site_filename: bb-drupal-staging.conf
+        proxy_tasks: tasks/reverse_proxy_staging.yml
+      prod:
+        name: prod
+        workspace: /home/bevan/workspace/bb-platform-prod
+        compose_src: "{{ playbook_dir }}/../compose/prod/docker-compose.yml"
+        compose_path: /home/bevan/workspace/bb-platform-prod/docker-compose.yml
+        local_env_src: "{{ playbook_dir }}/../compose/prod/.env"
+        env_path: /home/bevan/workspace/bb-platform-prod/.env
+        env_example: ops/compose/prod/.env.example
+        domain: www.bevansbench.com
+        upstream_host: 127.0.0.1
+        upstream_port: 18081
+        tls_email: bevan@bevansbench.com
+        nginx_site_filename: bb-platform-prod.conf
+        proxy_tasks: tasks/reverse_proxy_prod.yml
 
   tasks:
+    - name: Resolve deploy environment
+      ansible.builtin.set_fact:
+        deploy_env_effective: "{{ deploy_env | default('staging') }}"
+
+    - name: Validate deploy_env is supported
+      ansible.builtin.assert:
+        that:
+          - deploy_env_effective in deploy_targets
+        fail_msg: |
+          Unsupported deploy_env '{{ deploy_env_effective }}'.
+
+          Supported values:
+          - staging
+          - prod
+
+    - name: Select target settings for current environment
+      ansible.builtin.set_fact:
+        deploy_target: "{{ deploy_targets[deploy_env_effective] }}"
+
     - name: Run sudo preflight checks
       ansible.builtin.import_tasks: tasks/preflight_sudo.yml
 
@@ -55,6 +95,7 @@
 
           Example:
           ansible-playbook -i ops/ansible/inventory.ini ops/ansible/deploy_image.yml \
+            -e deploy_env={{ deploy_env_effective }} \
             -e release_artifact_name=bb-platform-drupal-git-abc123.tar.gz \
             -e release_image_ref=bb-platform-drupal:git-abc123
 
@@ -99,95 +140,87 @@
         content: |
           {{ release_image_ref }}
 
-    - name: Ensure staging workspace exists
+    - name: Ensure environment workspace exists
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: "0755"
       loop:
-        - "{{ staging_workspace }}"
-        - "{{ staging_workspace }}/html"
-        - "{{ staging_workspace }}/html/sites"
-        - "{{ staging_workspace }}/html/sites/default"
-        - "{{ staging_workspace }}/html/sites/default/files"
+        - "{{ deploy_target.workspace }}"
+        - "{{ deploy_target.workspace }}/html"
+        - "{{ deploy_target.workspace }}/html/sites"
+        - "{{ deploy_target.workspace }}/html/sites/default"
+        - "{{ deploy_target.workspace }}/html/sites/default/files"
 
-    - name: Copy staging docker-compose file to remote workspace
+    - name: Copy environment docker-compose file to remote workspace
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../compose/staging/docker-compose.yml"
-        dest: "{{ staging_compose_path }}"
+        src: "{{ deploy_target.compose_src }}"
+        dest: "{{ deploy_target.compose_path }}"
         mode: "0644"
 
-    - name: Check local staging .env exists on control machine
+    - name: Check local environment .env exists on control machine
       ansible.builtin.stat:
-        path: "{{ local_staging_env_src }}"
-      register: local_staging_env_stat
+        path: "{{ deploy_target.local_env_src }}"
+      register: local_env_stat
       delegate_to: localhost
       run_once: true
 
-    - name: Fail when local staging .env is missing
+    - name: Fail when local environment .env is missing
       ansible.builtin.assert:
         that:
-          - local_staging_env_stat.stat.exists
+          - local_env_stat.stat.exists
         fail_msg: |
-          Missing local staging env file.
+          Missing local {{ deploy_target.name }} env file.
 
           Expected:
-          {{ local_staging_env_src }}
+          {{ deploy_target.local_env_src }}
 
           Create it from:
-          ops/compose/staging/.env.example
+          {{ deploy_target.env_example }}
 
-          See:
-          ops/ansible/BOOTSTRAP.md
-          Section: "Staging env file"
-
-    - name: Copy local staging .env to remote workspace
+    - name: Copy local environment .env to remote workspace
       ansible.builtin.copy:
-        src: "{{ local_staging_env_src }}"
-        dest: "{{ staging_env_path }}"
+        src: "{{ deploy_target.local_env_src }}"
+        dest: "{{ deploy_target.env_path }}"
         mode: "0600"
 
-    - name: Ensure staging .env exists on remote host
+    - name: Ensure environment .env exists on remote host
       ansible.builtin.stat:
-        path: "{{ staging_env_path }}"
-      register: staging_env_stat
+        path: "{{ deploy_target.env_path }}"
+      register: env_stat
 
-    - name: Fail when staging .env is missing on remote host
+    - name: Fail when environment .env is missing on remote host
       ansible.builtin.assert:
         that:
-          - staging_env_stat.stat.exists
+          - env_stat.stat.exists
         fail_msg: |
-          Missing staging env file on remote host after copy.
+          Missing {{ deploy_target.name }} env file on remote host after copy.
 
           Expected:
-          {{ staging_env_path }}
+          {{ deploy_target.env_path }}
 
-          See:
-          ops/ansible/BOOTSTRAP.md
-          Section: "Staging env file"
-
-    - name: Set APP_IMAGE in staging .env for this release
+    - name: Set APP_IMAGE in environment .env for this release
       ansible.builtin.lineinfile:
-        path: "{{ staging_env_path }}"
+        path: "{{ deploy_target.env_path }}"
         regexp: '^APP_IMAGE='
         line: "APP_IMAGE={{ release_image_ref }}"
         create: true
         mode: "0600"
 
-    - name: Read staging .env content
+    - name: Read environment .env content
       ansible.builtin.slurp:
-        path: "{{ staging_env_path }}"
-      register: staging_env_content
+        path: "{{ deploy_target.env_path }}"
+      register: env_content
 
-    - name: Assert required MySQL variables exist in staging .env
+    - name: Assert required MySQL variables exist in environment .env
       ansible.builtin.assert:
         that:
-          - "(staging_env_content.content | b64decode) is regex('(?m)^MYSQL_ROOT_PASSWORD=.+$')"
-          - "(staging_env_content.content | b64decode) is regex('(?m)^MYSQL_USER=.+$')"
-          - "(staging_env_content.content | b64decode) is regex('(?m)^MYSQL_PASSWORD=.+$')"
-          - "(staging_env_content.content | b64decode) is regex('(?m)^MYSQL_DATABASE=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^MYSQL_ROOT_PASSWORD=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^MYSQL_USER=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^MYSQL_PASSWORD=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^MYSQL_DATABASE=.+$')"
         fail_msg: |
-          Staging .env is present but missing required MySQL values.
+          {{ deploy_target.name | upper }} .env is present but missing required MySQL values.
 
           Required non-empty keys:
           - MYSQL_ROOT_PASSWORD
@@ -196,39 +229,84 @@
           - MYSQL_DATABASE
 
           File:
-          {{ staging_env_path }}
+          {{ deploy_target.env_path }}
 
-          See:
-          ops/ansible/BOOTSTRAP.md
-          Section: "Staging env file"
-
-    - name: Validate staging compose configuration
+    - name: Validate environment compose configuration
       ansible.builtin.command:
         cmd: >-
           sudo -n docker compose
-          -f {{ staging_compose_path }}
-          --env-file {{ staging_env_path }}
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
           config -q
       changed_when: false
 
-    - name: Start staging services with docker compose
+    - name: Start environment services with docker compose
       ansible.builtin.command:
         cmd: >-
           sudo -n docker compose
-          -f {{ staging_compose_path }}
-          --env-file {{ staging_env_path }}
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
           up -d
       register: compose_up_result
       changed_when: true
 
-    - name: Run staging reverse proxy tasks
-      ansible.builtin.import_tasks: tasks/reverse_proxy_staging.yml
+    - name: Check Drupal bootstrap state in environment app container
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
+          exec -T appserver
+          sh -lc 'cd /var/www/html && vendor/bin/drush status --fields=bootstrap --format=list'
+      register: drush_bootstrap
+      changed_when: false
+      failed_when: false
+
+    - name: Import config on environment when Drupal is bootstrapped
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
+          exec -T appserver
+          sh -lc 'cd /var/www/html && vendor/bin/drush cim -y'
+      register: drush_cim
+      changed_when: "'No changes to import.' not in (drush_cim.stdout | default(''))"
+      when:
+        - drush_bootstrap.rc == 0
+        - "'Successful' in (drush_bootstrap.stdout | default(''))"
+
+    - name: Rebuild cache on environment when config import runs
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
+          exec -T appserver
+          sh -lc 'cd /var/www/html && vendor/bin/drush cr'
+      changed_when: true
+      when:
+        - drush_bootstrap.rc == 0
+        - "'Successful' in (drush_bootstrap.stdout | default(''))"
+
+    - name: Note config import was skipped because Drupal is not bootstrapped
+      ansible.builtin.debug:
+        msg: >-
+          Skipping drush cim/cr on {{ deploy_target.name }} because Drupal bootstrap is not ready yet
+          (likely empty database on first boot).
+      when:
+        - drush_bootstrap.rc != 0
+          or "'Successful' not in (drush_bootstrap.stdout | default(''))"
+
+    - name: Run environment reverse proxy tasks
+      ansible.builtin.include_tasks: "{{ deploy_target.proxy_tasks }}"
 
     - name: Output docker load summary
       ansible.builtin.debug:
         msg:
+          - "Environment: {{ deploy_target.name }}"
           - "Loaded image: {{ release_image_ref }}"
           - "Artifact: {{ release_remote_dir }}/{{ release_artifact_name }}"
           - "Docker load output: {{ docker_load_result.stdout | default('') }}"
-          - "Compose file: {{ staging_compose_path }}"
+          - "Compose file: {{ deploy_target.compose_path }}"
           - "Compose up output: {{ compose_up_result.stdout | default('') }}"

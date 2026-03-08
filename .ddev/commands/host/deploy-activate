@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ## #ddev-generated
-## Description: Activate uploaded release artifact on production host (docker load via Ansible).
+## Description: Activate uploaded release artifact on staging stack.
 ## Usage: deploy-activate [--dry-run]
 ## Example: ddev deploy-activate --dry-run
 
@@ -40,13 +40,14 @@ echo "- artifact: ${REMOTE_ARTIFACT_PATH}"
 echo "- dry run: ${DRY_RUN}"
 
 if [ "${DRY_RUN}" = true ]; then
-  echo "[dry-run] ansible-playbook -i ${ANSIBLE_INVENTORY} ${ANSIBLE_PLAYBOOK} -e release_image_ref=${IMAGE_REF} -e release_artifact_name=${ARTIFACT_FILE} -e release_remote_dir=${REMOTE_RELEASE_DIR}"
+  echo "[dry-run] ansible-playbook -i ${ANSIBLE_INVENTORY} ${ANSIBLE_PLAYBOOK} -e deploy_env=staging -e release_image_ref=${IMAGE_REF} -e release_artifact_name=${ARTIFACT_FILE} -e release_remote_dir=${REMOTE_RELEASE_DIR}"
   exit 0
 fi
 
 ansible-playbook \
   -i "${ANSIBLE_INVENTORY}" \
   "${ANSIBLE_PLAYBOOK}" \
+  -e "deploy_env=staging" \
   -e "release_image_ref=${IMAGE_REF}" \
   -e "release_artifact_name=${ARTIFACT_FILE}" \
   -e "release_remote_dir=${REMOTE_RELEASE_DIR}"

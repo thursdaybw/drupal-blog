@@ -31,10 +31,14 @@
     - "{{ prod_workspace_path }}/html/sites"
     - "{{ prod_workspace_path }}/html/sites/default"
     - "{{ prod_workspace_path }}/html/sites/default/files"
+    - "{{ prod_workspace_path }}/content"
+    - "{{ prod_workspace_path }}/content/sync"
     - "{{ staging_workspace_path }}/html"
     - "{{ staging_workspace_path }}/html/sites"
     - "{{ staging_workspace_path }}/html/sites/default"
     - "{{ staging_workspace_path }}/html/sites/default/files"
+    - "{{ staging_workspace_path }}/content"
+    - "{{ staging_workspace_path }}/content/sync"
 
 - name: Add placeholder .env files for prod and staging
   # We create marker files only. Real secrets should be populated separately.

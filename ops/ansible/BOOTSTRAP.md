@@ -65,6 +65,7 @@ Fill real values for:
 Notes:
 - `ops/compose/staging/.env` is gitignored.
 - `APP_IMAGE` is auto-updated by `deploy-activate`.
+- `APP_PORT` and `MYSQL_VOLUME_NAME` are auto-managed by Ansible for staging.
 - `ebay_connector.settings` is config-ignored and runtime-overridden from env.
 
 ### 2) Run activate/deploy
@@ -126,6 +127,7 @@ Fill real values for:
 Notes:
 - `ops/compose/prod/.env` is gitignored.
 - `APP_IMAGE` is auto-updated by `deploy-prod-activate`.
+- `APP_PORT` and `MYSQL_VOLUME_NAME` are auto-managed by Ansible for prod.
 - `ebay_connector.settings` is config-ignored and runtime-overridden from env.
 
 ## Production deployment

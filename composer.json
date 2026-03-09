@@ -134,7 +134,8 @@
         },
         "patches": {
             "drupal/content_sync": {
-                "https://www.drupal.org/project/content_sync/issues/3486660 - Fix FileEntityNormalizer::denormalize return type for file imports": "patches/content_sync-3486660-file-normalizer-denormalize-return-type.patch"
+                "https://www.drupal.org/project/content_sync/issues/3486660 - Fix FileEntityNormalizer::denormalize return type for file imports": "patches/content_sync-3486660-file-normalizer-denormalize-return-type.patch",
+                "LOCAL PATCH - Support dynamic entity reference target_type during import": "patches/content_sync-dynamic-entity-reference-import-target-type-resolution.patch"
             }
         },
         "merge-plugin": {

@@ -1,0 +1,29 @@
+--- a/src/Normalizer/EntityReferenceFieldItemNormalizer.php
++++ b/src/Normalizer/EntityReferenceFieldItemNormalizer.php
+@@ -101,10 +101,23 @@
+       if (empty($data['target_uuid'])) {
+         throw new InvalidArgumentException(sprintf('If provided "target_uuid" cannot be empty for field "%s".', $field_item->getName()));
+       }
+-      $target_type = $field_item->getFieldDefinition()->getSetting('target_type');
+-      if (!empty($data['target_type']) && $target_type !== $data['target_type']) {
+-        throw new UnexpectedValueException(sprintf('The field "%s" property "target_type" must be set to "%s" or omitted.', $field_item->getFieldDefinition()->getName(), $target_type));
++      $field_target_type = $field_item->getFieldDefinition()->getSetting('target_type');
++      $incoming_target_type = $data['target_type'] ?? NULL;
++
++      if (!empty($field_target_type) && !empty($incoming_target_type) && $field_target_type !== $incoming_target_type) {
++        throw new UnexpectedValueException(sprintf('The field "%s" property "target_type" must be set to "%s" or omitted.', $field_item->getFieldDefinition()->getName(), $field_target_type));
+       }
++
++      // Dynamic entity reference fields do not define a static target_type.
++      // In that case, target_type must be supplied in the incoming payload.
++      $target_type = !empty($field_target_type) ? $field_target_type : $incoming_target_type;
++      if (empty($target_type)) {
++        throw new UnexpectedValueException(sprintf(
++          'The field "%s" requires "target_type" for dynamic entity references.',
++          $field_item->getFieldDefinition()->getName()
++        ));
++      }
++
+       if ($entity = $this->entityRepository->loadEntityByUuid($target_type, $data['target_uuid'])) {
+         $key = $field_item->mainPropertyName();
+         if (is_a($entity, RevisionableInterface::class, TRUE)) {

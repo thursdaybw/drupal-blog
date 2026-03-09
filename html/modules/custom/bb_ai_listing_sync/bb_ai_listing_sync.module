@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+use Drupal\Core\Entity\EntityInterface;
+
+/**
+ * Implements hook_entity_insert().
+ */
+function bb_ai_listing_sync_entity_insert(EntityInterface $entity): void {
+  bb_ai_listing_sync_apply_legacy_payload_after_save($entity);
+}
+
+/**
+ * Implements hook_entity_update().
+ */
+function bb_ai_listing_sync_entity_update(EntityInterface $entity): void {
+  bb_ai_listing_sync_apply_legacy_payload_after_save($entity);
+}
+
+/**
+ * Applies staged legacy table payload for imported bb_ai_listing entities.
+ */
+function bb_ai_listing_sync_apply_legacy_payload_after_save(EntityInterface $entity): void {
+  if ($entity->getEntityTypeId() !== 'bb_ai_listing') {
+    return;
+  }
+
+  $listingId = (int) $entity->id();
+  $listingUuid = (string) $entity->uuid();
+  if ($listingId <= 0 || $listingUuid === '') {
+    return;
+  }
+
+  /** @var \Drupal\bb_ai_listing_sync\Service\LegacyTableSyncService $legacySync */
+  $legacySync = \Drupal::service('bb_ai_listing_sync.legacy_table_sync');
+  $summary = $legacySync->applyPayloadForListing($listingUuid, $listingId);
+
+  if (($summary['legacy_link_upserts'] ?? 0) === 0 && ($summary['legacy_listing_upserts'] ?? 0) === 0) {
+    return;
+  }
+
+  \Drupal::logger('bb_ai_listing_sync')->notice(
+    'Applied legacy payload for listing @listing_id (@listing_uuid): link upserts=@link_upserts listing upserts=@listing_upserts',
+    [
+      '@listing_id' => $listingId,
+      '@listing_uuid' => $listingUuid,
+      '@link_upserts' => (int) ($summary['legacy_link_upserts'] ?? 0),
+      '@listing_upserts' => (int) ($summary['legacy_listing_upserts'] ?? 0),
+    ]
+  );
+}

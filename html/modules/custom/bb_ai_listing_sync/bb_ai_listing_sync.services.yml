@@ -1,0 +1,10 @@
+services:
+  bb_ai_listing_sync.legacy_payload_runtime_store:
+    class: Drupal\bb_ai_listing_sync\Service\LegacyPayloadRuntimeStore
+
+  bb_ai_listing_sync.legacy_table_sync:
+    class: Drupal\bb_ai_listing_sync\Service\LegacyTableSyncService
+    arguments:
+      - '@database'
+      - '@bb_ai_listing_sync.legacy_payload_runtime_store'
+      - '@datetime.time'

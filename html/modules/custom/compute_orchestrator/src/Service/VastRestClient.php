@@ -16,7 +16,7 @@ use Symfony\Component\Process\Process;
 final class VastRestClient implements VastRestClientInterface {
 
   private ClientInterface $httpClient;
-  private string $apiKey;
+  private ?string $apiKey = NULL;
   private LoggerInterface $logger;
 
   public function __construct(
@@ -30,8 +30,9 @@ final class VastRestClient implements VastRestClientInterface {
     $this->logger = $loggerFactory->get('compute_orchestrator');
 
     $apiKey = getenv('VAST_API_KEY');
-    if (!$apiKey) {
-      throw new \RuntimeException('VAST_API_KEY environment variable is not set.');
+    if (!is_string($apiKey) || $apiKey === '') {
+      $this->logger->warning('VAST_API_KEY environment variable is not set. Vast API calls are disabled.');
+      return;
     }
 
     $this->apiKey = $apiKey;
@@ -104,6 +105,10 @@ final class VastRestClient implements VastRestClientInterface {
   }
 
   private function request(string $method, string $uri, array $options = []): array {
+    if ($this->apiKey === NULL || $this->apiKey === '') {
+      throw new \RuntimeException('VAST_API_KEY environment variable is not set.');
+    }
+
     try {
 
       $response = $this->httpClient->request(

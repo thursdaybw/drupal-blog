@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Drupal\bb_ai_listing_sync\Service;
 
 use Drupal\ai_listing\Entity\BbAiListing;
-use Drupal\Component\Datetime\TimeInterface;
-use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 
@@ -14,31 +12,55 @@ final class ListingSyncExportGraphBuilder {
 
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
-    private readonly Connection $database,
-    private readonly TimeInterface $time,
   ) {}
 
+  /**
+   * Build the export graph for one listing.
+   *
+   * @return array{
+   *   entities_by_type: array<string, array<int, \Drupal\Core\Entity\EntityInterface>>,
+   *   uuids: array<int, string>,
+   *   root_listing_uuid: string,
+   *   root_listing_id: int,
+   *   counts: array<string, int>,
+   *   total_entities: int
+   * }
+   */
   public function buildForListing(BbAiListing $listing): array {
     $listingId = (int) $listing->id();
+
     $bundleItems = $this->loadBundleItemsForListing($listingId);
     $inventorySkus = $this->loadInventorySkusForListing($listingId);
     $publications = $this->loadMarketplacePublicationsForListing($listingId);
     $listingImages = $this->loadListingImagesForListing($listingId, $bundleItems);
     $files = $this->loadFilesFromListingImages($listingImages);
-    $legacyRows = $this->loadLegacyRowsForListing($listingId);
+
+    $entitiesByType = [
+      'bb_ai_listing' => [$listing],
+      'ai_book_bundle_item' => $bundleItems,
+      'ai_listing_inventory_sku' => $inventorySkus,
+      'ai_marketplace_publication' => $publications,
+      'listing_image' => $listingImages,
+      'file' => $files,
+    ];
+
+    $uuids = $this->collectUniqueUuids($entitiesByType);
+
+    $counts = [];
+    $total = 0;
+    foreach ($entitiesByType as $entityType => $entities) {
+      $count = count($entities);
+      $counts[$entityType] = $count;
+      $total += $count;
+    }
 
     return [
-      'generated_at' => gmdate(DATE_ATOM, $this->time->getCurrentTime()),
-      'root_listing' => $this->buildEntityRecord($listing),
-      'relationship_manifest' => $this->buildRelationshipManifest(),
-      'entities' => [
-        'ai_book_bundle_item' => $this->buildEntityRecords($bundleItems),
-        'ai_listing_inventory_sku' => $this->buildEntityRecords($inventorySkus),
-        'ai_marketplace_publication' => $this->buildEntityRecords($publications),
-        'listing_image' => $this->buildEntityRecords($listingImages),
-        'file' => $this->buildEntityRecords($files),
-      ],
-      'legacy_tables' => $legacyRows,
+      'entities_by_type' => $entitiesByType,
+      'uuids' => $uuids,
+      'root_listing_uuid' => (string) $listing->uuid(),
+      'root_listing_id' => $listingId,
+      'counts' => $counts,
+      'total_entities' => $total,
     ];
   }
 
@@ -123,65 +145,6 @@ final class ListingSyncExportGraphBuilder {
   }
 
   /**
-   * @return array{
-   *   bb_ebay_legacy_listing_link: array<int, array<string, mixed>>,
-   *   bb_ebay_legacy_listing: array<int, array<string, mixed>>
-   * }
-   */
-  private function loadLegacyRowsForListing(int $listingId): array {
-    $links = [];
-    $listings = [];
-
-    if (!$this->database->schema()->tableExists('bb_ebay_legacy_listing_link')) {
-      return [
-        'bb_ebay_legacy_listing_link' => [],
-        'bb_ebay_legacy_listing' => [],
-      ];
-    }
-
-    $linksResult = $this->database->select('bb_ebay_legacy_listing_link', 'l')
-      ->fields('l')
-      ->condition('listing', $listingId)
-      ->execute();
-
-    foreach ($linksResult as $row) {
-      $links[] = (array) $row;
-    }
-
-    if ($links === [] || !$this->database->schema()->tableExists('bb_ebay_legacy_listing')) {
-      return [
-        'bb_ebay_legacy_listing_link' => $links,
-        'bb_ebay_legacy_listing' => [],
-      ];
-    }
-
-    foreach ($links as $link) {
-      $accountId = (int) ($link['account_id'] ?? 0);
-      $ebayListingId = (string) ($link['ebay_listing_id'] ?? '');
-      if ($accountId <= 0 || $ebayListingId === '') {
-        continue;
-      }
-
-      $listingRow = $this->database->select('bb_ebay_legacy_listing', 'x')
-        ->fields('x')
-        ->condition('account_id', $accountId)
-        ->condition('ebay_listing_id', $ebayListingId)
-        ->range(0, 1)
-        ->execute()
-        ->fetchAssoc();
-
-      if (is_array($listingRow)) {
-        $listings[] = $listingRow;
-      }
-    }
-
-    return [
-      'bb_ebay_legacy_listing_link' => $links,
-      'bb_ebay_legacy_listing' => $listings,
-    ];
-  }
-
-  /**
    * @return array<int, \Drupal\Core\Entity\EntityInterface>
    */
   private function loadByProperty(string $entityType, string $property, int $value): array {
@@ -193,75 +156,30 @@ final class ListingSyncExportGraphBuilder {
     if ($ids === []) {
       return [];
     }
+
     return array_values($storage->loadMultiple($ids));
   }
 
   /**
-   * @param array<int, \Drupal\Core\Entity\EntityInterface> $entities
+   * @param array<string, array<int, \Drupal\Core\Entity\EntityInterface>> $entitiesByType
    *
-   * @return array<int, array<string, mixed>>
+   * @return array<int, string>
    */
-  private function buildEntityRecords(array $entities): array {
-    $records = [];
-    foreach ($entities as $entity) {
-      $records[] = $this->buildEntityRecord($entity);
+  private function collectUniqueUuids(array $entitiesByType): array {
+    $byUuid = [];
+
+    foreach ($entitiesByType as $entities) {
+      foreach ($entities as $entity) {
+        $uuid = (string) $entity->uuid();
+        if ($uuid !== '') {
+          $byUuid[$uuid] = $uuid;
+        }
+      }
     }
-    return $records;
-  }
 
-  /**
-   * @return array<string, mixed>
-   */
-  private function buildEntityRecord(EntityInterface $entity): array {
-    return [
-      'entity_type' => $entity->getEntityTypeId(),
-      'id' => $entity->id(),
-      'uuid' => $entity->uuid(),
-      'bundle' => $entity->bundle(),
-      'values' => $entity->toArray(),
-    ];
-  }
-
-  /**
-   * @return array<string, array<int, array<string, string>>>
-   */
-  private function buildRelationshipManifest(): array {
-    return [
-      'reverse_entity_relationships' => [
-        [
-          'entity_type' => 'ai_book_bundle_item',
-          'field' => 'bundle_listing',
-          'points_to' => 'bb_ai_listing',
-        ],
-        [
-          'entity_type' => 'ai_listing_inventory_sku',
-          'field' => 'listing',
-          'points_to' => 'bb_ai_listing',
-        ],
-        [
-          'entity_type' => 'ai_marketplace_publication',
-          'field' => 'listing',
-          'points_to' => 'bb_ai_listing',
-        ],
-        [
-          'entity_type' => 'listing_image',
-          'field' => 'owner',
-          'points_to' => 'bb_ai_listing|ai_book_bundle_item',
-        ],
-      ],
-      'non_entity_table_relationships' => [
-        [
-          'table' => 'bb_ebay_legacy_listing_link',
-          'field' => 'listing',
-          'points_to' => 'bb_ai_listing.id',
-        ],
-        [
-          'table' => 'bb_ebay_legacy_listing',
-          'field' => 'account_id + ebay_listing_id',
-          'points_to' => 'bb_ebay_legacy_listing_link.account_id + ebay_listing_id',
-        ],
-      ],
-    ];
+    $uuids = array_values($byUuid);
+    sort($uuids);
+    return $uuids;
   }
 
 }

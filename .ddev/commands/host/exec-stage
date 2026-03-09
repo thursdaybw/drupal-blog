@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## #ddev-generated
+## Description: Run a shell command inside the staging appserver container.
+## Usage: exec-stage '<command>'
+## Example: ddev exec-stage 'drush status'
+
+SSH_TARGET="bb-drupal-prod"
+WORKSPACE="/home/bevan/workspace/bb-platform-staging"
+COMPOSE_PATH="${WORKSPACE}/docker-compose.yml"
+ENV_PATH="${WORKSPACE}/.env"
+
+if [ "$#" -eq 0 ]; then
+  echo "Usage: ddev exec-stage '<command>'"
+  exit 1
+fi
+
+COMMAND="$*"
+
+ssh "${SSH_TARGET}" \
+  "sudo -n docker compose -f ${COMPOSE_PATH} --env-file ${ENV_PATH} exec -T appserver sh -lc 'cd /var/www/html && ${COMMAND}'"

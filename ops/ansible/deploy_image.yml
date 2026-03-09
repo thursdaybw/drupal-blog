@@ -36,7 +36,7 @@
       staging:
         name: staging
         workspace: /home/bevan/workspace/bb-platform-staging
-        compose_src: "{{ playbook_dir }}/../compose/staging/docker-compose.yml"
+        compose_src: "{{ playbook_dir }}/../compose/shared/docker-compose.yml"
         compose_path: /home/bevan/workspace/bb-platform-staging/docker-compose.yml
         local_env_src: "{{ playbook_dir }}/../compose/staging/.env"
         env_path: /home/bevan/workspace/bb-platform-staging/.env
@@ -44,13 +44,15 @@
         domain: bb-drupal-staging.bevansbench.com
         upstream_host: 127.0.0.1
         upstream_port: 18082
+        app_port: 18082
+        mysql_volume_name: bb-platform-staging_mysql_data
         tls_email: bevan@bevansbench.com
         nginx_site_filename: bb-drupal-staging.conf
         proxy_tasks: tasks/reverse_proxy_staging.yml
       prod:
         name: prod
         workspace: /home/bevan/workspace/bb-platform-prod
-        compose_src: "{{ playbook_dir }}/../compose/prod/docker-compose.yml"
+        compose_src: "{{ playbook_dir }}/../compose/shared/docker-compose.yml"
         compose_path: /home/bevan/workspace/bb-platform-prod/docker-compose.yml
         local_env_src: "{{ playbook_dir }}/../compose/prod/.env"
         env_path: /home/bevan/workspace/bb-platform-prod/.env
@@ -58,6 +60,8 @@
         domain: www.bevansbench.com
         upstream_host: 127.0.0.1
         upstream_port: 18081
+        app_port: 18081
+        mysql_volume_name: bb-platform-prod_mysql_data
         tls_email: bevan@bevansbench.com
         nginx_site_filename: bb-platform-prod.conf
         proxy_tasks: tasks/reverse_proxy_prod.yml
@@ -211,22 +215,42 @@
         create: true
         mode: "0600"
 
+    - name: Set APP_PORT in environment .env
+      ansible.builtin.lineinfile:
+        path: "{{ deploy_target.env_path }}"
+        regexp: '^APP_PORT='
+        line: "APP_PORT={{ deploy_target.app_port }}"
+        create: true
+        mode: "0600"
+
+    - name: Set MYSQL_VOLUME_NAME in environment .env
+      ansible.builtin.lineinfile:
+        path: "{{ deploy_target.env_path }}"
+        regexp: '^MYSQL_VOLUME_NAME='
+        line: "MYSQL_VOLUME_NAME={{ deploy_target.mysql_volume_name }}"
+        create: true
+        mode: "0600"
+
     - name: Read environment .env content
       ansible.builtin.slurp:
         path: "{{ deploy_target.env_path }}"
       register: env_content
 
-    - name: Assert required MySQL variables exist in environment .env
+    - name: Assert required runtime variables exist in environment .env
       ansible.builtin.assert:
         that:
+          - "(env_content.content | b64decode) is regex('(?m)^APP_PORT=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^MYSQL_VOLUME_NAME=.+$')"
           - "(env_content.content | b64decode) is regex('(?m)^MYSQL_ROOT_PASSWORD=.+$')"
           - "(env_content.content | b64decode) is regex('(?m)^MYSQL_USER=.+$')"
           - "(env_content.content | b64decode) is regex('(?m)^MYSQL_PASSWORD=.+$')"
           - "(env_content.content | b64decode) is regex('(?m)^MYSQL_DATABASE=.+$')"
         fail_msg: |
-          {{ deploy_target.name | upper }} .env is present but missing required MySQL values.
+          {{ deploy_target.name | upper }} .env is present but missing required runtime values.
 
           Required non-empty keys:
+          - APP_PORT
+          - MYSQL_VOLUME_NAME
           - MYSQL_ROOT_PASSWORD
           - MYSQL_USER
           - MYSQL_PASSWORD

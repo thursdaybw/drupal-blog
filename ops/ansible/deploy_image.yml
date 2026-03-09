@@ -28,6 +28,10 @@
     # Must be provided by caller.
     release_image_ref: ""
 
+    # Drush binary path relative to /var/www/html in the app container.
+    # Keep this in one place so image layout changes are a single edit.
+    app_drush_bin: ../vendor/bin/drush
+
     deploy_targets:
       staging:
         name: staging
@@ -257,7 +261,7 @@
           -f {{ deploy_target.compose_path }}
           --env-file {{ deploy_target.env_path }}
           exec -T appserver
-          sh -lc 'cd /var/www/html && vendor/bin/drush status --fields=bootstrap --format=list'
+          sh -lc 'cd /var/www/html && {{ app_drush_bin }} status --fields=bootstrap --format=list'
       register: drush_bootstrap
       changed_when: false
       failed_when: false
@@ -269,7 +273,7 @@
           -f {{ deploy_target.compose_path }}
           --env-file {{ deploy_target.env_path }}
           exec -T appserver
-          sh -lc 'cd /var/www/html && vendor/bin/drush cim -y'
+          sh -lc 'cd /var/www/html && {{ app_drush_bin }} cim -y'
       register: drush_cim
       changed_when: "'No changes to import.' not in (drush_cim.stdout | default(''))"
       when:
@@ -283,7 +287,7 @@
           -f {{ deploy_target.compose_path }}
           --env-file {{ deploy_target.env_path }}
           exec -T appserver
-          sh -lc 'cd /var/www/html && vendor/bin/drush cr'
+          sh -lc 'cd /var/www/html && {{ app_drush_bin }} cr'
       changed_when: true
       when:
         - drush_bootstrap.rc == 0
@@ -295,8 +299,20 @@
           Skipping drush cim/cr on {{ deploy_target.name }} because Drupal bootstrap is not ready yet
           (likely empty database on first boot).
       when:
-        - drush_bootstrap.rc != 0
-          or "'Successful' not in (drush_bootstrap.stdout | default(''))"
+        - drush_bootstrap.rc != 0 or ('Successful' not in (drush_bootstrap.stdout | default('')))
+
+    - name: Map reverse proxy variables for environment task files
+      ansible.builtin.set_fact:
+        staging_domain: "{{ deploy_target.domain }}"
+        staging_upstream_host: "{{ deploy_target.upstream_host }}"
+        staging_upstream_port: "{{ deploy_target.upstream_port }}"
+        staging_tls_email: "{{ deploy_target.tls_email }}"
+        nginx_staging_site_filename: "{{ deploy_target.nginx_site_filename }}"
+        prod_domain: "{{ deploy_target.domain }}"
+        prod_upstream_host: "{{ deploy_target.upstream_host }}"
+        prod_upstream_port: "{{ deploy_target.upstream_port }}"
+        prod_tls_email: "{{ deploy_target.tls_email }}"
+        nginx_prod_site_filename: "{{ deploy_target.nginx_site_filename }}"
 
     - name: Run environment reverse proxy tasks
       ansible.builtin.include_tasks: "{{ deploy_target.proxy_tasks }}"

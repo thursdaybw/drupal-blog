@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## #ddev-generated
+## Description: Import staged content-sync files into staging Drupal.
+## Usage: content-sync-import-staging [--label=sync] [--entity-types=a,b] [--uuids=u1,u2] [--actions=create,update|create,update,delete] [--skiplist] [--compare-dates] [--dry-run]
+## Example: ddev content-sync-import-staging --label=sync --skiplist
+
+SSH_TARGET="bb-drupal-prod"
+STAGING_WORKSPACE="/home/bevan/workspace/bb-platform-staging"
+STAGING_COMPOSE_PATH="${STAGING_WORKSPACE}/docker-compose.yml"
+STAGING_ENV_PATH="${STAGING_WORKSPACE}/.env"
+REMOTE_CONTENT_DIR="${STAGING_WORKSPACE}/content/sync"
+CONTAINER_CONTENT_DIR="/var/www/html/content/sync"
+DRY_RUN=false
+LABEL="sync"
+ENTITY_TYPES=""
+UUIDS=""
+ACTIONS="create,update"
+SKIPLIST=false
+COMPARE_DATES=false
+# Update this one constant if drush location changes in the container.
+DRUSH_BIN="../vendor/bin/drush"
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    --label=*)
+      LABEL="${arg#*=}"
+      ;;
+    --entity-types=*)
+      ENTITY_TYPES="${arg#*=}"
+      ;;
+    --uuids=*)
+      UUIDS="${arg#*=}"
+      ;;
+    --actions=*)
+      ACTIONS="${arg#*=}"
+      ;;
+    --skiplist)
+      SKIPLIST=true
+      ;;
+    --compare-dates)
+      COMPARE_DATES=true
+      ;;
+    *)
+      echo "Unknown argument: $arg"
+      exit 1
+      ;;
+  esac
+done
+
+read -r -d '' COMPOSE_PREFIX <<COMPOSE || true
+sudo -n docker compose -f ${STAGING_COMPOSE_PATH} --env-file ${STAGING_ENV_PATH}
+COMPOSE
+
+IMPORT_CMD="${DRUSH_BIN} content-sync:import ${LABEL} -y"
+
+if [ -n "${ENTITY_TYPES}" ]; then
+  IMPORT_CMD+=" --entity-types=${ENTITY_TYPES}"
+fi
+
+if [ -n "${UUIDS}" ]; then
+  IMPORT_CMD+=" --uuids=${UUIDS}"
+fi
+
+IMPORT_CMD+=" --actions=${ACTIONS}"
+
+if [ "${SKIPLIST}" = true ]; then
+  IMPORT_CMD+=" --skiplist"
+fi
+
+if [ "${COMPARE_DATES}" = true ]; then
+  IMPORT_CMD+=" --compare-dates"
+fi
+
+echo "Content import phase (staging)"
+echo "- source on remote host: ${REMOTE_CONTENT_DIR}"
+echo "- target in container: ${CONTAINER_CONTENT_DIR}"
+echo "- drush bin: ${DRUSH_BIN}"
+echo "- drush command: ${IMPORT_CMD}"
+echo "- dry run: ${DRY_RUN}"
+
+if [ "${DRY_RUN}" = true ]; then
+  echo "[dry-run] ssh ${SSH_TARGET} '${COMPOSE_PREFIX} ps -q appserver'"
+  echo "[dry-run] ssh ${SSH_TARGET} '${COMPOSE_PREFIX} up -d appserver'"
+  echo "[dry-run] ssh ${SSH_TARGET} '${COMPOSE_PREFIX} ps -q appserver'"
+  echo "[dry-run] ssh ${SSH_TARGET} 'sudo -n docker cp ${REMOTE_CONTENT_DIR}/. <app_container_id>:${CONTAINER_CONTENT_DIR}/'"
+  echo "[dry-run] ssh ${SSH_TARGET} '${COMPOSE_PREFIX} exec -T appserver sh -lc \"cd /var/www/html && ${IMPORT_CMD}\"'"
+  exit 0
+fi
+
+APP_CONTAINER_ID="$(ssh "${SSH_TARGET}" "${COMPOSE_PREFIX} ps -q appserver")"
+
+if [ -z "${APP_CONTAINER_ID}" ]; then
+  ssh "${SSH_TARGET}" "${COMPOSE_PREFIX} up -d appserver"
+  APP_CONTAINER_ID="$(ssh "${SSH_TARGET}" "${COMPOSE_PREFIX} ps -q appserver")"
+fi
+
+if [ -z "${APP_CONTAINER_ID}" ]; then
+  echo "Could not resolve staging appserver container id."
+  exit 1
+fi
+
+ssh "${SSH_TARGET}" "test -d ${REMOTE_CONTENT_DIR}"
+ssh "${SSH_TARGET}" "sudo -n docker exec ${APP_CONTAINER_ID} mkdir -p ${CONTAINER_CONTENT_DIR}"
+ssh "${SSH_TARGET}" "sudo -n docker cp ${REMOTE_CONTENT_DIR}/. ${APP_CONTAINER_ID}:${CONTAINER_CONTENT_DIR}/"
+ssh "${SSH_TARGET}" "${COMPOSE_PREFIX} exec -T appserver sh -lc 'cd /var/www/html && if [ ! -x \"${DRUSH_BIN}\" ]; then DRUSH_FALLBACK=\$(command -v drush || true); if [ -n \"\${DRUSH_FALLBACK}\" ]; then DRUSH_CMD=\"\${DRUSH_FALLBACK}\"; else echo \"Drush binary not found: ${DRUSH_BIN}\"; exit 127; fi; else DRUSH_CMD=\"${DRUSH_BIN}\"; fi; \${DRUSH_CMD} content-sync:import ${LABEL} -y${ENTITY_TYPES:+ --entity-types=${ENTITY_TYPES}}${UUIDS:+ --uuids=${UUIDS}}${ACTIONS:+ --actions=${ACTIONS}}$( [ \"${SKIPLIST}\" = true ] && printf ' --skiplist' )$( [ \"${COMPARE_DATES}\" = true ] && printf ' --compare-dates' )'"
+
+echo "Content import complete (staging)."

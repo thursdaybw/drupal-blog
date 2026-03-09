@@ -4,7 +4,7 @@ set -euo pipefail
 
 ## #ddev-generated
 ## Description: Import staged content-sync files into staging Drupal.
-## Usage: deploy-content-import-staging [--label=sync] [--entity-types=a,b] [--uuids=u1,u2] [--actions=create,update] [--skiplist] [--compare-dates] [--dry-run]
+## Usage: deploy-content-import-staging [--label=sync] [--entity-types=a,b] [--uuids=u1,u2] [--actions=create,update|create,update,delete] [--skiplist] [--compare-dates] [--dry-run]
 ## Example: ddev deploy-content-import-staging --label=sync --skiplist
 
 SSH_TARGET="bb-drupal-prod"
@@ -17,7 +17,7 @@ DRY_RUN=false
 LABEL="sync"
 ENTITY_TYPES=""
 UUIDS=""
-ACTIONS=""
+ACTIONS="create,update"
 SKIPLIST=false
 COMPARE_DATES=false
 # Update this one constant if drush location changes in the container.
@@ -67,9 +67,7 @@ if [ -n "${UUIDS}" ]; then
   IMPORT_CMD+=" --uuids=${UUIDS}"
 fi
 
-if [ -n "${ACTIONS}" ]; then
-  IMPORT_CMD+=" --actions=${ACTIONS}"
-fi
+IMPORT_CMD+=" --actions=${ACTIONS}"
 
 if [ "${SKIPLIST}" = true ]; then
   IMPORT_CMD+=" --skiplist"

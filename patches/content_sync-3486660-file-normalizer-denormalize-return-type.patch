@@ -1,0 +1,25 @@
+From 321ce479c9501eb41cb628caabfb402dc6b42deb Mon Sep 17 00:00:00 2001
+From: Mohamed Tahar Meharga <28324-motame@users.noreply.drupalcode.org>
+Date: Mon, 11 Nov 2024 07:25:19 +0000
+Subject: [PATCH] Update file FileEntityNormalizer.php
+
+---
+ src/Normalizer/FileEntityNormalizer.php | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Normalizer/FileEntityNormalizer.php b/src/Normalizer/FileEntityNormalizer.php
+index 7b9f4a5..0ff28d5 100755
+--- a/src/Normalizer/FileEntityNormalizer.php
++++ b/src/Normalizer/FileEntityNormalizer.php
+@@ -71,7 +71,7 @@ class FileEntityNormalizer extends ContentEntityNormalizer {
+   /**
+    * {@inheritdoc}
+    */
+-  public function denormalize($data, $class, $format = NULL, array $serializer_context = array()): array|string|int|float|bool|\ArrayObject|NULL {
++  public function denormalize($data, $class, $format = NULL, array $serializer_context = array()): mixed {
+ 
+     $file_data = '';
+ 
+-- 
+GitLab
+

@@ -132,6 +132,11 @@
                 "      composer remove drupal/core-project-message"
             ]
         },
+        "patches": {
+            "drupal/content_sync": {
+                "https://www.drupal.org/project/content_sync/issues/3486660 - Fix FileEntityNormalizer::denormalize return type for file imports": "patches/content_sync-3486660-file-normalizer-denormalize-return-type.patch"
+            }
+        },
         "merge-plugin": {
             "include": [
                 "composer.local.json",

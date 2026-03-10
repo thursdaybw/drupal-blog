@@ -55,6 +55,11 @@ final class AiListingProcessCommand extends Command {
       catch (\Throwable $e) {
         $failed++;
         $output->writeln(sprintf('  Failed: %s', $e->getMessage()));
+        if ($this->isConnectivityFailure($e)) {
+          $output->writeln('  Aborting run: VLM connectivity failure detected.');
+          $output->writeln('  Action: re-provision VLM and rerun ai:process-new.');
+          return self::FAILURE;
+        }
       }
       finally {
         $duration = microtime(TRUE) - $itemStart;
@@ -78,6 +83,27 @@ final class AiListingProcessCommand extends Command {
     }
 
     return self::SUCCESS;
+  }
+
+  private function isConnectivityFailure(\Throwable $error): bool {
+    $message = strtolower($error->getMessage());
+    $patterns = [
+      'curl error 28',
+      'failed to connect',
+      'connection refused',
+      'could not resolve host',
+      'operation timed out',
+      'vllm not configured',
+      '/v1/chat/completions',
+    ];
+
+    foreach ($patterns as $pattern) {
+      if (str_contains($message, $pattern)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
 }

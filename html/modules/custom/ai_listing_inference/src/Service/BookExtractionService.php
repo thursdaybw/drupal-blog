@@ -36,8 +36,19 @@ final class BookExtractionService implements BookExtractionInterface {
 
     $metadataPrompt = $this->buildMetadataPrompt();
 
+    \Drupal::logger('ai_listing_inference')->notice(
+      'Starting metadata inference using @count image(s).',
+      ['@count' => count($metadataImagePaths)]
+    );
     $metadataResult = $this->vlmClient->infer($metadataPrompt, $metadataImagePaths);
+    \Drupal::logger('ai_listing_inference')->notice('Metadata inference completed.');
+
+    \Drupal::logger('ai_listing_inference')->notice(
+      'Starting condition inference over @count image(s).',
+      ['@count' => count($imagePaths)]
+    );
     $conditionResult = $this->inferConditionFromImages($imagePaths);
+    \Drupal::logger('ai_listing_inference')->notice('Condition inference completed.');
 
     $metadataParsed = is_array($metadataResult['parsed'] ?? null) ? $metadataResult['parsed'] : null;
     $conditionParsed = $conditionResult['parsed'] ?? null;
@@ -66,9 +77,26 @@ final class BookExtractionService implements BookExtractionInterface {
 
     foreach ($imagePaths as $index => $imagePath) {
       $imageNumber = $index + 1;
+      $stepStart = microtime(TRUE);
+      \Drupal::logger('ai_listing_inference')->notice(
+        'Condition inference image @current/@total started: @path',
+        [
+          '@current' => $imageNumber,
+          '@total' => count($imagePaths),
+          '@path' => $imagePath,
+        ]
+      );
       $conditionResult = $this->vlmClient->infer($conditionPrompt, [$imagePath]);
       $conditionParsed = is_array($conditionResult['parsed'] ?? null) ? $conditionResult['parsed'] : [];
       $normalizedCondition = $this->normalizeCondition($conditionParsed);
+      \Drupal::logger('ai_listing_inference')->notice(
+        'Condition inference image @current/@total completed in @seconds s.',
+        [
+          '@current' => $imageNumber,
+          '@total' => count($imagePaths),
+          '@seconds' => number_format(microtime(TRUE) - $stepStart, 2),
+        ]
+      );
 
       foreach ($normalizedCondition['issues'] as $issue) {
         if ($issue === '') {

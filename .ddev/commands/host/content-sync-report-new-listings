@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## #ddev-generated
+## Description: Report bb_ai_listing entities present on dev but missing on target env.
+## Usage: content-sync-report-new-listings [--target=staging|prod] [--limit=<n>] [--show-uuids]
+## Example: ddev content-sync-report-new-listings --target=staging --limit=25
+
+TARGET="staging"
+LIMIT=""
+SHOW_UUIDS=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --target=staging|--target=prod)
+      TARGET="${arg#*=}"
+      ;;
+    --limit=*)
+      LIMIT="${arg#*=}"
+      if ! [[ "${LIMIT}" =~ ^[0-9]+$ ]]; then
+        echo "Invalid --limit value: ${LIMIT}"
+        exit 1
+      fi
+      ;;
+    --show-uuids)
+      SHOW_UUIDS=true
+      ;;
+    *)
+      echo "Unknown argument: ${arg}"
+      exit 1
+      ;;
+  esac
+done
+
+if [ "${TARGET}" = "staging" ]; then
+  REMOTE_EXEC_CMD="exec-stage"
+else
+  REMOTE_EXEC_CMD="exec-prod"
+fi
+
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+LOCAL_TSV="${TMP_DIR}/local.tsv"
+REMOTE_UUIDS="${TMP_DIR}/remote_uuids.txt"
+MISSING_TSV="${TMP_DIR}/missing.tsv"
+
+LOCAL_SQL="SELECT id, uuid, COALESCE(ebay_title, '') AS listing_title, FROM_UNIXTIME(changed) AS changed_at FROM bb_ai_listing ORDER BY changed DESC;"
+REMOTE_CMD="../vendor/bin/drush php:eval \"print implode(PHP_EOL, \\\\Drupal::database()->query(\\\"SELECT uuid FROM bb_ai_listing\\\")->fetchCol()) . PHP_EOL;\""
+
+echo "Building local listing snapshot (dev)..."
+ddev drush sqlq "${LOCAL_SQL}" > "${LOCAL_TSV}"
+
+echo "Reading remote listing UUIDs (${TARGET})..."
+ddev "${REMOTE_EXEC_CMD}" "${REMOTE_CMD}" > "${REMOTE_UUIDS}"
+
+awk -F '\t' '
+  function is_uuid(value) {
+    return value ~ /^[0-9a-fA-F-]{36}$/
+  }
+  NR==FNR {
+    if (is_uuid($1)) {
+      remote[$1] = 1
+    }
+    next
+  }
+  {
+    if (!is_uuid($2)) {
+      next
+    }
+    uuid = $2
+    if (!(uuid in remote)) {
+      print $0
+    }
+  }
+' "${REMOTE_UUIDS}" "${LOCAL_TSV}" > "${MISSING_TSV}"
+
+TOTAL_LOCAL=$(wc -l < "${LOCAL_TSV}" | tr -d ' ')
+TOTAL_REMOTE=$(wc -l < "${REMOTE_UUIDS}" | tr -d ' ')
+TOTAL_MISSING=$(wc -l < "${MISSING_TSV}" | tr -d ' ')
+
+echo
+echo "Report: dev -> ${TARGET}"
+echo "- local listings: ${TOTAL_LOCAL}"
+echo "- remote listings: ${TOTAL_REMOTE}"
+echo "- missing on ${TARGET}: ${TOTAL_MISSING}"
+
+if [ "${TOTAL_MISSING}" -eq 0 ]; then
+  echo
+  echo "No missing listings."
+  exit 0
+fi
+
+echo
+printf "%-8s %-38s %-24s %s\n" "ID" "UUID" "CHANGED" "LABEL"
+printf "%-8s %-38s %-24s %s\n" "--------" "--------------------------------------" "------------------------" "----------------------------------------"
+
+if [ -n "${LIMIT}" ]; then
+  DISPLAY_FILE="${TMP_DIR}/missing_limited.tsv"
+  head -n "${LIMIT}" "${MISSING_TSV}" > "${DISPLAY_FILE}"
+else
+  DISPLAY_FILE="${MISSING_TSV}"
+fi
+
+awk -F '\t' '
+  {
+    id = $1
+    uuid = $2
+    label = $3
+    changed = $4
+    printf "%-8s %-38s %-24s %s\n", id, uuid, changed, label
+  }
+' "${DISPLAY_FILE}"
+
+if [ -n "${LIMIT}" ] && [ "${TOTAL_MISSING}" -gt "${LIMIT}" ]; then
+  echo
+  echo "Showing first ${LIMIT} rows."
+fi
+
+if [ "${SHOW_UUIDS}" = true ]; then
+  echo
+  echo "UUID list:"
+  awk -F '\t' '{print $2}' "${MISSING_TSV}" | paste -sd, -
+fi

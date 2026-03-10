@@ -58,6 +58,7 @@
         env_path: /home/bevan/workspace/bb-platform-prod/.env
         env_example: ops/compose/prod/.env.example
         domain: www.bevansbench.com
+        apex_domain: bevansbench.com
         upstream_host: 127.0.0.1
         upstream_port: 18081
         app_port: 18081
@@ -231,6 +232,14 @@
         create: true
         mode: "0600"
 
+    - name: Set DRUSH_OPTIONS_URI in environment .env
+      ansible.builtin.lineinfile:
+        path: "{{ deploy_target.env_path }}"
+        regexp: '^DRUSH_OPTIONS_URI='
+        line: "DRUSH_OPTIONS_URI=https://{{ deploy_target.domain }}"
+        create: true
+        mode: "0600"
+
     - name: Read environment .env content
       ansible.builtin.slurp:
         path: "{{ deploy_target.env_path }}"
@@ -276,6 +285,19 @@
           --env-file {{ deploy_target.env_path }}
           up -d
       register: compose_up_result
+      changed_when: true
+
+    - name: Ensure environment public files directory is writable by web user
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
+          exec -T appserver
+          sh -lc 'mkdir -p /var/www/html/sites/default/files &&
+                  chown -R www-data:www-data /var/www/html/sites/default/files &&
+                  find /var/www/html/sites/default/files -type d -exec chmod 2775 {} + &&
+                  find /var/www/html/sites/default/files -type f -exec chmod 0664 {} +'
       changed_when: true
 
     - name: Check Drupal bootstrap state in environment app container
@@ -333,6 +355,7 @@
         staging_tls_email: "{{ deploy_target.tls_email }}"
         nginx_staging_site_filename: "{{ deploy_target.nginx_site_filename }}"
         prod_domain: "{{ deploy_target.domain }}"
+        prod_apex_domain: "{{ deploy_target.apex_domain | default('') }}"
         prod_upstream_host: "{{ deploy_target.upstream_host }}"
         prod_upstream_port: "{{ deploy_target.upstream_port }}"
         prod_tls_email: "{{ deploy_target.tls_email }}"

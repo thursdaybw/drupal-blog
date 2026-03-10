@@ -7,6 +7,13 @@
     stdin: |
       server {
         listen 80;
+        server_name {{ prod_apex_domain }};
+
+        return 301 https://{{ prod_domain }}$request_uri;
+      }
+
+      server {
+        listen 80;
         server_name {{ prod_domain }};
 
         location / {
@@ -55,6 +62,7 @@
       --keep-until-expiring
       --redirect
       --email {{ prod_tls_email }}
+      -d {{ prod_apex_domain }}
       -d {{ prod_domain }}
   register: certbot_result
   changed_when: >-

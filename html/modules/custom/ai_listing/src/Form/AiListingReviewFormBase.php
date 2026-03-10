@@ -129,16 +129,22 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#markup' => Html::escape(trim((string) ($listing->get('listing_code')->value ?? '')) ?: 'Will be generated on save'),
       '#description' => $this->t('Stable short code used in new SKUs. Older listings may still be on entity ID based SKUs.'),
     ];
-    $form['basic']['status'] = [
-      '#type' => 'select',
-      '#title' => 'Stage',
-      '#options' => [
+    $statusOptions = $listing->getFieldDefinition('status')->getSetting('allowed_values');
+    if (!is_array($statusOptions) || $statusOptions === []) {
+      $statusOptions = [
         'new' => $this->t('New'),
+        'processing' => $this->t('Processing'),
         'ready_for_review' => $this->t('Ready for review'),
         'ready_to_shelve' => $this->t('Ready to shelve'),
         'shelved' => $this->t('Shelved'),
         'failed' => $this->t('Failed'),
-      ],
+      ];
+    }
+
+    $form['basic']['status'] = [
+      '#type' => 'select',
+      '#title' => 'Stage',
+      '#options' => $statusOptions,
       '#default_value' => (string) ($listing->get('status')->value ?? 'new'),
       '#description' => $this->t('Choose the workflow stage for this listing.'),
       '#required' => TRUE,

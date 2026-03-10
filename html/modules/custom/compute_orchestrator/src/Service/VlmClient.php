@@ -77,6 +77,7 @@ final class VlmClient {
     ];
 
     $url = rtrim($vllmUrl, '/') . '/v1/chat/completions';
+    $timeoutSeconds = $this->getInferenceTimeoutSeconds();
 
     $resp = $this->httpClient->request('POST', $url, [
       'headers' => [
@@ -84,11 +85,22 @@ final class VlmClient {
         'Accept' => 'application/json',
       ],
       'json' => $payload,
-      'timeout' => 180,
+      'timeout' => $timeoutSeconds,
+      'connect_timeout' => min(10, $timeoutSeconds),
       'http_errors' => false,
     ]);
 
+    $statusCode = $resp->getStatusCode();
     $body = (string) $resp->getBody();
+    if ($statusCode >= 400) {
+      $summary = mb_substr(trim($body), 0, 500);
+      throw new \RuntimeException(sprintf(
+        'vLLM request failed with HTTP %d: %s',
+        $statusCode,
+        $summary !== '' ? $summary : '(empty response body)'
+      ));
+    }
+
     $data = json_decode($body, true);
 
     $content = (string) ($data['choices'][0]['message']['content'] ?? '');
@@ -132,6 +144,15 @@ final class VlmClient {
     $json = substr($text, $start, ($end - $start) + 1);
     $decoded = json_decode($json, true);
     return is_array($decoded) ? $decoded : null;
+  }
+
+  private function getInferenceTimeoutSeconds(): int {
+    $value = (int) \Drupal::state()->get('compute.vllm_infer_timeout', 90);
+    if ($value < 5) {
+      return 5;
+    }
+
+    return $value;
   }
 
 }

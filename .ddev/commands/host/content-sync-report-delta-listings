@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## #ddev-generated
+## Description: Report bb_ai_listing delta (missing + changed) from dev to staging/prod using deterministic graph fingerprints.
+## Usage: content-sync-report-delta-listings [--target=staging|prod] [--limit=<n>] [--show-uuids]
+## Example: ddev content-sync-report-delta-listings --target=staging --limit=50 --show-uuids
+
+TARGET="staging"
+LIMIT=""
+SHOW_UUIDS=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --target=staging|--target=prod)
+      TARGET="${arg#*=}"
+      ;;
+    --limit=*)
+      LIMIT="${arg#*=}"
+      if ! [[ "${LIMIT}" =~ ^[0-9]+$ ]]; then
+        echo "Invalid --limit value: ${LIMIT}"
+        exit 1
+      fi
+      ;;
+    --show-uuids)
+      SHOW_UUIDS=true
+      ;;
+    *)
+      echo "Unknown argument: ${arg}"
+      exit 1
+      ;;
+  esac
+done
+
+if [ "${TARGET}" = "staging" ]; then
+  REMOTE_EXEC_CMD="exec-stage"
+else
+  REMOTE_EXEC_CMD="exec-prod"
+fi
+
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+LOCAL_MAP="${TMP_DIR}/local_map.tsv"
+REMOTE_MAP="${TMP_DIR}/remote_map.tsv"
+DELTA_MAP="${TMP_DIR}/delta.tsv"
+MAP_LIMIT_ARG=""
+
+if [ -n "${LIMIT}" ]; then
+  MAP_LIMIT_ARG=" --limit=${LIMIT}"
+fi
+
+echo "Building local fingerprint map (dev)..."
+ddev drush bb-ai-listing-sync:fingerprint-map --format=tsv${MAP_LIMIT_ARG} > "${LOCAL_MAP}"
+
+if ! ddev "${REMOTE_EXEC_CMD}" "../vendor/bin/drush list" | grep -q "bb-ai-listing-sync:fingerprint-map"; then
+  echo "Remote ${TARGET} does not have bb-ai-listing-sync:fingerprint-map yet."
+  echo "Deploy current code to ${TARGET} first, then rerun this command."
+  exit 1
+fi
+
+echo "Building remote fingerprint map (${TARGET})..."
+ddev "${REMOTE_EXEC_CMD}" "if [ -x ../vendor/bin/drush ]; then DRUSH_CMD=../vendor/bin/drush; else DRUSH_CMD=\$(command -v drush || true); fi; if [ -z \"\${DRUSH_CMD}\" ]; then echo Drush_not_found >&2; exit 127; fi; \${DRUSH_CMD} bb-ai-listing-sync:fingerprint-map --format=tsv${MAP_LIMIT_ARG}" > "${REMOTE_MAP}"
+
+awk -F '\t' '
+  NR==FNR {
+    remote_uuid[$2] = 1
+    remote_fp[$2] = $6
+    next
+  }
+  {
+    id = $1
+    uuid = $2
+    status = $3
+    changed = $4
+    title = $5
+    local_fp = $6
+
+    if (!(uuid in remote_uuid)) {
+      print "missing\t" id "\t" uuid "\t" status "\t" changed "\t" title "\t" local_fp
+      next
+    }
+
+    if (remote_fp[uuid] != local_fp) {
+      print "changed\t" id "\t" uuid "\t" status "\t" changed "\t" title "\t" local_fp
+    }
+  }
+' "${REMOTE_MAP}" "${LOCAL_MAP}" > "${DELTA_MAP}"
+
+TOTAL_LOCAL=$(wc -l < "${LOCAL_MAP}" | tr -d ' ')
+TOTAL_REMOTE=$(wc -l < "${REMOTE_MAP}" | tr -d ' ')
+TOTAL_DELTA=$(wc -l < "${DELTA_MAP}" | tr -d ' ')
+TOTAL_MISSING=$(awk -F '\t' '$1 == "missing" {count++} END {print count+0}' "${DELTA_MAP}")
+TOTAL_CHANGED=$(awk -F '\t' '$1 == "changed" {count++} END {print count+0}' "${DELTA_MAP}")
+
+echo
+echo "Report: dev -> ${TARGET}"
+echo "- local listings: ${TOTAL_LOCAL}"
+echo "- remote listings: ${TOTAL_REMOTE}"
+echo "- delta total: ${TOTAL_DELTA}"
+echo "- missing on ${TARGET}: ${TOTAL_MISSING}"
+echo "- changed on ${TARGET}: ${TOTAL_CHANGED}"
+
+if [ "${TOTAL_DELTA}" -eq 0 ]; then
+  echo
+  echo "No missing or changed listings."
+  exit 0
+fi
+
+echo
+printf "%-8s %-8s %-38s %-14s %-12s %s\n" "TYPE" "ID" "UUID" "STATUS" "CHANGED" "LABEL"
+printf "%-8s %-8s %-38s %-14s %-12s %s\n" "--------" "--------" "--------------------------------------" "--------------" "------------" "----------------------------------------"
+
+awk -F '\t' '
+  {
+    printf "%-8s %-8s %-38s %-14s %-12s %s\n", $1, $2, $3, $4, $5, $6
+  }
+' "${DELTA_MAP}"
+
+if [ "${SHOW_UUIDS}" = true ]; then
+  echo
+  echo "Delta UUID list:"
+  awk -F '\t' '{print $3}' "${DELTA_MAP}" | paste -sd, -
+fi

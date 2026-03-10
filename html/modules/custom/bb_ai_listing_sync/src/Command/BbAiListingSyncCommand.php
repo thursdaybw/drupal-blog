@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\bb_ai_listing_sync\Command;
 
-use Drupal\ai_listing\Entity\BbAiListing;
-use Drupal\bb_ai_listing_sync\Service\ListingSyncExportGraphBuilder;
+use Drupal\bb_ai_listing_sync\Contract\ListingSyncGraphBuilderInterface;
+use Drupal\bb_ai_listing_sync\Service\ListingSyncGraphFingerprintService;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drush\Commands\DrushCommands;
 use Symfony\Component\Process\Process;
@@ -13,8 +13,9 @@ use Symfony\Component\Process\Process;
 final class BbAiListingSyncCommand extends DrushCommands {
 
   public function __construct(
+    private readonly ListingSyncGraphBuilderInterface $graphBuilder,
+    private readonly ListingSyncGraphFingerprintService $graphFingerprintService,
     private readonly EntityTypeManagerInterface $entityTypeManager,
-    private readonly ListingSyncExportGraphBuilder $graphBuilder,
   ) {
     parent::__construct();
   }
@@ -31,33 +32,27 @@ final class BbAiListingSyncCommand extends DrushCommands {
    *   Print computed UUIDs and native command, but do not execute export.
    */
   public function export(int $listing_id, array $options = ['dry-run' => FALSE]): void {
-    $listing = $this->loadListing($listing_id);
-    if ($listing === NULL) {
+    $graph = $this->graphBuilder->loadAndBuildForListingId($listing_id);
+    if ($graph === NULL) {
       $this->output()->writeln(sprintf('<error>Listing %d not found.</error>', $listing_id));
       return;
     }
 
-    $graph = $this->graphBuilder->buildForListing($listing);
-    $uuids = $graph['uuids'];
+    $uuids = $graph->uuids();
     if ($uuids === []) {
       $this->output()->writeln('<error>No UUIDs were discovered for export.</error>');
       return;
     }
 
-    $uuidCsv = implode(',', $uuids);
+    $uuidCsv = $graph->uuidsCsv();
 
     $this->output()->writeln('Computed export graph:');
-    $this->output()->writeln('- root_listing_id: ' . $graph['root_listing_id']);
-    $this->output()->writeln('- root_listing_uuid: ' . $graph['root_listing_uuid']);
-    $this->writeCounts($graph['counts']);
-    $this->output()->writeln('- total_entities: ' . $graph['total_entities']);
-    $this->output()->writeln('- total_uuids: ' . count($uuids));
-
-    $nativeCommand = sprintf(
-      'vendor/bin/drush content-sync:export sync --uuids=%s --skiplist -y',
-      $uuidCsv
-    );
-    $this->output()->writeln('- native_command: ' . $nativeCommand);
+    $this->output()->writeln('- root_listing_id: ' . $graph->rootListingId());
+    $this->output()->writeln('- root_listing_uuid: ' . $graph->rootListingUuid());
+    $this->writeCounts($graph->counts());
+    $this->output()->writeln('- total_entities: ' . $graph->totalEntities());
+    $this->output()->writeln('- total_uuids: ' . $graph->totalUuids());
+    $this->output()->writeln('- native_command: ' . $graph->nativeExportCommandPreview());
 
     if (!empty($options['dry-run'])) {
       $this->output()->writeln('Dry run enabled. Skipping native export execution.');
@@ -73,10 +68,81 @@ final class BbAiListingSyncCommand extends DrushCommands {
     $this->output()->writeln('Export complete. Content YAML written to content/sync/entities.');
   }
 
-  private function loadListing(int $listingId): ?BbAiListing {
-    $storage = $this->entityTypeManager->getStorage('bb_ai_listing');
-    $entity = $storage->load($listingId);
-    return $entity instanceof BbAiListing ? $entity : NULL;
+  /**
+   * Output deterministic listing graph fingerprints.
+   *
+   * @command bb-ai-listing-sync:fingerprint-map
+   * @aliases bblsfm
+   *
+   * @option listing-ids
+   *   Comma-separated bb_ai_listing IDs to include.
+   * @option status
+   *   Optional status filter when listing-ids is not provided.
+   * @option limit
+   *   Optional max number of listings to output.
+   * @option format
+   *   Output format: tsv or json. Defaults to tsv.
+   */
+  public function fingerprintMap(array $options = [
+    'listing-ids' => '',
+    'status' => '',
+    'limit' => '0',
+    'format' => 'tsv',
+  ]): void {
+    $format = strtolower((string) ($options['format'] ?? 'tsv'));
+    if (!in_array($format, ['tsv', 'json'], TRUE)) {
+      $this->output()->writeln('<error>Invalid --format. Use tsv or json.</error>');
+      return;
+    }
+
+    $listingIds = $this->resolveListingIds($options);
+    if ($listingIds === []) {
+      return;
+    }
+
+    $rows = [];
+    $listingStorage = $this->entityTypeManager->getStorage('bb_ai_listing');
+    foreach ($listingIds as $listingId) {
+      $graph = $this->graphBuilder->loadAndBuildForListingId($listingId);
+      if ($graph === NULL) {
+        continue;
+      }
+
+      $listing = $listingStorage->load($listingId);
+      if ($listing === NULL) {
+        continue;
+      }
+
+      $rows[] = [
+        'id' => $listingId,
+        'uuid' => $graph->rootListingUuid(),
+        'status' => (string) ($listing->get('status')->value ?? ''),
+        'changed' => (int) ($listing->get('changed')->value ?? 0),
+        'title' => $this->sanitizeTsvCell((string) ($listing->label() ?? '')),
+        'fingerprint' => $this->graphFingerprintService->fingerprintGraph($graph),
+      ];
+    }
+
+    usort($rows, static function (array $left, array $right): int {
+      return strcmp((string) $left['uuid'], (string) $right['uuid']);
+    });
+
+    if ($format === 'json') {
+      $this->output()->writeln((string) json_encode($rows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+      return;
+    }
+
+    foreach ($rows as $row) {
+      $this->output()->writeln(sprintf(
+        '%d' . "\t" . '%s' . "\t" . '%s' . "\t" . '%d' . "\t" . '%s' . "\t" . '%s',
+        (int) $row['id'],
+        (string) $row['uuid'],
+        (string) $row['status'],
+        (int) $row['changed'],
+        (string) $row['title'],
+        (string) $row['fingerprint']
+      ));
+    }
   }
 
   /**
@@ -109,6 +175,46 @@ final class BbAiListingSyncCommand extends DrushCommands {
     });
 
     return $process->getExitCode() ?? 1;
+  }
+
+  /**
+   * @param array<string, mixed> $options
+   *
+   * @return array<int, int>
+   */
+  private function resolveListingIds(array $options): array {
+    $listingIdsOption = trim((string) ($options['listing-ids'] ?? ''));
+    if ($listingIdsOption !== '') {
+      $parts = array_filter(array_map('trim', explode(',', $listingIdsOption)));
+      $ids = [];
+      foreach ($parts as $part) {
+        if (ctype_digit($part)) {
+          $ids[] = (int) $part;
+        }
+      }
+      return array_values(array_unique($ids));
+    }
+
+    $status = trim((string) ($options['status'] ?? ''));
+    $limitValue = (string) ($options['limit'] ?? '0');
+    $limit = ctype_digit($limitValue) ? (int) $limitValue : 0;
+
+    $query = $this->entityTypeManager->getStorage('bb_ai_listing')->getQuery();
+    $query->accessCheck(FALSE);
+    if ($status !== '') {
+      $query->condition('status', $status);
+    }
+    $query->sort('id', 'ASC');
+    if ($limit > 0) {
+      $query->range(0, $limit);
+    }
+
+    $ids = $query->execute();
+    return array_map('intval', array_values($ids));
+  }
+
+  private function sanitizeTsvCell(string $value): string {
+    return str_replace(["\t", "\n", "\r"], ' ', $value);
   }
 
 }

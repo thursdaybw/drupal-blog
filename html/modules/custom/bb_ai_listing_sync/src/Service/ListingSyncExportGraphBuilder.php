@@ -5,28 +5,18 @@ declare(strict_types=1);
 namespace Drupal\bb_ai_listing_sync\Service;
 
 use Drupal\ai_listing\Entity\BbAiListing;
+use Drupal\bb_ai_listing_sync\Contract\ListingSyncGraphBuilderInterface;
+use Drupal\bb_ai_listing_sync\Model\ListingSyncGraph;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 
-final class ListingSyncExportGraphBuilder {
+final class ListingSyncExportGraphBuilder implements ListingSyncGraphBuilderInterface {
 
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {}
 
-  /**
-   * Build the export graph for one listing.
-   *
-   * @return array{
-   *   entities_by_type: array<string, array<int, \Drupal\Core\Entity\EntityInterface>>,
-   *   uuids: array<int, string>,
-   *   root_listing_uuid: string,
-   *   root_listing_id: int,
-   *   counts: array<string, int>,
-   *   total_entities: int
-   * }
-   */
-  public function buildForListing(BbAiListing $listing): array {
+  public function buildForListing(BbAiListing $listing): ListingSyncGraph {
     $listingId = (int) $listing->id();
 
     $bundleItems = $this->loadBundleItemsForListing($listingId);
@@ -54,14 +44,24 @@ final class ListingSyncExportGraphBuilder {
       $total += $count;
     }
 
-    return [
-      'entities_by_type' => $entitiesByType,
-      'uuids' => $uuids,
-      'root_listing_uuid' => (string) $listing->uuid(),
-      'root_listing_id' => $listingId,
-      'counts' => $counts,
-      'total_entities' => $total,
-    ];
+    return new ListingSyncGraph(
+      entitiesByType: $entitiesByType,
+      uuids: $uuids,
+      rootListingUuid: (string) $listing->uuid(),
+      rootListingId: $listingId,
+      counts: $counts,
+      totalEntities: $total,
+    );
+  }
+
+  public function loadAndBuildForListingId(int $listingId): ?ListingSyncGraph {
+    $storage = $this->entityTypeManager->getStorage('bb_ai_listing');
+    $listing = $storage->load($listingId);
+    if (!$listing instanceof BbAiListing) {
+      return NULL;
+    }
+
+    return $this->buildForListing($listing);
   }
 
   /**

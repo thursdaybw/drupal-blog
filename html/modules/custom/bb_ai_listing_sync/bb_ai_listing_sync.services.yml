@@ -1,4 +1,9 @@
 services:
+  bb_ai_listing_sync.export_graph_builder:
+    class: Drupal\bb_ai_listing_sync\Service\ListingSyncExportGraphBuilder
+    arguments:
+      - '@entity_type.manager'
+
   bb_ai_listing_sync.legacy_payload_runtime_store:
     class: Drupal\bb_ai_listing_sync\Service\LegacyPayloadRuntimeStore
 
@@ -8,3 +13,9 @@ services:
       - '@database'
       - '@bb_ai_listing_sync.legacy_payload_runtime_store'
       - '@datetime.time'
+
+  bb_ai_listing_sync.graph_fingerprint:
+    class: Drupal\bb_ai_listing_sync\Service\ListingSyncGraphFingerprintService
+    arguments:
+      - '@entity_type.manager'
+      - '@bb_ai_listing_sync.legacy_table_sync'

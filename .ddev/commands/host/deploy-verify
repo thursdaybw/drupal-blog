@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## #ddev-generated
+## Description: Run mandatory verification checks before deployment build.
+## Usage: deploy-verify [--dry-run]
+## Example: ddev deploy-verify
+
+DRY_RUN=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    *)
+      echo "Unknown argument: ${arg}"
+      exit 1
+      ;;
+  esac
+done
+
+echo "Verify phase"
+echo "- dry run: ${DRY_RUN}"
+echo "- checks:"
+echo "  1) drush command discovery"
+echo "  2) bb_ai_listing_sync kernel drift test"
+
+if [ "${DRY_RUN}" = true ]; then
+  echo "[dry-run] ddev drush list >/dev/null"
+  echo "[dry-run] ddev exec vendor/bin/phpunit -c /var/www/html/html/core/phpunit.xml.dist /var/www/html/html/modules/custom/bb_ai_listing_sync/tests/src/Kernel/ListingSyncGraphFingerprintTest.php"
+  exit 0
+fi
+
+ddev drush list >/dev/null
+ddev exec vendor/bin/phpunit \
+  -c /var/www/html/html/core/phpunit.xml.dist \
+  /var/www/html/html/modules/custom/bb_ai_listing_sync/tests/src/Kernel/ListingSyncGraphFingerprintTest.php
+
+echo "Verify phase complete."
+

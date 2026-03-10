@@ -47,6 +47,7 @@ fi
 
 echo "Deploy-prod phases: build -> upload -> activate(prod)"
 
+"$(dirname "$0")/deploy-verify" "${COMMON_ARGS[@]}"
 "$(dirname "$0")/deploy-build" "${BUILD_ARGS[@]}"
 "$(dirname "$0")/deploy-upload" "${COMMON_ARGS[@]}"
 "$(dirname "$0")/deploy-prod-activate" "${COMMON_ARGS[@]}"

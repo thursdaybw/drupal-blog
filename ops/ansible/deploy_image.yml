@@ -159,7 +159,11 @@
         - "{{ deploy_target.workspace }}/html"
         - "{{ deploy_target.workspace }}/html/sites"
         - "{{ deploy_target.workspace }}/html/sites/default"
-        - "{{ deploy_target.workspace }}/html/sites/default/files"
+
+    - name: Ensure environment files directory exists
+      ansible.builtin.file:
+        path: "{{ deploy_target.workspace }}/html/sites/default/files"
+        state: directory
 
     - name: Copy environment docker-compose file to remote workspace
       ansible.builtin.copy:

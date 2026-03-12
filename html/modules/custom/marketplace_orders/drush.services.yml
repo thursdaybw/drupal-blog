@@ -2,6 +2,6 @@ services:
   marketplace_orders.command:
     class: Drupal\marketplace_orders\Command\MarketplaceOrdersCommand
     arguments:
-      - '@Drupal\marketplace_orders\Service\SyncMarketplaceOrdersSinceService'
+      - '@marketplace_orders.sync_service'
     tags:
       - { name: drush.command }

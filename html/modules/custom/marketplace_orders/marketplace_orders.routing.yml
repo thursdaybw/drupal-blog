@@ -1,0 +1,7 @@
+marketplace_orders.pick_pack_queue:
+  path: '/admin/ai-listings/orders/pick-pack'
+  defaults:
+    _controller: '\Drupal\marketplace_orders\Controller\PickPackQueueController::build'
+    _title: 'Pick and pack queue'
+  requirements:
+    _permission: 'administer ai listings'

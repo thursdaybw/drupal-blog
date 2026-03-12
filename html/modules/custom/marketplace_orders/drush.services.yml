@@ -1,0 +1,7 @@
+services:
+  marketplace_orders.command:
+    class: Drupal\marketplace_orders\Command\MarketplaceOrdersCommand
+    arguments:
+      - '@Drupal\marketplace_orders\Service\SyncMarketplaceOrdersSinceService'
+    tags:
+      - { name: drush.command }

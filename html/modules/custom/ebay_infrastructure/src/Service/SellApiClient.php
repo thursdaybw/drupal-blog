@@ -8,6 +8,19 @@ use Drupal\ebay_connector\Entity\EbayAccount;
 use Drupal\ebay_infrastructure\Service\EbayAccountManager;
 use GuzzleHttp\ClientInterface;
 
+/**
+ * Legacy broad Sell API client.
+ *
+ * Current scope is intentionally transitional. This class should be split into
+ * focused clients with one responsibility per API concern:
+ * - EbayInventoryClient
+ * - EbayOfferClient
+ * - EbayLocationClient
+ * - EbayTaxonomyClient
+ *
+ * Order retrieval has already been extracted to
+ * EbayFulfillmentOrdersClient.
+ */
 final class SellApiClient {
 
   private ?string $categoryTreeId = null;

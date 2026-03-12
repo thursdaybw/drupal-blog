@@ -1,0 +1,8 @@
+name: Marketplace Orders
+type: module
+description: Application boundary for marketplace order ingestion and pick-pack workflows.
+core_version_requirement: '^10 || ^11'
+package: Custom
+dependencies:
+  - ai_listing
+  - ebay_infrastructure

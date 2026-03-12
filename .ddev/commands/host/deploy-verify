@@ -25,18 +25,15 @@ echo "Verify phase"
 echo "- dry run: ${DRY_RUN}"
 echo "- checks:"
 echo "  1) drush command discovery"
-echo "  2) bb_ai_listing_sync kernel drift test"
+echo "  2) ai listing fast pre-deploy suite"
 
 if [ "${DRY_RUN}" = true ]; then
   echo "[dry-run] ddev drush list >/dev/null"
-  echo "[dry-run] ddev exec vendor/bin/phpunit -c /var/www/html/html/core/phpunit.xml.dist /var/www/html/html/modules/custom/bb_ai_listing_sync/tests/src/Kernel/ListingSyncGraphFingerprintTest.php"
+  echo "[dry-run] ddev test-ai-listing-fast"
   exit 0
 fi
 
 ddev drush list >/dev/null
-ddev exec vendor/bin/phpunit \
-  -c /var/www/html/html/core/phpunit.xml.dist \
-  /var/www/html/html/modules/custom/bb_ai_listing_sync/tests/src/Kernel/ListingSyncGraphFingerprintTest.php
+ddev test-ai-listing-fast
 
 echo "Verify phase complete."
-

@@ -3,9 +3,9 @@
 set -euo pipefail
 
 ## #ddev-generated
-## Description: Report bb_ai_listing delta (missing + changed) from dev to staging/prod using deterministic graph fingerprints.
-## Usage: content-sync-report-delta-listings [--target=staging|prod] [--limit=<n>] [--show-uuids]
-## Example: ddev content-sync-report-delta-listings --target=staging --limit=50 --show-uuids
+## Description: Generate bb_ai_listing delta report (missing + changed) from dev to target.
+## Usage: content-sync-report-delta [--target=staging|prod] [--limit=<n>] [--show-uuids]
+## Example: ddev content-sync-report-delta --target=staging --show-uuids
 
 TARGET="staging"
 LIMIT=""
@@ -34,10 +34,15 @@ for arg in "$@"; do
 done
 
 if [ "${TARGET}" = "staging" ]; then
-  REMOTE_EXEC_CMD="exec-stage"
+  REMOTE_WORKSPACE="/home/bevan/workspace/bb-platform-staging"
 else
-  REMOTE_EXEC_CMD="exec-prod"
+  REMOTE_WORKSPACE="/home/bevan/workspace/bb-platform-prod"
 fi
+
+SSH_TARGET="bb-drupal-prod"
+REMOTE_COMPOSE_PATH="${REMOTE_WORKSPACE}/docker-compose.yml"
+REMOTE_ENV_PATH="${REMOTE_WORKSPACE}/.env"
+DRUSH_BIN="../vendor/bin/drush"
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
@@ -51,17 +56,33 @@ if [ -n "${LIMIT}" ]; then
   MAP_LIMIT_ARG=" --limit=${LIMIT}"
 fi
 
-echo "Building local fingerprint map (dev)..."
-ddev drush bb-ai-listing-sync:fingerprint-map --format=tsv${MAP_LIMIT_ARG} > "${LOCAL_MAP}"
-
-if ! ddev "${REMOTE_EXEC_CMD}" "../vendor/bin/drush list" | grep -q "bb-ai-listing-sync:fingerprint-map"; then
+if ! ssh "${SSH_TARGET}" "sudo -n docker compose -f ${REMOTE_COMPOSE_PATH} --env-file ${REMOTE_ENV_PATH} exec -T appserver sh -lc 'cd /var/www/html && if [ ! -x ${DRUSH_BIN} ]; then echo Drush_not_found >&2; exit 127; fi; ${DRUSH_BIN} list'" | grep -q "bb-ai-listing-sync:fingerprint-map"; then
   echo "Remote ${TARGET} does not have bb-ai-listing-sync:fingerprint-map yet."
   echo "Deploy current code to ${TARGET} first, then rerun this command."
   exit 1
 fi
 
-echo "Building remote fingerprint map (${TARGET})..."
-ddev "${REMOTE_EXEC_CMD}" "if [ -x ../vendor/bin/drush ]; then DRUSH_CMD=../vendor/bin/drush; else DRUSH_CMD=\$(command -v drush || true); fi; if [ -z \"\${DRUSH_CMD}\" ]; then echo Drush_not_found >&2; exit 127; fi; \${DRUSH_CMD} bb-ai-listing-sync:fingerprint-map --format=tsv${MAP_LIMIT_ARG}" > "${REMOTE_MAP}"
+echo "Building fingerprint maps in parallel (dev + ${TARGET})..."
+ddev drush bb-ai-listing-sync:fingerprint-map --format=tsv${MAP_LIMIT_ARG} > "${LOCAL_MAP}" &
+LOCAL_PID=$!
+
+ssh "${SSH_TARGET}" "sudo -n docker compose -f ${REMOTE_COMPOSE_PATH} --env-file ${REMOTE_ENV_PATH} exec -T appserver sh -lc 'cd /var/www/html && if [ ! -x ${DRUSH_BIN} ]; then echo Drush_not_found >&2; exit 127; fi; ${DRUSH_BIN} bb-ai-listing-sync:fingerprint-map --format=tsv${MAP_LIMIT_ARG}'" > "${REMOTE_MAP}" &
+REMOTE_PID=$!
+
+LOCAL_EXIT=0
+REMOTE_EXIT=0
+wait "${LOCAL_PID}" || LOCAL_EXIT=$?
+wait "${REMOTE_PID}" || REMOTE_EXIT=$?
+
+if [ "${LOCAL_EXIT}" -ne 0 ]; then
+  echo "Failed to build local fingerprint map (exit ${LOCAL_EXIT})."
+  exit "${LOCAL_EXIT}"
+fi
+
+if [ "${REMOTE_EXIT}" -ne 0 ]; then
+  echo "Failed to build remote fingerprint map for ${TARGET} (exit ${REMOTE_EXIT})."
+  exit "${REMOTE_EXIT}"
+fi
 
 awk -F '\t' '
   NR==FNR {
@@ -95,7 +116,7 @@ TOTAL_MISSING=$(awk -F '\t' '$1 == "missing" {count++} END {print count+0}' "${D
 TOTAL_CHANGED=$(awk -F '\t' '$1 == "changed" {count++} END {print count+0}' "${DELTA_MAP}")
 
 echo
-echo "Report: dev -> ${TARGET}"
+echo "Delta report: dev -> ${TARGET}"
 echo "- local listings: ${TOTAL_LOCAL}"
 echo "- remote listings: ${TOTAL_REMOTE}"
 echo "- delta total: ${TOTAL_DELTA}"

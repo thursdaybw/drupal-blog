@@ -63,3 +63,36 @@ This makes delta detection independent from environment-local numeric IDs.
 - `bb-ai-listing-sync:fingerprint-map`
   - Uses graph builder + fingerprint service.
   - Outputs stable per-listing fingerprints for cross-environment delta reports.
+
+## Delivery Transport Direction
+
+Current delivery from dev to staging/prod uses host orchestration:
+
+1. Build delta/fingerprint maps.
+2. Export listing payload to `content/sync`.
+3. Upload payload via SSH/rsync to remote workspace.
+4. Run remote import via docker-compose + drush command execution.
+
+This works, but it couples sync operations to host/container layout details:
+
+- SSH access and remote shell tooling.
+- Container names and compose paths.
+- Drush binary path conventions.
+- Host-side bash control flow.
+
+Target direction is application-level delivery via Drupal API:
+
+1. Dev computes delta and export package.
+2. Dev sends package to staging/prod API endpoint (authenticated).
+3. Target app persists package in temp storage and starts an import job.
+4. Dev polls/imports job status via API.
+
+This shifts orchestration into application boundaries, not host shell boundaries.
+Benefits:
+
+- Less infrastructure-path fragility.
+- Better auditability and idempotency.
+- Cleaner retries and error handling.
+- Stronger automated test surface at application level.
+
+Until that API transport is implemented, SSH/rsync flow remains the active path.

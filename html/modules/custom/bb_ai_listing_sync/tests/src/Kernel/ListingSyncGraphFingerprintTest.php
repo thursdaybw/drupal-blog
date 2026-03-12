@@ -104,6 +104,52 @@ final class ListingSyncGraphFingerprintTest extends KernelTestBase {
     $this->assertNotSame($fingerprintAfterEntityChange, $fingerprintAfterLegacyChange, 'Fingerprint must change when legacy sidecar payload changes.');
   }
 
+  public function testGraphTraversalExcludesUnrelatedListingOwnedImages(): void {
+    $fixture = $this->createFixtureListingGraph();
+
+    $unrelatedListing = BbAiListing::create([
+      'listing_type' => 'book',
+      'ebay_title' => 'Unrelated listing',
+      'status' => 'ready_for_review',
+      'condition_grade' => 'good',
+      'storage_location' => 'BDMAA04',
+      'listing_code' => 'UNRELATED01',
+      'price' => '9.99',
+    ]);
+    $unrelatedListing->set('description', 'Unrelated listing description');
+    $unrelatedListing->save();
+
+    $unrelatedFile = File::create([
+      'uri' => 'public://ai-listings/unrelated/unrelated.jpg',
+      'filename' => 'unrelated.jpg',
+      'status' => 1,
+    ]);
+    $unrelatedFile->save();
+
+    $unrelatedImage = ListingImage::create([
+      'owner' => [
+        'target_type' => 'bb_ai_listing',
+        'target_id' => (int) $unrelatedListing->id(),
+      ],
+      'file' => (int) $unrelatedFile->id(),
+      'is_metadata_source' => FALSE,
+      'weight' => 0,
+    ]);
+    $unrelatedImage->save();
+
+    $graph = $this->graphBuilder->buildForListing($fixture['listing']);
+    $counts = $graph->counts();
+
+    $this->assertSame(2, $counts['listing_image'], 'Target listing graph must not include unrelated listing-owned images.');
+
+    $listingImageUuids = [];
+    foreach ($graph->entitiesByType()['listing_image'] as $listingImage) {
+      $listingImageUuids[] = (string) $listingImage->uuid();
+    }
+
+    $this->assertNotContains((string) $unrelatedImage->uuid(), $listingImageUuids);
+  }
+
   private function ensureListingTypeExists(string $id, string $label): void {
     $storage = $this->container->get('entity_type.manager')->getStorage('bb_ai_listing_type');
     if ($storage->load($id) instanceof BbAiListingType) {

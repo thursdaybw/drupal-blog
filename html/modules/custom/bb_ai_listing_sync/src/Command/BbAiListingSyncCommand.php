@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\bb_ai_listing_sync\Command;
 
+use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\bb_ai_listing_sync\Contract\ListingSyncGraphBuilderInterface;
 use Drupal\bb_ai_listing_sync\Service\ListingSyncGraphFingerprintService;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -100,18 +101,17 @@ final class BbAiListingSyncCommand extends DrushCommands {
       return;
     }
 
-    $rows = [];
     $listingStorage = $this->entityTypeManager->getStorage('bb_ai_listing');
+    $loadedListings = $listingStorage->loadMultiple($listingIds);
+
+    $rows = [];
     foreach ($listingIds as $listingId) {
-      $graph = $this->graphBuilder->loadAndBuildForListingId($listingId);
-      if ($graph === NULL) {
+      $listing = $loadedListings[$listingId] ?? NULL;
+      if (!$listing instanceof BbAiListing) {
         continue;
       }
 
-      $listing = $listingStorage->load($listingId);
-      if ($listing === NULL) {
-        continue;
-      }
+      $graph = $this->graphBuilder->buildForListing($listing);
 
       $rows[] = [
         'id' => $listingId,

@@ -92,16 +92,12 @@ final class ListingSyncExportGraphBuilder implements ListingSyncGraphBuilderInte
    */
   private function loadListingImagesForListing(int $listingId, array $bundleItems): array {
     $imageStorage = $this->entityTypeManager->getStorage('listing_image');
-    $ids = [];
-
-    $ids = array_merge($ids, $this->queryListingImageIds('bb_ai_listing', $listingId));
-
+    $bundleItemIds = [];
     foreach ($bundleItems as $bundleItem) {
-      $bundleItemId = (int) $bundleItem->id();
-      $ids = array_merge($ids, $this->queryListingImageIds('ai_book_bundle_item', $bundleItemId));
+      $bundleItemIds[] = (int) $bundleItem->id();
     }
 
-    $ids = array_values(array_unique(array_map('intval', $ids)));
+    $ids = $this->queryListingImageIds($listingId, $bundleItemIds);
     if ($ids === []) {
       return [];
     }
@@ -110,14 +106,36 @@ final class ListingSyncExportGraphBuilder implements ListingSyncGraphBuilderInte
   }
 
   /**
-   * @return array<int, int|string>
+   * Query listing_image IDs for one listing root and zero or more bundle items.
+   *
+   * @param array<int, int> $bundleItemIds
+   *
+   * @return array<int, int>
    */
-  private function queryListingImageIds(string $ownerType, int $ownerId): array {
+  private function queryListingImageIds(int $listingId, array $bundleItemIds): array {
     $query = $this->entityTypeManager->getStorage('listing_image')->getQuery();
     $query->accessCheck(FALSE);
-    $query->condition('owner.target_type', $ownerType);
-    $query->condition('owner.target_id', $ownerId);
-    return $query->execute();
+
+    $owners = $query->orConditionGroup();
+    $listingOwners = $query->andConditionGroup()
+      ->condition('owner.target_type', 'bb_ai_listing')
+      ->condition('owner.target_id', $listingId);
+    $owners->condition($listingOwners);
+
+    if ($bundleItemIds !== []) {
+      $bundleOwners = $query->andConditionGroup()
+        ->condition('owner.target_type', 'ai_book_bundle_item')
+        ->condition('owner.target_id', $bundleItemIds, 'IN');
+      $owners->condition($bundleOwners);
+    }
+
+    $query->condition($owners);
+    $ids = $query->execute();
+    if ($ids === []) {
+      return [];
+    }
+
+    return array_values(array_unique(array_map('intval', $ids)));
   }
 
   /**

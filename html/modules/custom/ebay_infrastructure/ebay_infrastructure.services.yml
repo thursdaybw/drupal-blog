@@ -28,6 +28,12 @@ services:
       - '@http_client'
       - '@drupal.ebay_infrastructure.account_manager'
 
+  drupal.ebay_infrastructure.fulfillment_orders:
+    class: Drupal\ebay_infrastructure\Service\EbayFulfillmentOrdersClient
+    arguments:
+      - '@http_client'
+      - '@drupal.ebay_infrastructure.account_manager'
+
   drupal.ebay_infrastructure.store_service:
     class: Drupal\ebay_infrastructure\Service\StoreService
     arguments:

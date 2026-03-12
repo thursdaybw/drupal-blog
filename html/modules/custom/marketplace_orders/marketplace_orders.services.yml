@@ -1,0 +1,28 @@
+services:
+  Drupal\marketplace_orders\Contract\MarketplaceOrdersPortInterface:
+    class: Drupal\marketplace_orders\Infrastructure\Ebay\EbayMarketplaceOrdersPort
+    arguments:
+      - '@drupal.ebay_infrastructure.fulfillment_orders'
+      - '@Drupal\marketplace_orders\Infrastructure\Ebay\EbayOrderPayloadMapper'
+
+  Drupal\marketplace_orders\Contract\MarketplaceOrderRepositoryInterface:
+    class: Drupal\marketplace_orders\Infrastructure\DatabaseMarketplaceOrderRepository
+    arguments:
+      - '@database'
+      - '@datetime.time'
+
+  Drupal\marketplace_orders\Contract\MarketplaceOrderSyncStateRepositoryInterface:
+    class: Drupal\marketplace_orders\Infrastructure\DatabaseMarketplaceOrderSyncStateRepository
+    arguments:
+      - '@database'
+      - '@datetime.time'
+
+  Drupal\marketplace_orders\Service\SyncMarketplaceOrdersSinceService:
+    arguments:
+      - '@Drupal\marketplace_orders\Contract\MarketplaceOrdersPortInterface'
+      - '@Drupal\marketplace_orders\Contract\MarketplaceOrderRepositoryInterface'
+      - '@Drupal\marketplace_orders\Contract\MarketplaceOrderSyncStateRepositoryInterface'
+
+  Drupal\marketplace_orders\Infrastructure\Ebay\EbayOrderPayloadMapper:
+    arguments:
+      - '@entity_type.manager'

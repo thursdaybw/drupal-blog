@@ -1,0 +1,256 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @file
+ * Install hooks for the Marketplace Orders module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function marketplace_orders_schema(): array {
+  return [
+    'marketplace_order' => [
+      'description' => 'Marketplace order headers keyed by marketplace + external order ID.',
+      'fields' => [
+        'id' => [
+          'description' => 'Primary key.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'marketplace' => [
+          'description' => 'Marketplace source, for example ebay.',
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => TRUE,
+        ],
+        'external_order_id' => [
+          'description' => 'Marketplace-native order identifier.',
+          'type' => 'varchar',
+          'length' => 128,
+          'not null' => TRUE,
+        ],
+        'status' => [
+          'description' => 'Normalized order status for application workflows.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+          'default' => 'unknown',
+        ],
+        'payment_status' => [
+          'description' => 'Normalized marketplace payment status.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'fulfillment_status' => [
+          'description' => 'Normalized marketplace fulfillment status.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'ordered_at' => [
+          'description' => 'Unix timestamp for the order creation time on marketplace.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'buyer_handle' => [
+          'description' => 'Marketplace buyer handle or username when provided.',
+          'type' => 'varchar',
+          'length' => 191,
+          'not null' => FALSE,
+        ],
+        'totals_json' => [
+          'description' => 'Raw totals blob for non-breaking future expansion.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'payload_hash' => [
+          'description' => 'Digest of the normalized payload for idempotent update detection.',
+          'type' => 'varchar',
+          'length' => 128,
+          'not null' => FALSE,
+        ],
+        'raw_json' => [
+          'description' => 'Optional raw payload snapshot from marketplace.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'created' => [
+          'description' => 'Unix timestamp when the row was first created locally.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+        'changed' => [
+          'description' => 'Unix timestamp when the row was last changed locally.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+      ],
+      'primary key' => ['id'],
+      'unique keys' => [
+        'marketplace_external_order_id' => ['marketplace', 'external_order_id'],
+      ],
+      'indexes' => [
+        'marketplace' => ['marketplace'],
+        'status' => ['status'],
+        'payment_status' => ['payment_status'],
+        'fulfillment_status' => ['fulfillment_status'],
+        'ordered_at' => ['ordered_at'],
+        'changed' => ['changed'],
+      ],
+    ],
+    'marketplace_order_line' => [
+      'description' => 'Marketplace order lines, one row per order line item.',
+      'fields' => [
+        'id' => [
+          'description' => 'Primary key.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'order_id' => [
+          'description' => 'Foreign key reference to marketplace_order.id.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+        'external_line_id' => [
+          'description' => 'Marketplace-native order line identifier.',
+          'type' => 'varchar',
+          'length' => 128,
+          'not null' => TRUE,
+        ],
+        'sku' => [
+          'description' => 'Marketplace inventory SKU for this order line.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+        ],
+        'quantity' => [
+          'description' => 'Quantity ordered for this line.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 1,
+        ],
+        'title_snapshot' => [
+          'description' => 'Line title snapshot captured from marketplace payload.',
+          'type' => 'varchar',
+          'length' => 512,
+          'not null' => FALSE,
+        ],
+        'price_snapshot' => [
+          'description' => 'Line price snapshot as marketplace string value.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+        'listing_uuid' => [
+          'description' => 'Resolved local listing UUID when SKU matches local inventory.',
+          'type' => 'varchar',
+          'length' => 128,
+          'not null' => FALSE,
+        ],
+        'raw_json' => [
+          'description' => 'Optional raw line payload snapshot from marketplace.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'created' => [
+          'description' => 'Unix timestamp when the row was first created locally.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+        'changed' => [
+          'description' => 'Unix timestamp when the row was last changed locally.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+      ],
+      'primary key' => ['id'],
+      'unique keys' => [
+        'order_external_line_id' => ['order_id', 'external_line_id'],
+      ],
+      'indexes' => [
+        'order_id' => ['order_id'],
+        'sku' => ['sku'],
+        'listing_uuid' => ['listing_uuid'],
+      ],
+      'foreign keys' => [
+        'marketplace_order_line_order' => [
+          'table' => 'marketplace_order',
+          'columns' => ['order_id' => 'id'],
+        ],
+      ],
+    ],
+    'marketplace_order_sync_state' => [
+      'description' => 'Per-marketplace watermark state for incremental order sync.',
+      'fields' => [
+        'marketplace' => [
+          'description' => 'Marketplace key, for example ebay.',
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => TRUE,
+        ],
+        'last_synced_at' => [
+          'description' => 'Unix timestamp of the last successful sync boundary.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+        'changed' => [
+          'description' => 'Unix timestamp when state was last updated.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+      ],
+      'primary key' => ['marketplace'],
+    ],
+  ];
+}
+
+/**
+ * Add payment and fulfillment status columns for reporting filters.
+ */
+function marketplace_orders_update_10001(): void {
+  $schema = \Drupal::database()->schema();
+
+  if (!$schema->fieldExists('marketplace_order', 'payment_status')) {
+    $schema->addField('marketplace_order', 'payment_status', [
+      'description' => 'Normalized marketplace payment status.',
+      'type' => 'varchar',
+      'length' => 64,
+      'not null' => FALSE,
+    ]);
+  }
+
+  if (!$schema->fieldExists('marketplace_order', 'fulfillment_status')) {
+    $schema->addField('marketplace_order', 'fulfillment_status', [
+      'description' => 'Normalized marketplace fulfillment status.',
+      'type' => 'varchar',
+      'length' => 64,
+      'not null' => FALSE,
+    ]);
+  }
+
+}

@@ -1,0 +1,5 @@
+marketplace_orders.pick_pack_queue:
+  title: 'Pick and pack queue'
+  route_name: marketplace_orders.pick_pack_queue
+  parent: ai_listing.group
+  weight: 40

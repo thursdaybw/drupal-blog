@@ -17,11 +17,23 @@ services:
       - '@database'
       - '@datetime.time'
 
-  Drupal\marketplace_orders\Service\SyncMarketplaceOrdersSinceService:
+  marketplace_orders.sync_service:
     arguments:
       - '@Drupal\marketplace_orders\Contract\MarketplaceOrdersPortInterface'
       - '@Drupal\marketplace_orders\Contract\MarketplaceOrderRepositoryInterface'
       - '@Drupal\marketplace_orders\Contract\MarketplaceOrderSyncStateRepositoryInterface'
+    class: Drupal\marketplace_orders\Service\SyncMarketplaceOrdersSinceService
+
+  Drupal\marketplace_orders\Service\SyncMarketplaceOrdersSinceService:
+    alias: marketplace_orders.sync_service
+
+  marketplace_orders.pick_pack_queue_query:
+    arguments:
+      - '@database'
+    class: Drupal\marketplace_orders\Service\PickPackQueueQueryService
+
+  Drupal\marketplace_orders\Service\PickPackQueueQueryService:
+    alias: marketplace_orders.pick_pack_queue_query
 
   Drupal\marketplace_orders\Infrastructure\Ebay\EbayOrderPayloadMapper:
     arguments:

@@ -1,0 +1,4 @@
+pick_pack_queue:
+  css:
+    theme:
+      css/pick-pack-queue.css: {}

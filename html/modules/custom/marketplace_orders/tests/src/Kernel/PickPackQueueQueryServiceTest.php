@@ -71,6 +71,45 @@ final class PickPackQueueQueryServiceTest extends KernelTestBase {
     $this->assertCount(3, $result->getRows());
   }
 
+  public function testQueryExcludesInternallyDispatchedRowsFromActionableQueue(): void {
+    $database = $this->container->get('database');
+
+    $orderId = (int) $database->insert('marketplace_order')
+      ->fields([
+        'marketplace' => 'ebay',
+        'external_order_id' => 'ORDER-DISPATCHED-INTERNAL',
+        'status' => 'not_started',
+        'payment_status' => 'paid',
+        'fulfillment_status' => 'not_started',
+        'ordered_at' => 1773200300,
+        'buyer_handle' => 'buyer_dispatched',
+        'created' => 1773200300,
+        'changed' => 1773200300,
+      ])
+      ->execute();
+
+    $database->insert('marketplace_order_line')
+      ->fields([
+        'order_id' => $orderId,
+        'external_line_id' => 'LINE-DISPATCHED-INTERNAL-1',
+        'sku' => 'SKU-DISPATCHED-INTERNAL-1',
+        'quantity' => 1,
+        'title_snapshot' => 'Internally dispatched item',
+        'price_snapshot' => '9.99',
+        'listing_uuid' => NULL,
+        'warehouse_status' => 'dispatched',
+        'created' => 1773200300,
+        'changed' => 1773200300,
+      ])
+      ->execute();
+
+    $result = $this->queryService->query();
+
+    $this->assertSame(1, $result->getTotalRows());
+    $this->assertCount(1, $result->getRows());
+    $this->assertSame('ORDER-ACTIONABLE', $result->getRows()[0]->getExternalOrderId());
+  }
+
   private function seedListings(): void {
     $database = $this->container->get('database');
 
@@ -113,6 +152,7 @@ final class PickPackQueueQueryServiceTest extends KernelTestBase {
         'title_snapshot' => 'The Yarns of Billy Borker',
         'price_snapshot' => '12.34',
         'listing_uuid' => 'de647017-4054-4512-9025-4d12aad996ba',
+        'warehouse_status' => 'new',
         'created' => 1773200000,
         'changed' => 1773200000,
       ])
@@ -141,6 +181,7 @@ final class PickPackQueueQueryServiceTest extends KernelTestBase {
         'title_snapshot' => 'Already shipped item',
         'price_snapshot' => '20.00',
         'listing_uuid' => NULL,
+        'warehouse_status' => 'new',
         'created' => 1773200100,
         'changed' => 1773200100,
       ])
@@ -169,6 +210,7 @@ final class PickPackQueueQueryServiceTest extends KernelTestBase {
         'title_snapshot' => 'Awaiting payment item',
         'price_snapshot' => '8.00',
         'listing_uuid' => NULL,
+        'warehouse_status' => 'new',
         'created' => 1773200200,
         'changed' => 1773200200,
       ])

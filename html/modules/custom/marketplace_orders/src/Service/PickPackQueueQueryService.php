@@ -24,6 +24,11 @@ final class PickPackQueueQueryService {
    */
   private const DEFAULT_ACTIONABLE_FULFILLMENT_STATUSES = ['not_started', 'in_progress'];
 
+  /**
+   * @var string[]
+   */
+  private const DEFAULT_ACTIONABLE_WAREHOUSE_STATUSES = ['new', 'picked', 'packed', 'label_purchased'];
+
   public function __construct(
     private readonly Connection $connection,
   ) {}
@@ -33,13 +38,14 @@ final class PickPackQueueQueryService {
    *
    * @param array{
    *   actionable_only?: bool,
-   *   marketplace?: string,
-   *   offset?: int,
-   *   limit?: int,
-   *   payment_statuses?: array<int, string>,
-   *   fulfillment_statuses?: array<int, string>
-   * } $options
-   */
+     *   marketplace?: string,
+     *   offset?: int,
+     *   limit?: int,
+     *   payment_statuses?: array<int, string>,
+     *   fulfillment_statuses?: array<int, string>,
+     *   warehouse_statuses?: array<int, string>
+     * } $options
+     */
   public function query(array $options = []): PickPackQueueResult {
     $actionableOnly = (bool) ($options['actionable_only'] ?? TRUE);
     $marketplace = trim((string) ($options['marketplace'] ?? ''));
@@ -54,6 +60,11 @@ final class PickPackQueueQueryService {
     $fulfillmentStatuses = $this->normalizeStatusList(
       $options['fulfillment_statuses'] ?? self::DEFAULT_ACTIONABLE_FULFILLMENT_STATUSES,
       self::DEFAULT_ACTIONABLE_FULFILLMENT_STATUSES,
+    );
+
+    $warehouseStatuses = $this->normalizeStatusList(
+      $options['warehouse_statuses'] ?? self::DEFAULT_ACTIONABLE_WAREHOUSE_STATUSES,
+      self::DEFAULT_ACTIONABLE_WAREHOUSE_STATUSES,
     );
 
     $select = $this->connection->select('marketplace_order_line', 'line');
@@ -88,6 +99,7 @@ final class PickPackQueueQueryService {
     if ($actionableOnly) {
       $select->condition('order_header.payment_status', $paymentStatuses, 'IN');
       $select->condition('order_header.fulfillment_status', $fulfillmentStatuses, 'IN');
+      $select->condition('line.warehouse_status', $warehouseStatuses, 'IN');
     }
 
     $select->orderBy('order_header.ordered_at', 'ASC');

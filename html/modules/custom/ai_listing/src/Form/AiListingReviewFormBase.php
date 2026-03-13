@@ -60,7 +60,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     $form['basic_search'] = [
       '#type' => 'markup',
       '#markup' => $linkMarkup,
-      '#prefix' => '<div class="ai-help">',
+      '#prefix' => '<div class="ai-listing-help-links">',
       '#suffix' => '</div>',
       '#weight' => -100,
     ];
@@ -270,7 +270,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       $form['condition']['ebay_listing'] = [
         '#type' => 'markup',
         '#markup' => $this->buildEbayListingLinkMarkup($ebayListingId),
-        '#prefix' => '<div class="ai-help">',
+        '#prefix' => '<div class="ai-listing-help-links">',
         '#suffix' => '</div>',
       ];
     }

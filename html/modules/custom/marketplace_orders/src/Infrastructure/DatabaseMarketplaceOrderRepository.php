@@ -172,6 +172,7 @@ final class DatabaseMarketplaceOrderRepository implements MarketplaceOrderReposi
         'title_snapshot' => $line->getTitleSnapshot(),
         'price_snapshot' => $line->getPriceSnapshot(),
         'listing_uuid' => $line->getListingUuid(),
+        'warehouse_status' => 'new',
         'raw_json' => $line->getRawJson(),
         'created' => $requestTime,
         'changed' => $requestTime,

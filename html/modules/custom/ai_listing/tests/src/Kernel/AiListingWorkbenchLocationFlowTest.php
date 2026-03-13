@@ -103,6 +103,10 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
    */
   public function testLocationConfirmQueuesPublishUpdateBatch(): void {
     $this->getWorkbenchTempstore()->set(AiListingWorkbenchForm::LOCATION_CONFIRM_TEMPSTORE_KEY, [
+      'selection' => [
+        ['listing_type' => 'book', 'id' => 12],
+        ['listing_type' => 'book_bundle', 'id' => 34],
+      ],
       'listing_ids' => [12, 34],
       'selected_count' => 2,
       'created_at' => time(),

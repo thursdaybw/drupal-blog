@@ -6,6 +6,7 @@ namespace Drupal\marketplace_orders\Command;
 
 use Drupal\marketplace_orders\Service\PickPackQueueQueryService;
 use Drupal\marketplace_orders\Service\SyncMarketplaceOrdersSinceService;
+use Drupal\marketplace_orders\Service\TransitionOrderLineWorkflowService;
 use Drush\Commands\DrushCommands;
 
 /**
@@ -15,6 +16,8 @@ final class MarketplaceOrdersCommand extends DrushCommands {
 
   public function __construct(
     private readonly SyncMarketplaceOrdersSinceService $syncService,
+    private readonly PickPackQueueQueryService $pickPackQueueQueryService,
+    private readonly TransitionOrderLineWorkflowService $transitionOrderLineWorkflowService,
   ) {
     parent::__construct();
   }
@@ -81,7 +84,7 @@ final class MarketplaceOrdersCommand extends DrushCommands {
       throw new \InvalidArgumentException('Invalid --format. Use tsv or json.');
     }
 
-    $result = $this->pickPackQueueQueryService()->query([
+    $result = $this->pickPackQueueQueryService->query([
       'marketplace' => trim((string) ($options['marketplace'] ?? '')),
       'limit' => (int) ($options['limit'] ?? 100),
       'offset' => (int) ($options['offset'] ?? 0),
@@ -98,6 +101,7 @@ final class MarketplaceOrdersCommand extends DrushCommands {
           'status' => $row->getStatus(),
           'payment_status' => $row->getPaymentStatus(),
           'fulfillment_status' => $row->getFulfillmentStatus(),
+          'warehouse_status' => $row->getWarehouseStatus(),
           'ordered_at' => $row->getOrderedAt(),
           'buyer_handle' => $row->getBuyerHandle(),
           'order_line_id' => $row->getOrderLineId(),
@@ -135,6 +139,7 @@ final class MarketplaceOrdersCommand extends DrushCommands {
       'status',
       'payment_status',
       'fulfillment_status',
+      'warehouse_status',
       'ordered_at',
       'buyer_handle',
       'order_line_id',
@@ -156,6 +161,7 @@ final class MarketplaceOrdersCommand extends DrushCommands {
         $this->sanitizeTsvCell($row->getStatus()),
         $this->sanitizeTsvCell($row->getPaymentStatus() ?? ''),
         $this->sanitizeTsvCell($row->getFulfillmentStatus() ?? ''),
+        $this->sanitizeTsvCell($row->getWarehouseStatus()),
         (string) ($row->getOrderedAt() ?? 0),
         $this->sanitizeTsvCell($row->getBuyerHandle() ?? ''),
         (string) $row->getOrderLineId(),
@@ -169,6 +175,45 @@ final class MarketplaceOrdersCommand extends DrushCommands {
         $this->sanitizeTsvCell($row->getStorageLocation() ?? ''),
       ]));
     }
+  }
+
+  /**
+   * Apply one monotonic internal warehouse transition to an order line.
+   *
+   * @command marketplace-orders:workflow-transition
+   * @aliases mowt
+   *
+   * @param int $orderLineId
+   *   Local order line ID from marketplace_order_line.id.
+   * @option action
+   *   One of: picked, packed, label_purchased, dispatched.
+   * @option actor-uid
+   *   Optional actor user ID to store in audit columns.
+   */
+  public function workflowTransition(int $orderLineId, array $options = [
+    'action' => '',
+    'actor-uid' => '',
+  ]): void {
+    $action = trim((string) ($options['action'] ?? ''));
+    if ($action === '') {
+      throw new \InvalidArgumentException('Missing --action option.');
+    }
+
+    $actorUid = $this->parseActorUid((string) ($options['actor-uid'] ?? ''));
+
+    $state = $this->transitionOrderLineWorkflowService->transition(
+      $orderLineId,
+      $action,
+      $actorUid
+    );
+
+    $this->output()->writeln('Order line workflow transition complete.');
+    $this->output()->writeln('- order_line_id: ' . $state->getOrderLineId());
+    $this->output()->writeln('- warehouse_status: ' . $state->getWarehouseStatus());
+    $this->output()->writeln('- picked_at: ' . (string) ($state->getPickedAt() ?? 0));
+    $this->output()->writeln('- packed_at: ' . (string) ($state->getPackedAt() ?? 0));
+    $this->output()->writeln('- label_purchased_at: ' . (string) ($state->getLabelPurchasedAt() ?? 0));
+    $this->output()->writeln('- dispatched_at: ' . (string) ($state->getDispatchedAt() ?? 0));
   }
 
   private function parseSinceOption(string $value): ?int {
@@ -196,8 +241,17 @@ final class MarketplaceOrdersCommand extends DrushCommands {
     return str_replace(["\t", "\n", "\r"], ' ', $value);
   }
 
-  private function pickPackQueueQueryService(): PickPackQueueQueryService {
-    return \Drupal::service(PickPackQueueQueryService::class);
+  private function parseActorUid(string $value): ?int {
+    $trimmedValue = trim($value);
+    if ($trimmedValue === '') {
+      return NULL;
+    }
+
+    if (!ctype_digit($trimmedValue)) {
+      throw new \InvalidArgumentException('Invalid --actor-uid value.');
+    }
+
+    return (int) $trimmedValue;
   }
 
 }

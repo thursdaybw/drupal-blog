@@ -17,6 +17,25 @@ Result:
 - Storage location becomes internal mutable data.
 - Pick/pack workflow no longer depends on eBay UI fields.
 
+## Product Delivery Direction (Current)
+- Primary objective is internal business value, fast.
+- Delivery surface is Drupal admin UI first, optimized mobile-first for phone-based pick/pack use.
+- Frontend architecture is intentionally deferred (Drupal UI now; HTMX or standalone frontend later).
+- Keep backend use-cases and read models stable so UI can be swapped without rewriting domain/application logic.
+
+## Mobile-First UI Direction (Pick/Pack)
+- Current table view is retained for desktop, but mobile is the primary operational surface.
+- Mobile rendering should use stacked order-line cards instead of wide tables.
+- Card priority order:
+  1. `storage_location` (large/bold) and `quantity`
+  2. listing title + SKU
+  3. order ID + buyer + external statuses
+- Touch-first controls:
+  - per-row actions: `Picked`, `Packed`, `Label Purchased`, `Dispatched`
+  - top-level filters: actionable/all toggle, marketplace, quick search (location/SKU/order ID)
+- Controller should select presentation mode by viewport/context while using the same read model service.
+- No policy logic in UI layer; all state transitions remain in application use-cases.
+
 ## Glossary and Invariants
 - **Marketplace SKU**: External marketplace inventory identity. Invariant: stable once published.
 - **Storage Location**: Internal warehouse location code. Invariant: mutable operational metadata.
@@ -142,7 +161,15 @@ Required uniqueness:
 - Preserve source status dimensions separately:
   - `payment_status`
   - `fulfillment_status`
-  - `status` (normalized workflow status used by application logic)
+  - `status` (normalized external status used by application logic)
+
+## Authority and State Policy
+- Internal warehouse workflow is authoritative for operations.
+- Marketplace status is an external signal, not command authority.
+- We retain both:
+  - Internal workflow state (to be added): `warehouse_status`
+  - External marketplace state (already stored): `payment_status`, `fulfillment_status`, `status`
+- Reconciliation rules determine how external state influences internal state, instead of direct overwrite.
 
 ## Roadmap (Checklist)
 
@@ -160,17 +187,29 @@ Required uniqueness:
 - [x] Add kernel tests for insert/update/idempotency.
 
 ### Phase 2: Internal pick/pack read model
-- [ ] Implement `BuildPickPackQueue` query/use case.
-- [ ] Resolve order lines -> listing -> current storage location.
-- [ ] Build admin table view for pick/pack.
+- [x] Implement `BuildPickPackQueue` query/use case.
+- [x] Resolve order lines -> listing -> current storage location.
+- [x] Build admin table view for pick/pack.
 - [ ] Add filter/sort by status, age, location.
-- [ ] Add tests for location resolution and edge cases.
+- [x] Add tests for location resolution and edge cases.
 
 ### Phase 3: Workflow actions
-- [ ] Add actions: Picked, Packed, Shipped.
-- [ ] Persist audit timestamps and actor IDs.
-- [ ] Ensure actions are idempotent and monotonic.
-- [ ] Add tests for status transitions.
+- [x] Add internal actions: Picked, Packed, Label Purchased, Dispatched.
+- [x] Persist audit timestamps and actor IDs.
+- [x] Ensure actions are idempotent and monotonic.
+- [x] Add tests for status transitions.
+
+### Phase 2.5: Mobile UX Hardening
+- [ ] Add mobile card layout for pick/pack queue.
+- [ ] Keep desktop table view as secondary presentation.
+- [ ] Add touch-sized action controls for workflow transitions.
+- [ ] Add mobile-first filter/search controls.
+
+### Phase 3.5: Shipping Label Integration
+- [ ] Keep current operational path: labels purchased externally (MyPost Business).
+- [ ] Store shipping facts in-platform: `label_purchased_at`, `carrier`, `tracking_number`, `shipping_source`.
+- [ ] Add manual update UI for label/tracking facts.
+- [ ] Evaluate marketplace-agnostic shipping adapter boundary for future APIs/CSV import.
 
 ### Phase 4: Decouple location from SKU
 - [ ] Stop requiring location in newly generated SKU values.
@@ -204,6 +243,10 @@ Required uniqueness:
   - `src/Contract/InventoryLocationReadPortInterface.php`
 - Application use case:
   - `src/Service/SyncMarketplaceOrdersSinceService.php`
+- Read model:
+  - `src/Service/PickPackQueueQueryService.php`
+  - `src/Model/PickPackQueueRow.php`
+  - `src/Model/PickPackQueueResult.php`
 - Persistence adapter:
   - `src/Infrastructure/DatabaseMarketplaceOrderRepository.php`
 - eBay adapter:
@@ -211,6 +254,10 @@ Required uniqueness:
   - `src/Infrastructure/Ebay/EbayOrderPayloadMapper.php`
 - Drush:
   - `src/Command/MarketplaceOrdersCommand.php`
+- Admin UI:
+  - `src/Controller/PickPackQueueController.php`
+  - `marketplace_orders.routing.yml`
+  - `marketplace_orders.links.menu.yml`
 - Schema:
   - `marketplace_order`
   - `marketplace_order_line`

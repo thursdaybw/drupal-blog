@@ -76,6 +76,7 @@ final class PickPackQueueQueryService {
     $select->addField('line', 'title_snapshot', 'title_snapshot');
     $select->addField('line', 'price_snapshot', 'price_snapshot');
     $select->addField('line', 'listing_uuid', 'listing_uuid');
+    $select->addField('line', 'warehouse_status', 'warehouse_status');
 
     $select->addField('listing', 'ebay_title', 'listing_title');
     $select->addField('listing', 'storage_location', 'storage_location');
@@ -170,7 +171,7 @@ final class PickPackQueueQueryService {
   }
 
   /**
-   * @param object{order_id:mixed,marketplace:mixed,external_order_id:mixed,status:mixed,payment_status:mixed,fulfillment_status:mixed,ordered_at:mixed,buyer_handle:mixed,order_line_id:mixed,external_line_id:mixed,sku:mixed,quantity:mixed,title_snapshot:mixed,price_snapshot:mixed,listing_uuid:mixed,listing_title:mixed,storage_location:mixed} $record
+   * @param object{order_id:mixed,marketplace:mixed,external_order_id:mixed,status:mixed,payment_status:mixed,fulfillment_status:mixed,warehouse_status:mixed,ordered_at:mixed,buyer_handle:mixed,order_line_id:mixed,external_line_id:mixed,sku:mixed,quantity:mixed,title_snapshot:mixed,price_snapshot:mixed,listing_uuid:mixed,listing_title:mixed,storage_location:mixed} $record
    */
   private function mapRecordToRow(object $record): PickPackQueueRow {
     return new PickPackQueueRow(
@@ -180,6 +181,7 @@ final class PickPackQueueQueryService {
       status: (string) $record->status,
       paymentStatus: $this->toNullableString($record->payment_status),
       fulfillmentStatus: $this->toNullableString($record->fulfillment_status),
+      warehouseStatus: $this->toNullableString($record->warehouse_status) ?? 'new',
       orderedAt: $this->toNullableInt($record->ordered_at),
       buyerHandle: $this->toNullableString($record->buyer_handle),
       orderLineId: (int) $record->order_line_id,

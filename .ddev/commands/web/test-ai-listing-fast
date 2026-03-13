@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+## Description: Run the pre-deploy backend kernel suite: ai_listing + listing_publishing + ebay_connector + marketplace_orders. Excludes unit tests, browser tests, and smoke-only checks.
+## Usage: test-ai-listing-fast
 set -euo pipefail
 
 /var/www/html/scripts/test-ai-listing-fast

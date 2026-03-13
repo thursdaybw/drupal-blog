@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+## Description: Run only the ai_listing module kernel test directory. Covers Drupal-backed AI listing application tests, not listing_publishing, ebay_connector, marketplace_orders, unit, browser, or smoke tests.
+## Usage: test-ai-listing-kernel
 set -euo pipefail
 
 /var/www/html/scripts/test-ai-listing-kernel

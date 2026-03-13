@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+## Description: Run only the ebay_connector kernel test directory. Covers the eBay adapter module, not ai_listing, listing_publishing, marketplace_orders, unit, browser, or smoke tests.
+## Usage: test-ebay-connector-kernel
 set -euo pipefail
 
 /var/www/html/scripts/test-ebay-connector-kernel

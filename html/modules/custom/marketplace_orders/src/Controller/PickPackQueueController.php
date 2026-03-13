@@ -6,8 +6,10 @@ namespace Drupal\marketplace_orders\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Datetime\DateFormatterInterface;
+use Drupal\Core\Form\FormBuilderInterface;
 use Drupal\Core\Pager\PagerManagerInterface;
 use Drupal\Core\Url;
+use Drupal\marketplace_orders\Form\OrderLineWorkflowTransitionForm;
 use Drupal\marketplace_orders\Service\PickPackQueueQueryService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -21,6 +23,7 @@ final class PickPackQueueController extends ControllerBase {
     private readonly PickPackQueueQueryService $pickPackQueueQueryService,
     private readonly PagerManagerInterface $pagerManager,
     private readonly DateFormatterInterface $dateFormatter,
+    private readonly FormBuilderInterface $workflowActionFormBuilder,
   ) {}
 
   public static function create(ContainerInterface $container): self {
@@ -28,6 +31,7 @@ final class PickPackQueueController extends ControllerBase {
       $container->get(PickPackQueueQueryService::class),
       $container->get('pager.manager'),
       $container->get('date.formatter'),
+      $container->get('form_builder'),
     );
   }
 
@@ -75,13 +79,15 @@ final class PickPackQueueController extends ControllerBase {
           'buyer' => $this->t('Buyer'),
           'payment' => $this->t('Payment'),
           'fulfillment' => $this->t('Fulfillment'),
+          'warehouse' => $this->t('Warehouse'),
           'line' => $this->t('Line'),
           'sku' => $this->t('SKU'),
           'qty' => $this->t('Qty'),
           'listing' => $this->t('Listing'),
           'location' => $this->t('Location'),
+          'actions' => $this->t('Actions'),
         ],
-        '#rows' => $this->buildRows($result->getRows()),
+        '#rows' => $this->buildRows($result->getRows(), $request),
         '#empty' => $this->t('No rows match the current filter.'),
       ],
       'pager' => [
@@ -95,10 +101,11 @@ final class PickPackQueueController extends ControllerBase {
   /**
    * @param array<int,\Drupal\marketplace_orders\Model\PickPackQueueRow> $rows
    *
-   * @return array<int,array<string,string>>
+   * @return array<int,array<string,mixed>>
    */
-  private function buildRows(array $rows): array {
+  private function buildRows(array $rows, Request $request): array {
     $tableRows = [];
+    $destination = $request->getRequestUri();
 
     foreach ($rows as $row) {
       $orderedAt = $row->getOrderedAt();
@@ -113,15 +120,52 @@ final class PickPackQueueController extends ControllerBase {
         'buyer' => $row->getBuyerHandle() ?? '',
         'payment' => $row->getPaymentStatus() ?? '',
         'fulfillment' => $row->getFulfillmentStatus() ?? '',
+        'warehouse' => $row->getWarehouseStatus(),
         'line' => $row->getExternalLineId(),
         'sku' => $row->getSku() ?? '',
         'qty' => (string) $row->getQuantity(),
         'listing' => $row->getListingTitle() ?? ($row->getLineTitle() ?? ''),
         'location' => $row->getStorageLocation() ?? '',
+        'actions' => [
+          'data' => $this->buildActionCell($row->getOrderLineId(), $destination),
+        ],
       ];
     }
 
     return $tableRows;
+  }
+
+  private function buildActionCell(int $orderLineId, string $destination): array {
+    return [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['marketplace-orders-actions'],
+      ],
+      'picked' => $this->workflowActionFormBuilder->getForm(
+        OrderLineWorkflowTransitionForm::class,
+        $orderLineId,
+        'picked',
+        $destination
+      ),
+      'packed' => $this->workflowActionFormBuilder->getForm(
+        OrderLineWorkflowTransitionForm::class,
+        $orderLineId,
+        'packed',
+        $destination
+      ),
+      'label_purchased' => $this->workflowActionFormBuilder->getForm(
+        OrderLineWorkflowTransitionForm::class,
+        $orderLineId,
+        'label_purchased',
+        $destination
+      ),
+      'dispatched' => $this->workflowActionFormBuilder->getForm(
+        OrderLineWorkflowTransitionForm::class,
+        $orderLineId,
+        'dispatched',
+        $destination
+      ),
+    ];
   }
 
   private function normalizeLimit(mixed $value): int {

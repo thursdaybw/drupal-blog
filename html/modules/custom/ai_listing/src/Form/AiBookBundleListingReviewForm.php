@@ -186,7 +186,7 @@ final class AiBookBundleListingReviewForm extends AiListingReviewFormBase {
         $container['items'][$bundleItemKey]['search_link'] = [
           '#type' => 'markup',
           '#markup' => $ebaySearchLink,
-          '#prefix' => '<div class="ai-help">',
+          '#prefix' => '<div class="ai-listing-help-links">',
           '#suffix' => '</div>',
         ];
       }

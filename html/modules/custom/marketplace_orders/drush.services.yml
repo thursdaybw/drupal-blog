@@ -3,5 +3,7 @@ services:
     class: Drupal\marketplace_orders\Command\MarketplaceOrdersCommand
     arguments:
       - '@marketplace_orders.sync_service'
+      - '@marketplace_orders.pick_pack_queue_query'
+      - '@marketplace_orders.order_line_workflow_transition'
     tags:
       - { name: drush.command }

@@ -9,6 +9,7 @@ use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\Form\FormBuilderInterface;
 use Drupal\Core\Pager\PagerManagerInterface;
 use Drupal\Core\Url;
+use Drupal\marketplace_orders\Form\FetchMarketplaceOrdersForm;
 use Drupal\marketplace_orders\Form\OrderLineWorkflowTransitionForm;
 use Drupal\marketplace_orders\Service\PickPackQueueQueryService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -53,12 +54,22 @@ final class PickPackQueueController extends ControllerBase {
     $this->pagerManager->createPager($result->getTotalRows(), $limit);
 
     $build = [
+      '#attached' => [
+        'library' => [
+          'marketplace_orders/pick_pack_queue',
+        ],
+      ],
       'filters' => [
         '#type' => 'container',
         '#attributes' => ['class' => ['marketplace-orders-filters']],
         'text' => [
           '#markup' => $this->buildFilterMarkup($marketplace, $limit, $showAll),
         ],
+        'fetch' => $this->workflowActionFormBuilder->getForm(
+          FetchMarketplaceOrdersForm::class,
+          $marketplace,
+          $request->getRequestUri()
+        ),
       ],
       'summary' => [
         '#type' => 'html_tag',
@@ -72,6 +83,9 @@ final class PickPackQueueController extends ControllerBase {
       ],
       'table' => [
         '#type' => 'table',
+        '#attributes' => [
+          'class' => ['marketplace-orders-desktop-table'],
+        ],
         '#header' => [
           'ordered_at' => $this->t('Ordered'),
           'marketplace' => $this->t('Marketplace'),
@@ -89,6 +103,13 @@ final class PickPackQueueController extends ControllerBase {
         ],
         '#rows' => $this->buildRows($result->getRows(), $request),
         '#empty' => $this->t('No rows match the current filter.'),
+      ],
+      'mobile_cards' => [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['marketplace-orders-mobile-cards'],
+        ],
+        'items' => $this->buildMobileCards($result->getRows(), $request),
       ],
       'pager' => [
         '#type' => 'pager',
@@ -127,7 +148,11 @@ final class PickPackQueueController extends ControllerBase {
         'listing' => $row->getListingTitle() ?? ($row->getLineTitle() ?? ''),
         'location' => $row->getStorageLocation() ?? '',
         'actions' => [
-          'data' => $this->buildActionCell($row->getOrderLineId(), $destination),
+          'data' => $this->buildActionCell(
+            $row->getOrderLineId(),
+            $row->getWarehouseStatus(),
+            $destination
+          ),
         ],
       ];
     }
@@ -135,36 +160,133 @@ final class PickPackQueueController extends ControllerBase {
     return $tableRows;
   }
 
-  private function buildActionCell(int $orderLineId, string $destination): array {
+  private function buildActionCell(int $orderLineId, string $warehouseStatus, string $destination): array {
+    $nextAction = $this->resolveNextWorkflowAction($warehouseStatus);
+
     return [
       '#type' => 'container',
       '#attributes' => [
         'class' => ['marketplace-orders-actions'],
       ],
-      'picked' => $this->workflowActionFormBuilder->getForm(
-        OrderLineWorkflowTransitionForm::class,
-        $orderLineId,
-        'picked',
-        $destination
-      ),
-      'packed' => $this->workflowActionFormBuilder->getForm(
-        OrderLineWorkflowTransitionForm::class,
-        $orderLineId,
-        'packed',
-        $destination
-      ),
-      'label_purchased' => $this->workflowActionFormBuilder->getForm(
-        OrderLineWorkflowTransitionForm::class,
-        $orderLineId,
-        'label_purchased',
-        $destination
-      ),
-      'dispatched' => $this->workflowActionFormBuilder->getForm(
-        OrderLineWorkflowTransitionForm::class,
-        $orderLineId,
-        'dispatched',
-        $destination
-      ),
+      'next_action' => $nextAction === NULL
+        ? ['#markup' => '']
+        : $this->workflowActionFormBuilder->getForm(
+          OrderLineWorkflowTransitionForm::class,
+          $orderLineId,
+          $nextAction,
+          $destination
+        ),
+    ];
+  }
+
+  /**
+   * @param array<int,\Drupal\marketplace_orders\Model\PickPackQueueRow> $rows
+   *
+   * @return array<int,array<string,mixed>>
+   */
+  private function buildMobileCards(array $rows, Request $request): array {
+    $cards = [];
+    $destination = $request->getRequestUri();
+
+    foreach ($rows as $index => $row) {
+      $orderedAt = $row->getOrderedAt();
+      $orderedText = $orderedAt === NULL
+        ? ''
+        : $this->dateFormatter->format($orderedAt, 'custom', 'Y-m-d H:i');
+
+      $cards[$index] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['marketplace-orders-mobile-card'],
+        ],
+        'topline' => [
+          '#type' => 'container',
+          '#attributes' => [
+            'class' => ['marketplace-orders-mobile-card__topline'],
+          ],
+          'location' => [
+            '#type' => 'html_tag',
+            '#tag' => 'div',
+            '#value' => $row->getStorageLocation() ?? 'Unset',
+            '#attributes' => [
+              'class' => ['marketplace-orders-mobile-card__location'],
+            ],
+          ],
+          'qty' => [
+            '#type' => 'html_tag',
+            '#tag' => 'div',
+            '#value' => 'Qty ' . $row->getQuantity(),
+            '#attributes' => [
+              'class' => ['marketplace-orders-mobile-card__qty'],
+            ],
+          ],
+        ],
+        'title' => [
+          '#type' => 'html_tag',
+          '#tag' => 'div',
+          '#value' => $row->getListingTitle() ?? ($row->getLineTitle() ?? 'Untitled'),
+          '#attributes' => [
+            'class' => ['marketplace-orders-mobile-card__title'],
+          ],
+        ],
+        'sku' => [
+          '#type' => 'html_tag',
+          '#tag' => 'div',
+          '#value' => $row->getSku() ?? '',
+          '#attributes' => [
+            'class' => ['marketplace-orders-mobile-card__sku'],
+          ],
+        ],
+        'meta' => [
+          '#type' => 'container',
+          '#attributes' => [
+            'class' => ['marketplace-orders-mobile-card__meta'],
+          ],
+          'order' => $this->buildMetaItem('Order', $row->getExternalOrderId()),
+          'buyer' => $this->buildMetaItem('Buyer', $row->getBuyerHandle() ?? ''),
+          'marketplace' => $this->buildMetaItem('Marketplace', $row->getMarketplace()),
+          'ordered' => $this->buildMetaItem('Ordered', $orderedText),
+          'payment' => $this->buildMetaItem('Payment', $row->getPaymentStatus() ?? ''),
+          'fulfillment' => $this->buildMetaItem('Fulfillment', $row->getFulfillmentStatus() ?? ''),
+          'warehouse' => $this->buildMetaItem('Warehouse', $row->getWarehouseStatus()),
+          'line' => $this->buildMetaItem('Line', $row->getExternalLineId()),
+        ],
+        'actions' => $this->buildActionCell(
+          $row->getOrderLineId(),
+          $row->getWarehouseStatus(),
+          $destination
+        ),
+      ];
+    }
+
+    return $cards;
+  }
+
+  /**
+   * @return array<string,mixed>
+   */
+  private function buildMetaItem(string $label, string $value): array {
+    return [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['marketplace-orders-mobile-card__meta-item'],
+      ],
+      'label' => [
+        '#type' => 'html_tag',
+        '#tag' => 'span',
+        '#value' => $label,
+        '#attributes' => [
+          'class' => ['marketplace-orders-mobile-card__meta-label'],
+        ],
+      ],
+      'value' => [
+        '#type' => 'html_tag',
+        '#tag' => 'span',
+        '#value' => $value,
+        '#attributes' => [
+          'class' => ['marketplace-orders-mobile-card__meta-value'],
+        ],
+      ],
     ];
   }
 
@@ -194,10 +316,17 @@ final class PickPackQueueController extends ControllerBase {
     return in_array($normalized, ['1', 'true', 'yes', 'on'], TRUE);
   }
 
-  private function buildFilterMarkup(string $marketplace, int $limit, bool $showAll): string {
-    $allFlag = $showAll ? '1' : '0';
-    $toggleAllFlag = $showAll ? '0' : '1';
+  private function resolveNextWorkflowAction(string $warehouseStatus): ?string {
+    return match (trim(strtolower($warehouseStatus))) {
+      'new' => 'picked',
+      'picked' => 'packed',
+      'packed' => 'label_purchased',
+      'label_purchased' => 'dispatched',
+      default => NULL,
+    };
+  }
 
+  private function buildFilterMarkup(string $marketplace, int $limit, bool $showAll): string {
     $base = [
       'marketplace' => $marketplace,
       'limit' => $limit,
@@ -211,20 +340,15 @@ final class PickPackQueueController extends ControllerBase {
       'query' => $base + ['all' => '1'],
     ])->toString();
 
-    $toggleUrl = Url::fromRoute('marketplace_orders.pick_pack_queue', [], [
-      'query' => $base + ['all' => $toggleAllFlag],
-    ])->toString();
-
     $modeLabel = $showAll ? 'all rows' : 'actionable only';
 
     return sprintf(
-      'Marketplace: %s | Limit: %d | Mode: %s | <a href="%s">Actionable</a> | <a href="%s">All</a> | <a href="%s">Toggle</a>',
+      '<div class="marketplace-orders-filters__meta"><span>Marketplace: %s</span><span>Limit: %d</span><span>Mode: %s</span></div><div class="marketplace-orders-filters__links"><a href="%s">Actionable</a><a href="%s">All</a></div>',
       htmlspecialchars($marketplace, ENT_QUOTES, 'UTF-8'),
       $limit,
       $modeLabel,
       $actionableUrl,
       $allUrl,
-      $toggleUrl,
     );
   }
 

@@ -49,12 +49,16 @@ final class PickPackQueueControllerTest extends KernelTestBase {
 
     $this->assertIsArray($build);
     $this->assertArrayHasKey('table', $build);
+    $this->assertArrayHasKey('mobile_cards', $build);
+    $this->assertArrayHasKey('filters', $build);
     $this->assertArrayHasKey('#header', $build['table']);
     $this->assertArrayHasKey('#rows', $build['table']);
     $this->assertCount(1, $build['table']['#rows']);
     $this->assertArrayHasKey('actions', $build['table']['#rows'][0]);
     $this->assertIsArray($build['table']['#rows'][0]['actions']);
     $this->assertArrayHasKey('data', $build['table']['#rows'][0]['actions']);
+    $this->assertArrayHasKey('items', $build['mobile_cards']);
+    $this->assertArrayHasKey('fetch', $build['filters']);
   }
 
   public function testControllerBuildRendersWithoutWarnings(): void {
@@ -66,8 +70,13 @@ final class PickPackQueueControllerTest extends KernelTestBase {
 
     $this->assertStringContainsString('Showing 1 of 1 rows', $markup);
     $this->assertStringContainsString('ORDER-CONTROLLER-1', $markup);
+    $this->assertStringContainsString('Fetch orders', $markup);
+    $this->assertStringContainsString('marketplace-orders-mobile-card', $markup);
+    $this->assertStringContainsString('Qty 1', $markup);
     $this->assertStringContainsString('Picked', $markup);
-    $this->assertStringContainsString('Dispatched', $markup);
+    $this->assertStringNotContainsString('Packed', $markup);
+    $this->assertStringNotContainsString('Label Purchased', $markup);
+    $this->assertStringNotContainsString('Dispatched', $markup);
   }
 
   private function seedListing(): void {

@@ -1,0 +1,152 @@
+.marketplace-orders-filters {
+  margin: 0 0 16px;
+}
+
+.marketplace-orders-filters form {
+  margin: 12px 0 0;
+}
+
+.marketplace-orders-filters__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: #4a4a4a;
+  font-size: 14px;
+}
+
+.marketplace-orders-filters__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.marketplace-orders-filters__links a {
+  display: inline-block;
+  padding: 8px 12px;
+  border: 1px solid #d6d6d6;
+  border-radius: 999px;
+  background: #ffffff;
+  text-decoration: none;
+}
+
+.marketplace-orders-filters__links a:hover,
+.marketplace-orders-filters__links a:focus {
+  background: #f5f7fb;
+  text-decoration: none;
+}
+
+.marketplace-orders-desktop-table {
+  display: block;
+}
+
+.marketplace-orders-mobile-cards {
+  display: none;
+}
+
+.marketplace-orders-mobile-card {
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid #d9dde7;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+  box-shadow: 0 8px 24px rgba(18, 37, 63, 0.08);
+}
+
+.marketplace-orders-mobile-card__topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.marketplace-orders-mobile-card__location {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.marketplace-orders-mobile-card__qty {
+  display: inline-block;
+  min-width: 44px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: #111111;
+  color: #ffffff;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.marketplace-orders-mobile-card__title {
+  margin: 0 0 10px;
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.marketplace-orders-mobile-card__sku {
+  margin: 0 0 12px;
+  color: #475467;
+  font-family: monospace;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.marketplace-orders-mobile-card__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin: 0 0 14px;
+}
+
+.marketplace-orders-mobile-card__meta-item {
+  min-width: 0;
+}
+
+.marketplace-orders-mobile-card__meta-label {
+  display: block;
+  margin: 0 0 3px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.marketplace-orders-mobile-card__meta-value {
+  display: block;
+  color: #101828;
+  font-size: 14px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.marketplace-orders-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.marketplace-orders-actions form {
+  margin: 0;
+}
+
+.marketplace-orders-actions .button {
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+@media (max-width: 767px) {
+  .marketplace-orders-desktop-table {
+    display: none;
+  }
+
+  .marketplace-orders-mobile-cards {
+    display: block;
+  }
+}

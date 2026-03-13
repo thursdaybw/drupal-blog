@@ -55,6 +55,7 @@ final class PickPackQueueQueryServiceTest extends KernelTestBase {
     $this->assertSame('ORDER-ACTIONABLE', $row->getExternalOrderId());
     $this->assertSame('paid', $row->getPaymentStatus());
     $this->assertSame('not_started', $row->getFulfillmentStatus());
+    $this->assertSame('new', $row->getWarehouseStatus());
     $this->assertSame('A1-SHELF', $row->getStorageLocation());
     $this->assertSame('The Yarns of Billy Borker', $row->getListingTitle());
   }

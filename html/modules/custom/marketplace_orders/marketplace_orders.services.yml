@@ -17,6 +17,11 @@ services:
       - '@database'
       - '@datetime.time'
 
+  Drupal\marketplace_orders\Contract\OrderLineWorkflowRepositoryInterface:
+    class: Drupal\marketplace_orders\Infrastructure\DatabaseOrderLineWorkflowRepository
+    arguments:
+      - '@database'
+
   marketplace_orders.sync_service:
     arguments:
       - '@Drupal\marketplace_orders\Contract\MarketplaceOrdersPortInterface'
@@ -34,6 +39,15 @@ services:
 
   Drupal\marketplace_orders\Service\PickPackQueueQueryService:
     alias: marketplace_orders.pick_pack_queue_query
+
+  marketplace_orders.order_line_workflow_transition:
+    class: Drupal\marketplace_orders\Service\TransitionOrderLineWorkflowService
+    arguments:
+      - '@Drupal\marketplace_orders\Contract\OrderLineWorkflowRepositoryInterface'
+      - '@datetime.time'
+
+  Drupal\marketplace_orders\Service\TransitionOrderLineWorkflowService:
+    alias: marketplace_orders.order_line_workflow_transition
 
   Drupal\marketplace_orders\Infrastructure\Ebay\EbayOrderPayloadMapper:
     arguments:

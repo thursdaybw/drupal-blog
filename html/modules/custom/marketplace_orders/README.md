@@ -16,3 +16,5 @@ See: `docs/marketplace-orders-architecture.md`
 
 ## Drush
 - `drush marketplace-orders:sync --marketplace=ebay --since=<iso8601|timestamp>`
+- `drush marketplace-orders:pick-pack-queue --marketplace=ebay --limit=25`
+- `drush marketplace-orders:workflow-transition <order_line_id> --action=picked|packed|label_purchased|dispatched [--actor-uid=<uid>]`

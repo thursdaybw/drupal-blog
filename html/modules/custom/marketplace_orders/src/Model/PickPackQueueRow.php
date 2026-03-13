@@ -16,6 +16,7 @@ final class PickPackQueueRow {
     private readonly string $status,
     private readonly ?string $paymentStatus,
     private readonly ?string $fulfillmentStatus,
+    private readonly string $warehouseStatus,
     private readonly ?int $orderedAt,
     private readonly ?string $buyerHandle,
     private readonly int $orderLineId,
@@ -35,6 +36,7 @@ final class PickPackQueueRow {
   public function getStatus(): string { return $this->status; }
   public function getPaymentStatus(): ?string { return $this->paymentStatus; }
   public function getFulfillmentStatus(): ?string { return $this->fulfillmentStatus; }
+  public function getWarehouseStatus(): string { return $this->warehouseStatus; }
   public function getOrderedAt(): ?int { return $this->orderedAt; }
   public function getBuyerHandle(): ?string { return $this->buyerHandle; }
   public function getOrderLineId(): int { return $this->orderLineId; }

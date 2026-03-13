@@ -675,6 +675,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $missingLocationIds = $this->findListingsMissingStorageLocation($selectedIds);
 
     $this->getConfirmTempStore()->set(self::PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY, [
+      'selection' => $selection,
       'listing_ids' => $selectedIds,
       'set_location' => $setLocation,
       'location' => $location,
@@ -702,6 +703,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
 
     $this->getConfirmTempStore()->set(self::LOCATION_CONFIRM_TEMPSTORE_KEY, [
+      'selection' => $selection,
       'listing_ids' => $selectedIds,
       'selected_count' => count($selectedIds),
       'created_at' => time(),

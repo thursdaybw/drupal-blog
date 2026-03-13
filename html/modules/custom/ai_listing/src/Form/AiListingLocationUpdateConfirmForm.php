@@ -33,7 +33,8 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
 
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $payload = $this->getPayload();
-    $listingIds = array_map('intval', $payload['listing_ids'] ?? []);
+    $selection = $this->getSelectionFromPayload($payload);
+    $listingIds = $this->extractListingIdsFromSelection($selection, $payload);
 
     if ($listingIds === []) {
       $this->messenger()->addError($this->t('The location update selection expired. Please select the listings again.'));
@@ -95,24 +96,76 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     $payload = $this->getPayload();
-    $listingIds = array_map('intval', $payload['listing_ids'] ?? []);
+    $selection = $this->getSelectionFromPayload($payload);
     $location = trim((string) $form_state->getValue('location'));
 
     $this->getConfirmTempStore()->delete(AiListingWorkbenchForm::LOCATION_CONFIRM_TEMPSTORE_KEY);
 
-    if ($listingIds === []) {
+    if ($selection === []) {
       $this->messenger()->addError($this->t('The location update selection expired. Please select the listings again.'));
       $form_state->setRedirectUrl($this->getCancelUrl());
       return;
     }
 
-    batch_set(AiListingWorkbenchForm::buildListingBatchDefinition($listingIds, TRUE, $location, 'publish_update'));
+    batch_set(AiListingWorkbenchForm::buildListingBatchDefinition($selection, TRUE, $location, 'publish_update'));
     $form_state->setRedirectUrl($this->getCancelUrl());
   }
 
   private function getPayload(): array {
     $payload = $this->getConfirmTempStore()->get(AiListingWorkbenchForm::LOCATION_CONFIRM_TEMPSTORE_KEY);
     return is_array($payload) ? $payload : [];
+  }
+
+  /**
+   * @param array<string,mixed> $payload
+   *
+   * @return array<int,array{listing_type:string,id:int}>
+   */
+  private function getSelectionFromPayload(array $payload): array {
+    $selection = $payload['selection'] ?? [];
+    if (!is_array($selection)) {
+      return [];
+    }
+
+    $normalizedSelection = [];
+    foreach ($selection as $item) {
+      if (!is_array($item)) {
+        continue;
+      }
+      if (!isset($item['listing_type'], $item['id'])) {
+        continue;
+      }
+
+      $listingType = trim((string) $item['listing_type']);
+      $listingId = (int) $item['id'];
+      if ($listingType === '' || $listingId <= 0) {
+        continue;
+      }
+
+      $normalizedSelection[] = [
+        'listing_type' => $listingType,
+        'id' => $listingId,
+      ];
+    }
+
+    return $normalizedSelection;
+  }
+
+  /**
+   * @param array<int,array{listing_type:string,id:int}> $selection
+   * @param array<string,mixed> $payload
+   *
+   * @return int[]
+   */
+  private function extractListingIdsFromSelection(array $selection, array $payload): array {
+    if ($selection !== []) {
+      return array_map(
+        static fn(array $item): int => (int) $item['id'],
+        $selection
+      );
+    }
+
+    return array_map('intval', $payload['listing_ids'] ?? []);
   }
 
   private function getConfirmTempStore(): \Drupal\Core\TempStore\PrivateTempStore {

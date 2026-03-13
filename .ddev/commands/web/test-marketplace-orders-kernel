@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+## Description: Run only the marketplace_orders kernel test directory. Covers order sync persistence, pick-pack query, and orders controller wiring, not ai_listing, listing_publishing, ebay_connector, unit, browser, or smoke tests.
+## Usage: test-marketplace-orders-kernel
+set -euo pipefail
+
+/var/www/html/scripts/test-marketplace-orders-kernel

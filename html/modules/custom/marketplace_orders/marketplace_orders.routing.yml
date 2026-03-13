@@ -5,3 +5,13 @@ marketplace_orders.pick_pack_queue:
     _title: 'Pick and pack queue'
   requirements:
     _permission: 'administer ai listings'
+
+marketplace_orders.order_line_transition_form:
+  path: '/admin/ai-listings/orders/pick-pack/line/{order_line_id}/transition/{action}'
+  defaults:
+    _form: '\Drupal\marketplace_orders\Form\OrderLineWorkflowTransitionForm'
+    _title: 'Update warehouse workflow state'
+  requirements:
+    _permission: 'administer ai listings'
+    order_line_id: '\d+'
+    action: 'picked|packed|label_purchased|dispatched'

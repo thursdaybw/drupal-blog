@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+## Description: Run only the ai_listing unit test directory. Covers pure PHP logic in that module, not Drupal kernel wiring, controllers, forms, or cross-module integration.
+## Usage: test-ai-listing-unit
 set -euo pipefail
 
 /var/www/html/scripts/test-ai-listing-unit

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+## Description: Run the single AI Listings smoke test file. This is a narrow boot/sanity check, not the real application suite.
+## Usage: test-ai-listing-smoke
 set -euo pipefail
 
 /var/www/html/scripts/test-ai-listing-smoke

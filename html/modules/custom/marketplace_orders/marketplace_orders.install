@@ -163,6 +163,61 @@ function marketplace_orders_schema(): array {
           'length' => 128,
           'not null' => FALSE,
         ],
+        'warehouse_status' => [
+          'description' => 'Internal warehouse workflow status for this line.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+          'default' => 'new',
+        ],
+        'picked_at' => [
+          'description' => 'Unix timestamp when this line was marked picked.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'picked_by_uid' => [
+          'description' => 'User ID that marked this line picked.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'packed_at' => [
+          'description' => 'Unix timestamp when this line was marked packed.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'packed_by_uid' => [
+          'description' => 'User ID that marked this line packed.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'label_purchased_at' => [
+          'description' => 'Unix timestamp when label purchase was recorded.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'label_purchased_by_uid' => [
+          'description' => 'User ID that recorded label purchase.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'dispatched_at' => [
+          'description' => 'Unix timestamp when this line was marked dispatched.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
+        'dispatched_by_uid' => [
+          'description' => 'User ID that marked this line dispatched.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ],
         'raw_json' => [
           'description' => 'Optional raw line payload snapshot from marketplace.',
           'type' => 'text',
@@ -192,6 +247,7 @@ function marketplace_orders_schema(): array {
         'order_id' => ['order_id'],
         'sku' => ['sku'],
         'listing_uuid' => ['listing_uuid'],
+        'warehouse_status' => ['warehouse_status'],
       ],
       'foreign keys' => [
         'marketplace_order_line_order' => [

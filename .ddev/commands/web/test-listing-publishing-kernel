@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+## Description: Run only the listing_publishing kernel test directory. Covers marketplace-agnostic publishing flow, not ai_listing UI/forms, ebay_connector, marketplace_orders, unit, browser, or smoke tests.
+## Usage: test-listing-publishing-kernel
 set -euo pipefail
 
 /var/www/html/scripts/test-listing-publishing-kernel

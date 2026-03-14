@@ -2,6 +2,7 @@
   'use strict';
 
   const tableSelector = 'table[data-drupal-selector="edit-listings"]';
+  const mobileCardSelector = '.ai-batch-mobile-card';
   const searchInputSelector = '#ai-listing-search-query';
   const selectedKeysInputSelector = '#ai-batch-selected-listing-keys';
   const selectedCountSelector = '#ai-batch-selected-count';
@@ -10,32 +11,36 @@
 
   Drupal.behaviors.aiListingLocationBatch = {
     attach(context) {
-      once('aiListingLocationBatch', tableSelector, context).forEach((table) => {
-        applyStoredSelectionToTable(table);
-        synchronizeSelectionFromCurrentPage(table);
+      once('aiListingLocationBatchForm', 'form', context).forEach((form) => {
+        if (!form.querySelector(selectedKeysInputSelector)) {
+          return;
+        }
 
-        table.addEventListener('click', function (event) {
+        applyStoredSelectionToForm(form);
+        synchronizeSelectionFromCurrentForm(form);
+
+        form.addEventListener('click', function (event) {
           if (event.target.closest('a, button, input, label, select, textarea')) {
             return;
           }
 
-          const row = event.target.closest('tr');
-          if (!row || !table.contains(row)) {
+          const selectionContainer = event.target.closest('tr, ' + mobileCardSelector);
+          if (!selectionContainer || !form.contains(selectionContainer)) {
             return;
           }
 
-          const checkbox = row.querySelector('tbody input[type="checkbox"]');
-          if (!(checkbox instanceof HTMLInputElement)) {
+          const checkbox = selectionContainer.querySelector('input[type="checkbox"]');
+          if (!(checkbox instanceof HTMLInputElement) || extractSelectionKey(checkbox) === '') {
             return;
           }
 
           checkbox.checked = !checkbox.checked;
-          synchronizeSelectionFromCurrentPage(table);
+          synchronizeSelectionFromCurrentForm(form);
         });
 
-        table.addEventListener('change', function () {
+        form.addEventListener('change', function () {
           window.setTimeout(function () {
-            synchronizeSelectionFromCurrentPage(table);
+            synchronizeSelectionFromCurrentForm(form);
           }, 0);
         });
       });
@@ -44,7 +49,6 @@
         if (!form.querySelector(selectedKeysInputSelector)) {
           return;
         }
-
         form.addEventListener('submit', function () {
           synchronizeHiddenInput(form);
         });
@@ -113,24 +117,22 @@
   };
 
   function updateSelectionStateForDocument() {
-    document.querySelectorAll(tableSelector).forEach(function (table) {
-      applyStoredSelectionToTable(table);
-    });
-
     document.querySelectorAll('form').forEach(function (form) {
       if (!form.querySelector(selectedKeysInputSelector)) {
         return;
       }
 
+      applyStoredSelectionToForm(form);
       synchronizeHiddenInput(form);
     });
 
     updateSelectedCountDisplay();
   }
 
-  function synchronizeSelectionFromCurrentPage(table) {
+  function synchronizeSelectionFromCurrentForm(form) {
     const selectionKeys = loadStoredSelectionKeys();
-    const currentPageCheckboxes = getCurrentPageCheckboxes(table);
+    const currentPageCheckboxes = getCurrentPageCheckboxes(form);
+    const groupedState = new Map();
 
     currentPageCheckboxes.forEach(function (checkbox) {
       const selectionKey = extractSelectionKey(checkbox);
@@ -138,27 +140,28 @@
         return;
       }
 
-      if (checkbox.checked) {
-        selectionKeys.add(selectionKey);
-        return;
-      }
+      const currentValue = groupedState.get(selectionKey) || false;
+      groupedState.set(selectionKey, currentValue || checkbox.checked);
+    });
 
-      selectionKeys.delete(selectionKey);
+    groupedState.forEach(function (isChecked, selectionKey) {
+      if (isChecked) {
+        selectionKeys.add(selectionKey);
+      }
+      else {
+        selectionKeys.delete(selectionKey);
+      }
     });
 
     saveStoredSelectionKeys(selectionKeys);
-
-    const form = table.closest('form');
-    if (form) {
-      synchronizeHiddenInput(form);
-    }
-
+    applyStoredSelectionToForm(form);
+    synchronizeHiddenInput(form);
     updateSelectedCountDisplay();
   }
 
-  function applyStoredSelectionToTable(table) {
+  function applyStoredSelectionToForm(form) {
     const selectionKeys = loadStoredSelectionKeys();
-    const currentPageCheckboxes = getCurrentPageCheckboxes(table);
+    const currentPageCheckboxes = getCurrentPageCheckboxes(form);
 
     currentPageCheckboxes.forEach(function (checkbox) {
       const selectionKey = extractSelectionKey(checkbox);
@@ -219,8 +222,8 @@
     window.sessionStorage.setItem(storageKey, JSON.stringify(values));
   }
 
-  function getCurrentPageCheckboxes(table) {
-    return Array.from(table.querySelectorAll('tbody input[type="checkbox"]')).filter(function (checkbox) {
+  function getCurrentPageCheckboxes(form) {
+    return Array.from(form.querySelectorAll('tbody input[type="checkbox"], .ai-batch-mobile-card input[type="checkbox"]')).filter(function (checkbox) {
       return checkbox instanceof HTMLInputElement;
     });
   }
@@ -228,6 +231,11 @@
   function extractSelectionKey(checkbox) {
     if (!(checkbox instanceof HTMLInputElement)) {
       return '';
+    }
+
+    const explicitSelectionKey = checkbox.getAttribute('data-ai-selection-key');
+    if (typeof explicitSelectionKey === 'string' && explicitSelectionKey.trim() !== '') {
+      return explicitSelectionKey.trim();
     }
 
     const matches = checkbox.name.match(/^listings\[(.+)\]$/);

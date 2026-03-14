@@ -137,6 +137,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
         'ready_for_review' => $this->t('Ready for review'),
         'ready_to_shelve' => $this->t('Ready to shelve'),
         'shelved' => $this->t('Shelved'),
+        'archived' => $this->t('Archived'),
         'failed' => $this->t('Failed'),
       ];
     }

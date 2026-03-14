@@ -91,6 +91,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
         'ready_for_review' => $this->t('Ready for review'),
         'ready_to_shelve' => $this->t('Ready to shelve'),
         'shelved' => $this->t('Shelved'),
+        'archived' => $this->t('Archived'),
         'failed' => $this->t('Failed'),
       ],
       '#default_value' => $statusFilter,
@@ -240,7 +241,12 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       '#parameters' => $pagerParameters,
     ];
 
-    $form['listings_container']['listings'] = [
+    $form['listings_container']['desktop_table'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-batch-desktop-table']],
+    ];
+
+    $form['listings_container']['desktop_table']['listings'] = [
       '#type' => 'tableselect',
       '#header' => $this->buildListingTableHeader($sortField, $sortDirection, $pagerParameters),
       '#options' => $this->buildListingTableOptions($dataset->pagedRows),
@@ -249,9 +255,20 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       '#default_value' => [],
     ];
 
+    $form['listings_container']['mobile_cards'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-batch-mobile-cards']],
+      'items' => $this->buildMobileListingCards($dataset->pagedRows),
+    ];
+
     $form['listings_container']['pager_bottom'] = [
       '#type' => 'pager',
       '#parameters' => $pagerParameters,
+    ];
+
+    $form['actions'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-batch-actions']],
     ];
 
     $form['actions']['update_location'] = [
@@ -861,7 +878,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
         'ebay' => $this->buildEbayItemLink($row['ebay_listing_id']),
         'title' => $link->toString(),
         'author' => $listingType === 'book'
-          ? ($listing->get('field_author')->value ?: $this->t('Unknown'))
+          ? ($this->getStringFieldValueIfExists($listing, 'field_author') ?: $this->t('Unknown'))
           : $this->t('—'),
         'price' => $listing->get('price')->value ?? $this->t('—'),
         'location' => $listing->get('storage_location')->value ?: $this->t('Unset yet'),
@@ -871,6 +888,206 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
 
     return $options;
+  }
+
+  /**
+   * @param array<string,array{selection_key:string,listing_type:string,listing_id:int,entity:\Drupal\ai_listing\Entity\BbAiListing,created:int,sku:string,is_published_to_ebay:bool,ebay_listing_id:?string}> $rows
+   *
+   * @return array<string,array<string,mixed>>
+   */
+  private function buildMobileListingCards(array $rows): array {
+    $cards = [];
+    $thumbnailLookup = $this->buildListingThumbnailUriLookup($rows);
+
+    foreach ($rows as $selectionKey => $row) {
+      $listing = $row['entity'] ?? NULL;
+      if (!$listing instanceof BbAiListing) {
+        continue;
+      }
+
+      $listingId = (int) ($row['listing_id'] ?? 0);
+      $listingType = (string) ($row['listing_type'] ?? '');
+      $author = $listingType === 'book'
+        ? ($this->getStringFieldValueIfExists($listing, 'field_author') ?: $this->t('Unknown'))
+        : $this->t('—');
+      $thumbnailUri = $thumbnailLookup[$listingId] ?? NULL;
+
+      $cards[$selectionKey] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['ai-batch-mobile-card'],
+        ],
+        'header' => [
+          '#type' => 'container',
+          '#attributes' => ['class' => ['ai-batch-mobile-card__header']],
+          'select' => [
+            '#type' => 'checkbox',
+            '#title' => '',
+            '#attributes' => [
+              'class' => ['ai-batch-mobile-card__check'],
+              'data-ai-selection-key' => $selectionKey,
+              'aria-label' => 'Select listing ' . $listingId,
+            ],
+          ],
+          'thumb' => $this->buildMobileThumbnail($thumbnailUri),
+          'identity' => [
+            '#type' => 'container',
+            'title' => [
+              '#type' => 'html_tag',
+              '#tag' => 'div',
+              '#attributes' => ['class' => ['ai-batch-mobile-card__title']],
+              'link' => Link::fromTextAndUrl(
+                $this->buildListingLabel($listingType, $listing),
+                Url::fromRoute('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $listingId])
+              )->toRenderable(),
+            ],
+          ],
+        ],
+        'meta' => [
+          '#type' => 'container',
+          '#attributes' => ['class' => ['ai-batch-mobile-card__meta']],
+          'type' => $this->buildMobileMetaItem('Type', $this->buildTypeLabel($listingType)),
+          'entity_id' => $this->buildMobileMetaItem('Entity ID', (string) $listingId),
+          'listing_code' => $this->buildMobileMetaItem('Listing code', trim((string) ($listing->get('listing_code')->value ?? '')) ?: 'Unset'),
+          'sku' => $this->buildMobileMetaItem('SKU', $row['sku'] !== '' ? $row['sku'] : '—'),
+          'status' => $this->buildMobileMetaItem('Status', (string) ($listing->get('status')->value ?: '—')),
+          'author' => $this->buildMobileMetaItem('Author', (string) $author),
+          'price' => $this->buildMobileMetaItem('Price', (string) ($listing->get('price')->value ?? '—')),
+          'location' => $this->buildMobileMetaItem('Location', (string) ($listing->get('storage_location')->value ?: 'Unset yet')),
+          'published' => $this->buildMobileMetaItem('Published to eBay', !empty($row['is_published_to_ebay']) ? 'Yes' : 'No'),
+          'created' => $this->buildMobileMetaItem('Created', $this->getDateFormatter()->format((int) $row['created'])),
+        ],
+      ];
+    }
+
+    if ($cards === []) {
+      return [
+        'empty' => [
+          '#type' => 'html_tag',
+          '#tag' => 'p',
+          '#value' => 'No listings match the selected filters.',
+        ],
+      ];
+    }
+
+    return $cards;
+  }
+
+  /**
+   * @param array<string,array{selection_key:string,listing_type:string,listing_id:int,entity:\Drupal\ai_listing\Entity\BbAiListing,created:int,sku:string,is_published_to_ebay:bool,ebay_listing_id:?string}> $rows
+   *
+   * @return array<int,string>
+   */
+  private function buildListingThumbnailUriLookup(array $rows): array {
+    if (!$this->getEntityTypeManager()->hasDefinition('listing_image')) {
+      return [];
+    }
+
+    $listingIds = [];
+    foreach ($rows as $row) {
+      $listingId = (int) ($row['listing_id'] ?? 0);
+      if ($listingId > 0) {
+        $listingIds[] = $listingId;
+      }
+    }
+
+    if ($listingIds === []) {
+      return [];
+    }
+
+    $imageIds = $this->getEntityTypeManager()->getStorage('listing_image')->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('owner.target_type', 'bb_ai_listing')
+      ->condition('owner.target_id', array_values(array_unique($listingIds)), 'IN')
+      ->sort('weight', 'ASC')
+      ->sort('id', 'ASC')
+      ->execute();
+
+    if ($imageIds === []) {
+      return [];
+    }
+
+    $lookup = [];
+    $images = $this->getEntityTypeManager()->getStorage('listing_image')->loadMultiple($imageIds);
+    foreach ($imageIds as $imageId) {
+      $image = $images[$imageId] ?? NULL;
+      if ($image === NULL) {
+        continue;
+      }
+
+      $ownerId = (int) ($image->get('owner')->target_id ?? 0);
+      if ($ownerId <= 0 || isset($lookup[$ownerId])) {
+        continue;
+      }
+
+      $file = $image->get('file')->entity;
+      if ($file === NULL) {
+        continue;
+      }
+
+      $lookup[$ownerId] = $file->getFileUri();
+    }
+
+    return $lookup;
+  }
+
+  /**
+   * @return array<string,mixed>
+   */
+  private function buildMobileThumbnail(?string $thumbnailUri): array {
+    if ($thumbnailUri === NULL || $thumbnailUri === '') {
+      return [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['ai-batch-mobile-card__thumb']],
+        'placeholder' => [
+          '#type' => 'html_tag',
+          '#tag' => 'div',
+          '#value' => 'No image',
+          '#attributes' => ['class' => ['ai-batch-mobile-card__thumb-placeholder']],
+        ],
+      ];
+    }
+
+    return [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-batch-mobile-card__thumb']],
+      'image' => [
+        '#theme' => 'image_style',
+        '#style_name' => 'thumbnail',
+        '#uri' => $thumbnailUri,
+        '#alt' => '',
+      ],
+    ];
+  }
+
+  /**
+   * @return array<string,mixed>
+   */
+  private function buildMobileMetaItem(string $label, string $value): array {
+    return [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['ai-batch-mobile-card__meta-item']],
+      'label' => [
+        '#type' => 'html_tag',
+        '#tag' => 'div',
+        '#value' => $label,
+        '#attributes' => ['class' => ['ai-batch-mobile-card__meta-label']],
+      ],
+      'value' => [
+        '#type' => 'html_tag',
+        '#tag' => 'div',
+        '#value' => $value,
+        '#attributes' => ['class' => ['ai-batch-mobile-card__meta-value']],
+      ],
+    ];
+  }
+
+  private function getStringFieldValueIfExists(BbAiListing $listing, string $fieldName): string {
+    if (!$listing->hasField($fieldName)) {
+      return '';
+    }
+
+    return trim((string) ($listing->get($fieldName)->value ?? ''));
   }
 
   private function buildListingLabel(string $listingType, BbAiListing $listing): string {

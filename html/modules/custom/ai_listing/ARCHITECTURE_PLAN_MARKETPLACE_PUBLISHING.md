@@ -23,6 +23,8 @@ Status note:
 - Keep marketplace publication storage as a separate related entity.
 - Keep UI book-specific for now; backend model can be more generic than the UI.
 - Keep publication rows as current-state rows, not local history rows.
+- Add marketplace-specific operator controls to the listing page rather than
+  overloading destructive entity delete actions.
 
 ### Inventory Model Decisions
 
@@ -38,8 +40,52 @@ Status note:
 - `bb_ai_listing.status` may remain a workflow/UI summary for now, but it is not the long-term canonical source of marketplace publication truth.
 - Future UI badges/filters should be projections (for example `published_on_ebay`, `published_anywhere`) derived from marketplace publication records.
 - Local publication rows are current-state only.
-- If something is no longer published, the local publication row should be deleted.
-- We are not keeping local `ended` publication history in `ai_marketplace_publication`.
+- Current implementation deletes the local publication row on unpublish/takedown.
+- Target direction is to preserve the publication row as current-state data with an
+  explicit inactive state such as `unpublished`, rather than deleting it to
+  represent state.
+- We are still not planning to turn `ai_marketplace_publication` into a full event
+  history log. The goal is current state plus enough audit/debug metadata to work
+  operationally.
+
+### Marketplace UX Direction
+
+- Add a `Marketplaces` tab to the listing page.
+- Render one marketplace section per marketplace key.
+- Start with `eBay` only, but keep the page structure generic so other
+  marketplaces can slot in later without redesigning the whole screen.
+- Each marketplace section should show current local publication state:
+  - marketplace key
+  - publication status
+  - SKU
+  - marketplace listing ID
+  - marketplace publication / offer ID
+  - published timestamp
+  - source (`local_publish`, `legacy_adopted`, etc.)
+  - last known error
+- Each marketplace section should expose explicit marketplace actions rather than
+  relying on entity delete:
+  - `Unpublish`
+  - later: `Republish`, `Refresh status`, `Reconcile`
+
+### Unpublish Use-Case Direction
+
+- Unpublish is a marketplace operation, not an entity delete.
+- Deleting a local `bb_ai_listing` must not be the primary way to take down a
+  live marketplace listing.
+- The listing review page should call an explicit application use-case for
+  marketplace takedown.
+- Controllers/forms should delegate to an application service such as:
+  - `UnpublishListingFromMarketplaceService`
+- That use-case should:
+  1. resolve the local publication record for the listing + marketplace
+  2. dispatch to a marketplace adapter/port
+  3. update local publication state
+  4. leave the local `bb_ai_listing` intact
+- For Clean Architecture, the use-case should depend on an abstraction such as:
+  - `MarketplaceUnpublishPortInterface`
+- The eBay implementation should stay in the adapter layer, e.g.:
+  - `EbayMarketplaceUnpublishAdapter`
 
 ### Multi-Marketplace Model (Target Shape)
 
@@ -70,6 +116,11 @@ The marketplace publication entity should be generic and store:
 4. Current publication rows are now treated as current state only.
 5. Current audit direction is to mirror eBay inventory and offers more directly, then compare Drupal state against that mirror.
 6. Future marketplaces should plug into `listing_publishing` through their own adapters, not by bending the core around eBay.
+7. Add listing-page marketplace read model and operator controls via a
+   `Marketplaces` tab.
+8. Add explicit marketplace unpublish use-case and eBay adapter.
+9. Move local publication state from delete-on-unpublish toward explicit
+   `unpublished` current-state records when that operator workflow is in place.
 
 ### Clean Architecture Rules We Agreed To Apply
 

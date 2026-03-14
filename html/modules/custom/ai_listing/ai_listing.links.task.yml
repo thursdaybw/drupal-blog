@@ -1,0 +1,9 @@
+entity.bb_ai_listing.canonical:
+  route_name: entity.bb_ai_listing.canonical
+  title: 'Review'
+  base_route: entity.bb_ai_listing.canonical
+
+ai_listing.marketplaces:
+  route_name: ai_listing.marketplaces
+  title: 'Marketplaces'
+  base_route: entity.bb_ai_listing.canonical

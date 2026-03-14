@@ -49,3 +49,15 @@ entity.bb_ai_listing.canonical:
     parameters:
       bb_ai_listing:
         type: entity:bb_ai_listing
+
+ai_listing.marketplaces:
+  path: '/admin/ai-listings/{bb_ai_listing}/marketplaces'
+  defaults:
+    _controller: '\Drupal\ai_listing\Controller\AiListingMarketplacesController::build'
+    _title_callback: '\Drupal\ai_listing\Controller\AiListingMarketplacesController::getTitle'
+  requirements:
+    _permission: 'administer ai listings'
+  options:
+    parameters:
+      bb_ai_listing:
+        type: entity:bb_ai_listing

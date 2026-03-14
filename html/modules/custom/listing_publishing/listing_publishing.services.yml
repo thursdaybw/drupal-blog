@@ -51,3 +51,9 @@ services:
     class: Drupal\listing_publishing\Service\MarketplacePublicationResolver
     arguments:
       - '@entity_type.manager'
+
+  Drupal\listing_publishing\Service\MarketplaceUnpublishService:
+    class: Drupal\listing_publishing\Service\MarketplaceUnpublishService
+    arguments:
+      - '@entity_type.manager'
+      - !tagged_iterator listing_publishing.marketplace_unpublisher

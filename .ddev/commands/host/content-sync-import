@@ -93,27 +93,15 @@ echo "- source on remote host: ${REMOTE_CONTENT_DIR}"
 echo "- target in container: ${CONTAINER_CONTENT_DIR}"
 echo "- drush bin: ${DRUSH_BIN}"
 echo "- drush command: ${IMPORT_CMD}"
+echo "- cleanup after import: true"
 echo "- dry run: ${DRY_RUN}"
 
 if [ "${DRY_RUN}" = true ]; then
   echo "[dry-run] ssh ${SSH_TARGET} '${COMPOSE_PREFIX} ps -q appserver'"
   echo "[dry-run] ssh ${SSH_TARGET} '${COMPOSE_PREFIX} up -d appserver'"
-  echo "[dry-run] ssh ${SSH_TARGET} '${COMPOSE_PREFIX} ps -q appserver'"
-  echo "[dry-run] ssh ${SSH_TARGET} 'sudo -n docker cp ${REMOTE_CONTENT_DIR}/. <app_container_id>:${CONTAINER_CONTENT_DIR}/'"
   echo "[dry-run] ssh ${SSH_TARGET} '${COMPOSE_PREFIX} exec -T appserver sh -lc \"cd /var/www/html && ${IMPORT_CMD}\"'"
+  echo "[dry-run] ssh ${SSH_TARGET} 'find ${REMOTE_CONTENT_DIR} -mindepth 1 -delete'"
   exit 0
-fi
-
-APP_CONTAINER_ID="$(ssh "${SSH_TARGET}" "${COMPOSE_PREFIX} ps -q appserver")"
-
-if [ -z "${APP_CONTAINER_ID}" ]; then
-  ssh "${SSH_TARGET}" "${COMPOSE_PREFIX} up -d appserver"
-  APP_CONTAINER_ID="$(ssh "${SSH_TARGET}" "${COMPOSE_PREFIX} ps -q appserver")"
-fi
-
-if [ -z "${APP_CONTAINER_ID}" ]; then
-  echo "Could not resolve ${TARGET} appserver container id."
-  exit 1
 fi
 
 resolve_container_content_dir() {
@@ -127,13 +115,13 @@ resolve_container_content_dir() {
   printf '%s' "${CONTAINER_CONTENT_DIR_DEFAULT}"
 }
 
+ssh "${SSH_TARGET}" "test -d ${REMOTE_CONTENT_DIR}"
+ssh "${SSH_TARGET}" "${COMPOSE_PREFIX} up -d appserver"
 CONTAINER_CONTENT_DIR="$(resolve_container_content_dir)"
 
 echo "Resolved container sync directory: ${CONTAINER_CONTENT_DIR}"
 
-ssh "${SSH_TARGET}" "test -d ${REMOTE_CONTENT_DIR}"
-ssh "${SSH_TARGET}" "sudo -n docker exec ${APP_CONTAINER_ID} mkdir -p ${CONTAINER_CONTENT_DIR}"
-ssh "${SSH_TARGET}" "sudo -n docker cp ${REMOTE_CONTENT_DIR}/. ${APP_CONTAINER_ID}:${CONTAINER_CONTENT_DIR}/"
 ssh "${SSH_TARGET}" "${COMPOSE_PREFIX} exec -T appserver sh -lc 'cd /var/www/html && if [ ! -x \"${DRUSH_BIN}\" ]; then echo \"Drush binary not found: ${DRUSH_BIN}\"; exit 127; fi; ${DRUSH_BIN} content-sync:import ${LABEL} -y${ENTITY_TYPES:+ --entity-types=${ENTITY_TYPES}}${UUIDS:+ --uuids=${UUIDS}}${ACTIONS:+ --actions=${ACTIONS}}$( [ \"${SKIPLIST}\" = true ] && printf ' --skiplist' )$( [ \"${COMPARE_DATES}\" = true ] && printf ' --compare-dates' )'"
+ssh "${SSH_TARGET}" "find ${REMOTE_CONTENT_DIR} -mindepth 1 -delete"
 
 echo "Content import complete (${TARGET})."

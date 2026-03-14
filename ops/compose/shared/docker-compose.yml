@@ -11,6 +11,9 @@ services:
     volumes:
       # Persist Drupal files across container/image updates.
       - ./html/sites/default/files:/var/www/html/sites/default/files
+      # Stage content-sync payloads once on the host and expose them directly
+      # to Drupal for import, avoiding a second copied container-local payload.
+      - ./content/sync:/var/www/content/sync
     depends_on:
       db:
         condition: service_healthy

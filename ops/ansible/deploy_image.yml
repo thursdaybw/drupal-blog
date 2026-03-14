@@ -153,12 +153,16 @@
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
       loop:
         - "{{ deploy_target.workspace }}"
         - "{{ deploy_target.workspace }}/html"
         - "{{ deploy_target.workspace }}/html/sites"
         - "{{ deploy_target.workspace }}/html/sites/default"
+        - "{{ deploy_target.workspace }}/content"
+        - "{{ deploy_target.workspace }}/content/sync"
 
     - name: Ensure environment files directory exists
       ansible.builtin.file:

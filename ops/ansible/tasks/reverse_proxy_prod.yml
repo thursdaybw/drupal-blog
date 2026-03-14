@@ -59,6 +59,7 @@
       sudo -n certbot --nginx
       --non-interactive
       --agree-tos
+      --expand
       --keep-until-expiring
       --redirect
       --email {{ prod_tls_email }}

@@ -37,6 +37,10 @@ video-react/
 # Build/deploy artifacts
 .ddev/.artifacts/
 
+# Content sync payload is deployment data, not runtime image content
+content/sync/
+content/sync/**
+
 # Editor and cache noise
 *.swp
 *.swo

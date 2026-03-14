@@ -24,6 +24,9 @@ bargain_preset:
     - core/drupal
 
 location_table:
+  css:
+    theme:
+      css/workbench-mobile.css: {}
   js:
     js/ai-book-listing-location-batch.js: {}
   dependencies:

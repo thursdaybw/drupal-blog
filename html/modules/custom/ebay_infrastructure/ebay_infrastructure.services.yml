@@ -38,3 +38,10 @@ services:
     class: Drupal\ebay_infrastructure\Service\StoreService
     arguments:
       - '@drupal.ebay_infrastructure.sell_api'
+
+  drupal.ebay_infrastructure.marketplace_unpublisher:
+    class: Drupal\ebay_infrastructure\Service\EbayMarketplaceUnpublisher
+    arguments:
+      - '@drupal.ebay_infrastructure.sell_api'
+    tags:
+      - { name: listing_publishing.marketplace_unpublisher }

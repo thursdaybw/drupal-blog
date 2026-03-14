@@ -35,9 +35,11 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
     'system',
     'user',
     'field',
+    'file',
     'text',
     'filter',
     'options',
+    'dynamic_entity_reference',
     'bb_platform',
     'ai_listing',
   ];
@@ -48,7 +50,11 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
     parent::setUp();
 
     $this->installEntitySchema('bb_ai_listing');
-    $this->installConfig(['ai_listing']);
+    $this->installEntitySchema('ai_listing_inventory_sku');
+    $this->installEntitySchema('ai_marketplace_publication');
+    $this->installEntitySchema('file');
+    $this->installEntitySchema('listing_image');
+    $this->installConfig(['system', 'ai_listing']);
     $this->createBookType();
     $this->createBookField('field_title');
     $this->createBookField('field_full_title');
@@ -231,6 +237,42 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
     $redirect = $formState->getRedirect();
     $this->assertInstanceOf(Url::class, $redirect);
     $this->assertSame('ai_listing.workbench.publish_update_confirm', $redirect->getRouteName());
+  }
+
+  /**
+   * Checks that archived is available in the listing status model.
+   */
+  public function testArchivedStatusIsAvailableInListingUi(): void {
+    $listing = $this->createBookListing('Archived status test', 'BDMAA10');
+    $statusOptions = $listing->getFieldDefinition('status')->getSetting('allowed_values');
+    $this->assertIsArray($statusOptions);
+    $this->assertArrayHasKey('archived', $statusOptions);
+  }
+
+  /**
+   * Checks that the workbench renders mobile listing cards.
+   */
+  public function testWorkbenchBuildsMobileCards(): void {
+    $this->createBookListing('Mary Higgins Clark', 'BDMCC02');
+
+    $formObject = AiListingWorkbenchForm::create($this->container);
+    $formState = new FormState();
+    $form = $formObject->buildForm([], $formState);
+
+    $this->assertArrayHasKey('listings_container', $form);
+    $this->assertArrayHasKey('mobile_cards', $form['listings_container']);
+    $this->assertArrayHasKey('items', $form['listings_container']['mobile_cards']);
+
+    $items = $form['listings_container']['mobile_cards']['items'];
+    $this->assertNotEmpty($items);
+
+    $firstCard = reset($items);
+    $this->assertIsArray($firstCard);
+    $this->assertSame(['ai-batch-mobile-card'], $firstCard['#attributes']['class']);
+
+    $markup = (string) $this->container->get('renderer')->renderRoot($form['listings_container']['mobile_cards']);
+    $this->assertStringContainsString('Mary Higgins Clark', $markup);
+    $this->assertStringContainsString('No image', $markup);
   }
 
   private function getWorkbenchTempstore(): \Drupal\Core\TempStore\PrivateTempStore {

@@ -77,9 +77,7 @@ final class ListingSyncGraphFingerprintService {
    */
   private function normalizeEntity(EntityInterface $entity): array {
     $values = $entity->toArray();
-    unset($values['id']);
-    unset($values['changed']);
-    unset($values['created']);
+    $this->stripVolatileEntityKeys($entity, $values);
 
     $fieldDefinitions = $entity->getFieldDefinitions();
     $normalizedFields = [];
@@ -102,6 +100,27 @@ final class ListingSyncGraphFingerprintService {
       'uuid' => (string) $entity->uuid(),
       'fields' => $normalizedFields,
     ];
+  }
+
+  /**
+   * @param array<string, mixed> $values
+   */
+  private function stripVolatileEntityKeys(EntityInterface $entity, array &$values): void {
+    // Keep fingerprint independent of environment-local storage identifiers.
+    $entityType = $entity->getEntityType();
+    $idKey = $entityType->getKey('id');
+    if (is_string($idKey) && $idKey !== '') {
+      unset($values[$idKey]);
+    }
+
+    $revisionKey = $entityType->getKey('revision');
+    if (is_string($revisionKey) && $revisionKey !== '') {
+      unset($values[$revisionKey]);
+    }
+
+    unset($values['id']);
+    unset($values['changed']);
+    unset($values['created']);
   }
 
   /**

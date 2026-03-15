@@ -140,6 +140,24 @@ final class ListingSyncGraphFingerprintTest extends KernelTestBase {
     $this->assertSame($fingerprintBefore, $fingerprintAfter, 'Fingerprint must ignore volatile timestamp drift caused by import or entity resave.');
   }
 
+  public function testFingerprintPayloadExcludesEntityPrimaryKeyFields(): void {
+    $fixture = $this->createFixtureListingGraph();
+    $graph = $this->graphBuilder->buildForListing($fixture['listing']);
+
+    $service = $this->fingerprintService;
+    $reflection = new \ReflectionClass($service);
+    $normalizeGraph = $reflection->getMethod('normalizeGraph');
+    $normalizeGraph->setAccessible(TRUE);
+
+    /** @var array{
+     *   entities: array<string, array<int, array<string, mixed>>>
+     * } $normalized */
+    $normalized = $normalizeGraph->invoke($service, $graph);
+
+    $filePayload = $normalized['entities']['file'][0]['fields'] ?? [];
+    $this->assertArrayNotHasKey('fid', $filePayload, 'Fingerprint payload must not include environment-local file primary key.');
+  }
+
   public function testGraphTraversalExcludesUnrelatedListingOwnedImages(): void {
     $fixture = $this->createFixtureListingGraph();
 

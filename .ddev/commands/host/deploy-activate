@@ -25,18 +25,58 @@ for arg in "$@"; do
   esac
 done
 
-if [ ! -f "${RELEASE_ENV_PATH}" ]; then
-  echo "Release metadata not found: ${RELEASE_ENV_PATH}"
-  echo "Run: ddev deploy-build"
+fail() {
+  echo "$1" >&2
   exit 1
-fi
+}
 
-# shellcheck source=/dev/null
-source "${RELEASE_ENV_PATH}"
+resolve_git_context() {
+  CURRENT_HEAD_FULL_SHA="$(git -C "${PROJECT_ROOT}" rev-parse HEAD)"
+  CURRENT_HEAD_SHORT_SHA="$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD)"
+}
+
+validate_release_context() {
+  if [ ! -f "${RELEASE_ENV_PATH}" ]; then
+    fail "Release metadata not found: ${RELEASE_ENV_PATH}. Run: ddev deploy-build"
+  fi
+
+  # shellcheck source=/dev/null
+  source "${RELEASE_ENV_PATH}"
+
+  if [ "${HEAD_FULL_SHA:-}" != "${CURRENT_HEAD_FULL_SHA}" ]; then
+    fail "Activate phase aborted. release.env HEAD_FULL_SHA ${HEAD_FULL_SHA:-missing} does not match current HEAD ${CURRENT_HEAD_FULL_SHA}. Run: ddev deploy-build"
+  fi
+  if [ "${HEAD_SHORT_SHA:-}" != "${CURRENT_HEAD_SHORT_SHA}" ]; then
+    fail "Activate phase aborted. release.env HEAD_SHORT_SHA ${HEAD_SHORT_SHA:-missing} does not match current HEAD short ${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build"
+  fi
+  if [ ! -f "${LOCAL_METADATA_PATH:-}" ]; then
+    if [ "${DRY_RUN}" = true ]; then
+      return
+    fi
+    fail "Activate phase aborted. Artifact metadata not found: ${LOCAL_METADATA_PATH:-missing}. Run: ddev deploy-build --force-rebuild"
+  fi
+
+  # shellcheck source=/dev/null
+  source "${LOCAL_METADATA_PATH}"
+
+  if [ "${HEAD_FULL_SHA:-}" != "${CURRENT_HEAD_FULL_SHA}" ]; then
+    fail "Activate phase aborted. Artifact metadata HEAD_FULL_SHA ${HEAD_FULL_SHA:-missing} does not match current HEAD ${CURRENT_HEAD_FULL_SHA}. Run: ddev deploy-build --force-rebuild"
+  fi
+  if [ "${HEAD_SHORT_SHA:-}" != "${CURRENT_HEAD_SHORT_SHA}" ]; then
+    fail "Activate phase aborted. Artifact metadata HEAD_SHORT_SHA ${HEAD_SHORT_SHA:-missing} does not match current HEAD short ${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
+  fi
+  if [ "${IMAGE_TAG:-}" != "git-${CURRENT_HEAD_SHORT_SHA}" ]; then
+    fail "Activate phase aborted. Artifact metadata IMAGE_TAG ${IMAGE_TAG:-missing} does not match expected git-${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
+  fi
+}
+
+resolve_git_context
+validate_release_context
 
 echo "Activate phase"
 echo "- image: ${IMAGE_REF}"
 echo "- artifact: ${REMOTE_ARTIFACT_PATH}"
+echo "- metadata: ${LOCAL_METADATA_PATH}"
 echo "- dry run: ${DRY_RUN}"
 
 if [ "${DRY_RUN}" = true ]; then

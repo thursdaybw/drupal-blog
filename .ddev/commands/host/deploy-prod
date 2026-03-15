@@ -7,6 +7,7 @@ set -euo pipefail
 ## Usage: deploy-prod [--dry-run] [--image-tag=<tag>] [--force-rebuild]
 ## Example: ddev deploy-prod --dry-run
 
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 DRY_RUN=false
 IMAGE_TAG_ARG=""
 FORCE_REBUILD=false
@@ -29,6 +30,53 @@ for arg in "$@"; do
   esac
 done
 
+resolve_git_context() {
+  local head_full_sha head_short_sha git_branch working_tree_dirty origin_main_sha head_vs_origin counts ahead_count behind_count
+  head_full_sha="$(git -C "${PROJECT_ROOT}" rev-parse HEAD)"
+  head_short_sha="$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD)"
+  git_branch="$(git -C "${PROJECT_ROOT}" rev-parse --abbrev-ref HEAD)"
+  if [ -n "$(git -C "${PROJECT_ROOT}" status --short --untracked-files=no)" ]; then
+    working_tree_dirty=true
+  else
+    working_tree_dirty=false
+  fi
+
+  origin_main_sha=""
+  head_vs_origin="origin/main unavailable"
+  if git -C "${PROJECT_ROOT}" rev-parse --verify origin/main >/dev/null 2>&1; then
+    origin_main_sha="$(git -C "${PROJECT_ROOT}" rev-parse origin/main)"
+    counts="$(git -C "${PROJECT_ROOT}" rev-list --left-right --count HEAD...origin/main)"
+    ahead_count="${counts%%$'\t'*}"
+    behind_count="${counts##*$'\t'}"
+    if [ "${ahead_count}" -gt 0 ] && [ "${behind_count}" -gt 0 ]; then
+      head_vs_origin="diverged (+${ahead_count}/-${behind_count})"
+    elif [ "${ahead_count}" -gt 0 ]; then
+      head_vs_origin="ahead (+${ahead_count})"
+    elif [ "${behind_count}" -gt 0 ]; then
+      head_vs_origin="behind (-${behind_count})"
+    else
+      head_vs_origin="equal"
+    fi
+  fi
+
+  echo "Deploy-prod phases: build -> upload -> activate(prod)"
+  echo "- pwd: $(pwd)"
+  echo "- project root: ${PROJECT_ROOT}"
+  echo "- git branch: ${git_branch}"
+  echo "- git HEAD: ${head_full_sha}"
+  echo "- git HEAD short: ${head_short_sha}"
+  echo "- working tree dirty: ${working_tree_dirty}"
+  if [ -n "${origin_main_sha}" ]; then
+    echo "- origin/main: ${origin_main_sha}"
+    echo "- HEAD vs origin/main: ${head_vs_origin}"
+  else
+    echo "- origin/main: unavailable"
+  fi
+  if [[ "${head_vs_origin}" == ahead* ]]; then
+    echo "Warning: local HEAD is ahead of origin/main; production deploy will use the local committed HEAD."
+  fi
+}
+
 BUILD_ARGS=()
 COMMON_ARGS=()
 
@@ -45,8 +93,7 @@ if [ "${DRY_RUN}" = true ]; then
   COMMON_ARGS+=("--dry-run")
 fi
 
-echo "Deploy-prod phases: build -> upload -> activate(prod)"
-
+resolve_git_context
 "$(dirname "$0")/deploy-verify" "${COMMON_ARGS[@]}"
 "$(dirname "$0")/deploy-build" "${BUILD_ARGS[@]}"
 "$(dirname "$0")/deploy-upload" "${COMMON_ARGS[@]}"

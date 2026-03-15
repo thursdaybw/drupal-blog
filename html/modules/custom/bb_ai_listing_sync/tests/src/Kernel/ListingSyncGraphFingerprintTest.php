@@ -104,6 +104,42 @@ final class ListingSyncGraphFingerprintTest extends KernelTestBase {
     $this->assertNotSame($fingerprintAfterEntityChange, $fingerprintAfterLegacyChange, 'Fingerprint must change when legacy sidecar payload changes.');
   }
 
+  public function testFingerprintIgnoresVolatileTimestampDrift(): void {
+    $fixture = $this->createFixtureListingGraph();
+
+    $graphBefore = $this->graphBuilder->buildForListing($fixture['listing']);
+    $fingerprintBefore = $this->fingerprintService->fingerprintGraph($graphBefore);
+
+    $listing = $fixture['listing'];
+    $listing->setChangedTime(((int) $listing->getChangedTime()) + 3600);
+    $listing->save();
+
+    $rootImage = $fixture['root_image'];
+    $rootImage->setChangedTime(((int) $rootImage->getChangedTime()) + 3600);
+    $rootImage->save();
+
+    $this->container->get('database')->update('bb_ebay_legacy_listing_link')
+      ->fields([
+        'created' => time() + 60,
+        'changed' => time() + 120,
+      ])
+      ->condition('listing', (int) $listing->id())
+      ->execute();
+
+    $this->container->get('database')->update('bb_ebay_legacy_listing')
+      ->fields([
+        'last_seen' => time() + 180,
+      ])
+      ->condition('account_id', 1)
+      ->condition('ebay_listing_id', '176582430935')
+      ->execute();
+
+    $graphAfter = $this->graphBuilder->buildForListing($fixture['listing']);
+    $fingerprintAfter = $this->fingerprintService->fingerprintGraph($graphAfter);
+
+    $this->assertSame($fingerprintBefore, $fingerprintAfter, 'Fingerprint must ignore volatile timestamp drift caused by import or entity resave.');
+  }
+
   public function testGraphTraversalExcludesUnrelatedListingOwnedImages(): void {
     $fixture = $this->createFixtureListingGraph();
 

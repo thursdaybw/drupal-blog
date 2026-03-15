@@ -78,6 +78,8 @@ final class ListingSyncGraphFingerprintService {
   private function normalizeEntity(EntityInterface $entity): array {
     $values = $entity->toArray();
     unset($values['id']);
+    unset($values['changed']);
+    unset($values['created']);
 
     $fieldDefinitions = $entity->getFieldDefinitions();
     $normalizedFields = [];
@@ -206,6 +208,7 @@ final class ListingSyncGraphFingerprintService {
         if (!is_array($row)) {
           continue;
         }
+        $row = $this->stripVolatileLegacyFields($tableName, $row);
         $normalizedRows[] = $this->canonicalize($row);
       }
 
@@ -218,6 +221,26 @@ final class ListingSyncGraphFingerprintService {
 
     ksort($normalized);
     return $normalized;
+  }
+
+  /**
+   * @param array<string, mixed> $row
+   *
+   * @return array<string, mixed>
+   */
+  private function stripVolatileLegacyFields(string $tableName, array $row): array {
+    unset($row['id']);
+
+    if ($tableName === 'bb_ebay_legacy_listing_link') {
+      unset($row['changed']);
+      unset($row['created']);
+    }
+
+    if ($tableName === 'bb_ebay_legacy_listing') {
+      unset($row['last_seen']);
+    }
+
+    return $row;
   }
 
   /**
@@ -248,4 +271,3 @@ final class ListingSyncGraphFingerprintService {
   }
 
 }
-

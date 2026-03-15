@@ -161,6 +161,14 @@ ddev deploy-upload
 ddev deploy-prod-activate
 ```
 
+Deploy behavior:
+- `deploy-prod` now prints the resolved local git context before running phases.
+- `deploy-build` derives the image tag from the current local `HEAD`.
+- Existing artifacts are reused only when a matching `.meta` sidecar proves they were built for the same `HEAD`.
+- If artifact metadata is missing or mismatched, deploy fails hard instead of reusing a stale artifact.
+- If local `HEAD` is ahead of `origin/main`, deploy prints a warning and still uses the local committed `HEAD`.
+- Use `--force-rebuild` only when you explicitly want to replace the current artifact for the resolved `HEAD`.
+
 ## Production DB import
 
 Import current local dev DB into production DB container:

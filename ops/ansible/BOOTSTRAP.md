@@ -20,7 +20,12 @@ visudo -f /etc/sudoers.d/bevan-ansible
 Add:
 
 ```sudoers
-bevan ALL=(ALL) NOPASSWD: ALL
+Cmnd_Alias BB_NGINX = /usr/sbin/nginx -t, /usr/bin/systemctl reload nginx, /usr/bin/systemctl status nginx
+Cmnd_Alias BB_CERTBOT = /usr/bin/certbot, /usr/bin/certbot --version
+Cmnd_Alias BB_DOCKER = /usr/bin/docker ps, /usr/bin/docker load *, /usr/bin/docker image inspect *, /usr/bin/docker compose *, /usr/bin/docker exec *
+Cmnd_Alias BB_NGINX_WRITE = /usr/bin/tee /etc/nginx/sites-available/*
+Cmnd_Alias BB_BIND_MOUNT_PREP = /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-prod/html/sites/default/files, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-prod/content, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-prod/content/sync, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-staging/html/sites/default/files, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-staging/content, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-staging/content/sync
+bevan ALL=(root) NOPASSWD: BB_NGINX, BB_CERTBOT, BB_DOCKER, BB_NGINX_WRITE, BB_BIND_MOUNT_PREP
 ```
 
 Set secure permissions:
@@ -33,6 +38,15 @@ chmod 0440 /etc/sudoers.d/bevan-ansible
 
 ```bash
 ansible -i ops/ansible/inventory.ini bb-drupal-prod -m ansible.builtin.command -a "sudo -n true"
+```
+
+Expected:
+- command succeeds with return code 0.
+
+Verify bind-mount directory prep too:
+
+```bash
+ansible -i ops/ansible/inventory.ini bb-drupal-prod -m ansible.builtin.command -a "sudo -n install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-prod/content/sync"
 ```
 
 Expected:

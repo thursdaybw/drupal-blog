@@ -1,7 +1,9 @@
 services:
   ai_listing.image_normalization:
     class: Drupal\ai_listing\Service\ImageNormalizationService
-    arguments: ['@file_system']
+    arguments:
+      - '@file_system'
+      - '@logger.factory'
 
   ai_listing.inventory_sku_resolver:
     class: Drupal\ai_listing\Service\AiListingInventorySkuResolver

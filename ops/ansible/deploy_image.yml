@@ -153,14 +153,19 @@
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
         mode: "0755"
       loop:
         - "{{ deploy_target.workspace }}"
         - "{{ deploy_target.workspace }}/html"
         - "{{ deploy_target.workspace }}/html/sites"
         - "{{ deploy_target.workspace }}/html/sites/default"
+
+    - name: Ensure environment bind-mount source directories exist with expected ownership
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n install -d -o {{ ansible_user }} -g {{ ansible_user }} -m 0755 {{ item }}
+      loop:
+        - "{{ deploy_target.workspace }}/html/sites/default/files"
         - "{{ deploy_target.workspace }}/content"
         - "{{ deploy_target.workspace }}/content/sync"
 

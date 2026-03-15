@@ -11,7 +11,6 @@ use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\BbAiListingType;
 use Drupal\ai_listing\Entity\ListingImage;
 use Drupal\bb_ai_listing_sync\Contract\ListingSyncGraphBuilderInterface;
-use Drupal\bb_ai_listing_sync\Service\ListingGraphPruneService;
 use Drupal\bb_ai_listing_sync\Service\ListingSyncGraphFingerprintService;
 use Drupal\file\Entity\File;
 use Drupal\KernelTests\KernelTestBase;
@@ -39,8 +38,6 @@ final class ListingSyncGraphFingerprintTest extends KernelTestBase {
 
   private ListingSyncGraphFingerprintService $fingerprintService;
 
-  private ListingGraphPruneService $graphPruneService;
-
   protected function setUp(): void {
     parent::setUp();
 
@@ -58,7 +55,6 @@ final class ListingSyncGraphFingerprintTest extends KernelTestBase {
 
     $this->graphBuilder = $this->container->get('bb_ai_listing_sync.export_graph_builder');
     $this->fingerprintService = $this->container->get('bb_ai_listing_sync.graph_fingerprint');
-    $this->graphPruneService = $this->container->get('bb_ai_listing_sync.listing_graph_prune');
   }
 
   public function testGraphTraversalIncludesExpectedRelationships(): void {
@@ -206,78 +202,6 @@ final class ListingSyncGraphFingerprintTest extends KernelTestBase {
     }
 
     $this->assertNotContains((string) $unrelatedImage->uuid(), $listingImageUuids);
-  }
-
-  public function testListingGraphPruneDeletesDestinationOnlyChildren(): void {
-    $fixture = $this->createFixtureListingGraph();
-    $listing = $fixture['listing'];
-    $listingId = (int) $listing->id();
-    $listingUuid = (string) $listing->uuid();
-
-    $extraFile = File::create([
-      'uri' => 'public://ai-listings/prune-test/extra.jpg',
-      'filename' => 'extra.jpg',
-      'status' => 1,
-    ]);
-    $extraFile->save();
-
-    $extraImage = ListingImage::create([
-      'owner' => [
-        'target_type' => 'bb_ai_listing',
-        'target_id' => $listingId,
-      ],
-      'file' => (int) $extraFile->id(),
-      'is_metadata_source' => FALSE,
-      'weight' => 99,
-    ]);
-    $extraImage->save();
-
-    $extraPublication = AiMarketplacePublication::create([
-      'listing' => $listingId,
-      'marketplace_key' => 'ebay',
-      'status' => 'published',
-      'publication_type' => 'FIXED_PRICE',
-      'marketplace_publication_id' => 'extra-pub',
-      'marketplace_listing_id' => 'extra-listing-id',
-      'source' => 'local_publish',
-    ]);
-    $extraPublication->save();
-
-    $graph = $this->graphBuilder->buildForListing($listing);
-    $expectedByType = [];
-    foreach ($graph->entitiesByType() as $entityType => $entities) {
-      if ($entityType === 'bb_ai_listing') {
-        continue;
-      }
-      $uuids = [];
-      foreach ($entities as $entity) {
-        $uuid = (string) $entity->uuid();
-        if ($uuid !== '') {
-          $uuids[$uuid] = $uuid;
-        }
-      }
-      $expectedByType[$entityType] = array_values($uuids);
-    }
-
-    $expectedByType['ai_marketplace_publication'] = array_values(array_filter(
-      $expectedByType['ai_marketplace_publication'] ?? [],
-      static fn(string $uuid): bool => $uuid !== (string) $extraPublication->uuid()
-    ));
-    $expectedByType['listing_image'] = array_values(array_filter(
-      $expectedByType['listing_image'] ?? [],
-      static fn(string $uuid): bool => $uuid !== (string) $extraImage->uuid()
-    ));
-
-    $this->graphPruneService->stageImportPayload($listingUuid, [
-      'expected_uuids' => $expectedByType,
-    ]);
-    $summary = $this->graphPruneService->applyPayloadForListing($listingUuid, $listingId);
-
-    $this->assertGreaterThanOrEqual(1, (int) ($summary['publication_deletes'] ?? 0));
-    $this->assertGreaterThanOrEqual(1, (int) ($summary['listing_image_deletes'] ?? 0));
-
-    $this->assertNull($this->container->get('entity_type.manager')->getStorage('ai_marketplace_publication')->load($extraPublication->id()));
-    $this->assertNull($this->container->get('entity_type.manager')->getStorage('listing_image')->load($extraImage->id()));
   }
 
   private function ensureListingTypeExists(string $id, string $label): void {

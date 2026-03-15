@@ -34,41 +34,19 @@ function bb_ai_listing_sync_apply_legacy_payload_after_save(EntityInterface $ent
 
   /** @var \Drupal\bb_ai_listing_sync\Service\LegacyTableSyncService $legacySync */
   $legacySync = \Drupal::service('bb_ai_listing_sync.legacy_table_sync');
-  $legacySummary = $legacySync->applyPayloadForListing($listingUuid, $listingId);
+  $summary = $legacySync->applyPayloadForListing($listingUuid, $listingId);
 
-  /** @var \Drupal\bb_ai_listing_sync\Service\ListingGraphPruneService $graphPrune */
-  $graphPrune = \Drupal::service('bb_ai_listing_sync.listing_graph_prune');
-  $pruneSummary = $graphPrune->applyPayloadForListing($listingUuid, $listingId);
-
-  $legacyApplied = (($legacySummary['legacy_link_upserts'] ?? 0) > 0) || (($legacySummary['legacy_listing_upserts'] ?? 0) > 0);
-  $graphApplied = (($pruneSummary['bundle_item_deletes'] ?? 0) > 0)
-    || (($pruneSummary['inventory_sku_deletes'] ?? 0) > 0)
-    || (($pruneSummary['publication_deletes'] ?? 0) > 0)
-    || (($pruneSummary['listing_image_deletes'] ?? 0) > 0);
-
-  if ($legacyApplied) {
-    \Drupal::logger('bb_ai_listing_sync')->notice(
-      'Applied legacy payload for listing @listing_id (@listing_uuid): link upserts=@link_upserts listing upserts=@listing_upserts',
-      [
-        '@listing_id' => $listingId,
-        '@listing_uuid' => $listingUuid,
-        '@link_upserts' => (int) ($legacySummary['legacy_link_upserts'] ?? 0),
-        '@listing_upserts' => (int) ($legacySummary['legacy_listing_upserts'] ?? 0),
-      ]
-    );
+  if (($summary['legacy_link_upserts'] ?? 0) === 0 && ($summary['legacy_listing_upserts'] ?? 0) === 0) {
+    return;
   }
 
-  if ($graphApplied) {
-    \Drupal::logger('bb_ai_listing_sync')->notice(
-      'Pruned listing graph drift for listing @listing_id (@listing_uuid): bundle_item_deletes=@bundle_item_deletes inventory_sku_deletes=@inventory_sku_deletes publication_deletes=@publication_deletes listing_image_deletes=@listing_image_deletes',
-      [
-        '@listing_id' => $listingId,
-        '@listing_uuid' => $listingUuid,
-        '@bundle_item_deletes' => (int) ($pruneSummary['bundle_item_deletes'] ?? 0),
-        '@inventory_sku_deletes' => (int) ($pruneSummary['inventory_sku_deletes'] ?? 0),
-        '@publication_deletes' => (int) ($pruneSummary['publication_deletes'] ?? 0),
-        '@listing_image_deletes' => (int) ($pruneSummary['listing_image_deletes'] ?? 0),
-      ]
-    );
-  }
+  \Drupal::logger('bb_ai_listing_sync')->notice(
+    'Applied legacy payload for listing @listing_id (@listing_uuid): link upserts=@link_upserts listing upserts=@listing_upserts',
+    [
+      '@listing_id' => $listingId,
+      '@listing_uuid' => $listingUuid,
+      '@link_upserts' => (int) ($summary['legacy_link_upserts'] ?? 0),
+      '@listing_upserts' => (int) ($summary['legacy_listing_upserts'] ?? 0),
+    ]
+  );
 }

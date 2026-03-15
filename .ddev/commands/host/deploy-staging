@@ -3,9 +3,9 @@
 set -euo pipefail
 
 ## #ddev-generated
-## Description: Build, upload, and activate a production release.
-## Usage: deploy [--dry-run] [--image-tag=<tag>] [--force-rebuild]
-## Example: ddev deploy --dry-run
+## Description: Build, upload, and activate a staging release.
+## Usage: deploy-staging [--dry-run] [--image-tag=<tag>] [--force-rebuild]
+## Example: ddev deploy-staging --dry-run
 
 DRY_RUN=false
 IMAGE_TAG_ARG=""
@@ -45,11 +45,11 @@ if [ "${DRY_RUN}" = true ]; then
   COMMON_ARGS+=("--dry-run")
 fi
 
-echo "Deploy phases: build -> upload -> activate"
+echo "Deploy-staging phases: build -> upload -> activate(staging)"
 
 "$(dirname "$0")/deploy-verify" "${COMMON_ARGS[@]}"
 "$(dirname "$0")/deploy-build" "${BUILD_ARGS[@]}"
 "$(dirname "$0")/deploy-upload" "${COMMON_ARGS[@]}"
 "$(dirname "$0")/deploy-activate" "${COMMON_ARGS[@]}"
 
-echo "Deployment pipeline complete."
+echo "Staging deployment pipeline complete."

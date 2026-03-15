@@ -92,7 +92,7 @@ ddev deploy-activate
 or full pipeline:
 
 ```bash
-ddev deploy
+ddev deploy-staging
 ```
 
 ### 3) If activation fails on missing env keys

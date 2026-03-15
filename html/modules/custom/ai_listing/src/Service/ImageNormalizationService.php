@@ -34,6 +34,12 @@ final class ImageNormalizationService {
       return;
     }
 
+    $exif = @exif_read_data($realPath);
+    $orientation = (int) ($exif['Orientation'] ?? 1);
+    if ($orientation === 1) {
+      return;
+    }
+
     if ($this->canUseImagick()) {
       $imagickResult = $this->normalizeWithImagick($realPath, $uri);
       if ($imagickResult !== NULL) {
@@ -41,9 +47,10 @@ final class ImageNormalizationService {
       }
     }
 
-    // Check EXIF orientation before shell fallback.
-    $exif = @exif_read_data($realPath);
-    if (empty($exif['Orientation']) || (int) $exif['Orientation'] === 1) {
+    if (!$this->canUseConvert()) {
+      $this->logger->warning('Image normalization skipped for {uri}: no supported backend is available.', [
+        'uri' => $uri,
+      ]);
       return;
     }
 
@@ -53,6 +60,10 @@ final class ImageNormalizationService {
 
   private function canUseImagick(): bool {
     return extension_loaded('imagick') && class_exists(\Imagick::class);
+  }
+
+  private function canUseConvert(): bool {
+    return is_executable('/usr/bin/convert');
   }
 
   private function normalizeWithImagick(string $realPath, string $uri): ?bool {
@@ -109,4 +120,5 @@ final class ImageNormalizationService {
       ]);
     }
   }
+
 }

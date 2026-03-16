@@ -18,8 +18,9 @@
     - "{{ prod_workspace_path }}"
     - "{{ staging_workspace_path }}"
 
-- name: Create expected Drupal subdirectories for prod and staging
-  # Create minimal directory tree used by Drupal files storage in each env.
+- name: Create expected Drupal subdirectories except bind-mount dirs
+  # Create minimal directory tree without trying to take ownership of the
+  # files directories, which are managed separately for container writes.
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -30,15 +31,31 @@
     - "{{ prod_workspace_path }}/html"
     - "{{ prod_workspace_path }}/html/sites"
     - "{{ prod_workspace_path }}/html/sites/default"
-    - "{{ prod_workspace_path }}/html/sites/default/files"
     - "{{ prod_workspace_path }}/content"
     - "{{ prod_workspace_path }}/content/sync"
     - "{{ staging_workspace_path }}/html"
     - "{{ staging_workspace_path }}/html/sites"
     - "{{ staging_workspace_path }}/html/sites/default"
-    - "{{ staging_workspace_path }}/html/sites/default/files"
     - "{{ staging_workspace_path }}/content"
     - "{{ staging_workspace_path }}/content/sync"
+
+- name: Check whether Drupal files directories already exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: drupal_files_dirs
+  loop:
+    - "{{ prod_workspace_path }}/html/sites/default/files"
+    - "{{ staging_workspace_path }}/html/sites/default/files"
+
+- name: Create Drupal files directories only when missing
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  loop: "{{ drupal_files_dirs.results }}"
+  when: not item.stat.exists
 
 - name: Add placeholder .env files for prod and staging
   # We create marker files only. Real secrets should be populated separately.

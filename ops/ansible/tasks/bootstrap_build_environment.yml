@@ -1,0 +1,64 @@
+---
+# Prepare a dedicated build environment on the VPS.
+# This is separate from runtime environments like prod/staging.
+
+- name: Create build root directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  loop:
+    - "{{ build_root }}"
+    - "{{ build_tools_dir }}"
+    - "{{ build_cache_dir }}"
+
+- name: Verify PHP CLI is available on remote host
+  ansible.builtin.command:
+    cmd: php -v
+  register: build_php_check
+  changed_when: false
+
+- name: Check whether Composer is already installed in build tools dir
+  ansible.builtin.stat:
+    path: "{{ build_composer_path }}"
+  register: build_composer_stat
+
+- name: Download Composer installer
+  ansible.builtin.get_url:
+    url: https://getcomposer.org/installer
+    dest: "{{ build_tools_dir }}/composer-setup.php"
+    mode: "0755"
+  when: not build_composer_stat.stat.exists
+
+- name: Install Composer into build tools dir
+  ansible.builtin.command:
+    cmd: >-
+      php {{ build_tools_dir }}/composer-setup.php
+      --install-dir={{ build_tools_dir }}
+      --filename=composer
+  when: not build_composer_stat.stat.exists
+
+- name: Remove Composer installer
+  ansible.builtin.file:
+    path: "{{ build_tools_dir }}/composer-setup.php"
+    state: absent
+
+- name: Ensure build checkout exists at repository default branch
+  ansible.builtin.git:
+    repo: "{{ build_repo_url }}"
+    dest: "{{ build_workspace }}"
+    version: "{{ build_repo_version }}"
+    update: true
+    recursive: true
+    accept_hostkey: true
+    key_file: "{{ build_git_key_path }}"
+
+- name: Run composer install in build checkout
+  ansible.builtin.command:
+    cmd: "{{ build_composer_path }} install --no-interaction --prefer-dist"
+    chdir: "{{ build_workspace }}"
+  environment:
+    COMPOSER_HOME: "{{ build_cache_dir }}"
+    GIT_SSH_COMMAND: "ssh -i {{ build_git_key_path }} -o IdentitiesOnly=yes"

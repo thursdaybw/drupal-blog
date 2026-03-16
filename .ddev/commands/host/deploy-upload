@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ## #ddev-generated
-## Description: Upload the latest release artifact to production host.
+## Description: Record release handoff for the latest production image build.
 ## Usage: deploy-upload [--dry-run]
 ## Example: ddev deploy-upload --dry-run
 
@@ -52,101 +52,39 @@ validate_release_context() {
     if [ "${DRY_RUN}" = true ]; then
       return
     fi
-    fail "Upload phase aborted. Artifact metadata not found: ${LOCAL_METADATA_PATH:-missing}. Run: ddev deploy-build --force-rebuild"
+    fail "Upload phase aborted. Build metadata not found: ${LOCAL_METADATA_PATH:-missing}. Run: ddev deploy-build --force-rebuild"
   fi
 
   # shellcheck source=/dev/null
   source "${LOCAL_METADATA_PATH}"
 
   if [ "${HEAD_FULL_SHA:-}" != "${CURRENT_HEAD_FULL_SHA}" ]; then
-    fail "Upload phase aborted. Artifact metadata HEAD_FULL_SHA ${HEAD_FULL_SHA:-missing} does not match current HEAD ${CURRENT_HEAD_FULL_SHA}. Run: ddev deploy-build --force-rebuild"
+    fail "Upload phase aborted. Build metadata HEAD_FULL_SHA ${HEAD_FULL_SHA:-missing} does not match current HEAD ${CURRENT_HEAD_FULL_SHA}. Run: ddev deploy-build --force-rebuild"
   fi
   if [ "${HEAD_SHORT_SHA:-}" != "${CURRENT_HEAD_SHORT_SHA}" ]; then
-    fail "Upload phase aborted. Artifact metadata HEAD_SHORT_SHA ${HEAD_SHORT_SHA:-missing} does not match current HEAD short ${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
+    fail "Upload phase aborted. Build metadata HEAD_SHORT_SHA ${HEAD_SHORT_SHA:-missing} does not match current HEAD short ${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
   fi
   if [ "${IMAGE_TAG:-}" != "git-${CURRENT_HEAD_SHORT_SHA}" ]; then
-    fail "Upload phase aborted. Artifact metadata IMAGE_TAG ${IMAGE_TAG:-missing} does not match expected git-${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
+    fail "Upload phase aborted. Build metadata IMAGE_TAG ${IMAGE_TAG:-missing} does not match expected git-${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
   fi
-}
-
-prune_local_artifacts() {
-  local keep_count=3
-  local files=()
-  local delete_list=()
-  local artifact_path metadata_path
-
-  shopt -s nullglob
-  files=( "${PROJECT_ROOT}/.ddev/.artifacts/${IMAGE_REPOSITORY}-"*.tar.gz )
-  shopt -u nullglob
-
-  if [ "${#files[@]}" -eq 0 ]; then
-    return
-  fi
-
-  IFS=$'\n' files=( $(ls -1t "${files[@]}") )
-
-  if [ "${#files[@]}" -le "${keep_count}" ]; then
-    return
-  fi
-
-  delete_list=( "${files[@]:${keep_count}}" )
-
-  for artifact_path in "${delete_list[@]}"; do
-    metadata_path="${artifact_path%.tar.gz}.meta"
-    rm -f "${artifact_path}" "${metadata_path}"
-    echo "- pruned local artifact: ${artifact_path}"
-    if [ -f "${metadata_path}" ]; then
-      echo "- pruned local metadata: ${metadata_path}"
-    fi
-  done
-}
-
-prune_remote_artifacts() {
-  local keep_count=3
-
-  ssh "${SSH_TARGET}" "
-set -euo pipefail
-mapfile -t files < <(
-  find \"${REMOTE_RELEASE_DIR}\" -maxdepth 1 -type f -name \"${IMAGE_REPOSITORY}-*.tar.gz\" \
-    -printf '%T@ %p\\n' | sort -nr | awk '{print \$2}'
-)
-if [ \${#files[@]} -le ${keep_count} ]; then
-  exit 0
-fi
-for old_file in \"\${files[@]:${keep_count}}\"; do
-  rm -f \"\${old_file}\" \"\${old_file%.tar.gz}.meta\"
-  echo \"- pruned remote artifact: \${old_file}\"
-done
-"
 }
 
 resolve_git_context
 validate_release_context
 
-if [ ! -f "${LOCAL_ARTIFACT_PATH}" ] && [ "${DRY_RUN}" = false ]; then
-  fail "Local artifact not found: ${LOCAL_ARTIFACT_PATH}. Run: ddev deploy-build"
-fi
-
 echo "Upload phase"
-echo "- source: ${LOCAL_ARTIFACT_PATH}"
+echo "- image: ${IMAGE_REF}"
 echo "- metadata: ${LOCAL_METADATA_PATH}"
-echo "- target: ${SSH_TARGET}:${REMOTE_ARTIFACT_PATH}"
+echo "- build host: ${SSH_TARGET}"
 echo "- dry run: ${DRY_RUN}"
 
 if [ "${DRY_RUN}" = true ]; then
-  echo "[dry-run] ssh ${SSH_TARGET} mkdir -p ${REMOTE_RELEASE_DIR}"
-  echo "[dry-run] rsync -av --progress ${LOCAL_ARTIFACT_PATH} ${SSH_TARGET}:${REMOTE_ARTIFACT_PATH}"
-  echo "[dry-run] rsync -av --progress ${LOCAL_METADATA_PATH} ${SSH_TARGET}:${REMOTE_ARTIFACT_PATH%.tar.gz}.meta"
-  echo "[dry-run] keep newest 3 local artifacts matching ${PROJECT_ROOT}/.ddev/.artifacts/${IMAGE_REPOSITORY}-*.tar.gz"
-  echo "[dry-run] keep newest 3 remote artifacts matching ${REMOTE_RELEASE_DIR}/${IMAGE_REPOSITORY}-*.tar.gz"
+  echo "[dry-run] verify ${IMAGE_REF} is already present on ${SSH_TARGET}"
+  echo "[dry-run] no artifact transfer is required because build and runtime share the same VPS"
   exit 0
 fi
 
-ssh "${SSH_TARGET}" "mkdir -p ${REMOTE_RELEASE_DIR}"
-rsync -av --progress "${LOCAL_ARTIFACT_PATH}" "${SSH_TARGET}:${REMOTE_ARTIFACT_PATH}"
-rsync -av --progress "${LOCAL_METADATA_PATH}" "${SSH_TARGET}:${REMOTE_ARTIFACT_PATH%.tar.gz}.meta"
-prune_local_artifacts
-prune_remote_artifacts
+ssh "${SSH_TARGET}" "sudo -n docker image inspect '${IMAGE_REF}' >/dev/null 2>&1"
 
 echo "Upload phase complete."
-echo "- uploaded: ${REMOTE_ARTIFACT_PATH}"
+echo "- image already present on build/runtime VPS: ${IMAGE_REF}"

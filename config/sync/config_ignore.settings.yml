@@ -2,6 +2,6 @@ _core:
   default_config_hash: IgOVnECx6lbVt6JVFnadoEEugneDf3UblPZnOzov43Q
 mode: simple
 ignored_config_entities:
+  - ebay_connector.settings
   - recaptcha.settings
   - video_forge.settings
-  - ebay_connector.settings

@@ -9,6 +9,8 @@ services:
     ports:
       - "${APP_PORT}:80"
     volumes:
+      # Mount environment-specific Drupal settings managed on the host.
+      - ./html/sites/default/settings.php:/var/www/html/sites/default/settings.php
       # Persist Drupal files across container/image updates.
       - ./html/sites/default/files:/var/www/html/sites/default/files
       # Stage content-sync payloads once on the host and expose them directly

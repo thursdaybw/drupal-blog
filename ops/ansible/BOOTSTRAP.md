@@ -22,12 +22,17 @@ Add:
 ```sudoers
 Cmnd_Alias BB_NGINX = /usr/sbin/nginx -t, /usr/bin/systemctl reload nginx, /usr/bin/systemctl status nginx
 Cmnd_Alias BB_CERTBOT = /usr/bin/certbot, /usr/bin/certbot --version
-Cmnd_Alias BB_DOCKER = /usr/bin/docker ps, /usr/bin/docker load *, /usr/bin/docker image inspect *, /usr/bin/docker compose *, /usr/bin/docker exec *
+Cmnd_Alias BB_DOCKER = /usr/bin/docker ps, /usr/bin/docker load *, /usr/bin/docker image inspect *, /usr/bin/docker build *, /usr/bin/docker compose *, /usr/bin/docker exec *
 Cmnd_Alias BB_NGINX_WRITE = /usr/bin/tee /etc/nginx/sites-available/*
 Cmnd_Alias BB_NGINX_LINK = /usr/bin/ln -sfn /etc/nginx/sites-available/* /etc/nginx/sites-enabled/*
 Cmnd_Alias BB_BIND_MOUNT_PREP = /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-prod/html/sites/default/files, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-prod/content, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-prod/content/sync, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-staging/html/sites/default/files, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-staging/content, /usr/bin/install -d -o bevan -g bevan -m 0755 /home/bevan/workspace/bb-platform-staging/content/sync
 bevan ALL=(root) NOPASSWD: BB_NGINX, BB_CERTBOT, BB_DOCKER, BB_NGINX_WRITE, BB_NGINX_LINK, BB_BIND_MOUNT_PREP
 ```
+
+Why `docker build` is included:
+- the VPS now hosts a dedicated Drupal `build` environment under `/home/bevan/build`
+- `deploy-build` runs `sudo -n docker build ...` there
+- without this sudoers entry, remote image builds fail after `composer install`
 
 Set secure permissions:
 

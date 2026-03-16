@@ -6,6 +6,7 @@
 # - validate sudo preflight state
 # - create bevan-owned workspace directories for prod and staging
 # - create minimal Drupal files directory structure under each
+# - prepare a dedicated build workspace and install Composer there
 #
 # It intentionally does NOT deploy application code.
 
@@ -25,9 +26,22 @@
     prod_workspace_path: "{{ workspace_root }}/{{ platform_slug }}-prod"
     staging_workspace_path: "{{ workspace_root }}/{{ platform_slug }}-staging"
 
+    # Dedicated build environment on the VPS.
+    build_root: /home/bevan/build
+    build_workspace: "{{ build_root }}/bevansbench.com.au"
+    build_tools_dir: "{{ build_root }}/tools"
+    build_cache_dir: "{{ build_root }}/.composer"
+    build_composer_path: "{{ build_tools_dir }}/composer"
+    build_repo_url: git@github.com:thursdaybw/drupal-blog.git
+    build_repo_version: main
+    build_git_key_path: /home/bevan/.ssh/bevansbench-drupal_support
+
   tasks:
     - name: Run sudo preflight checks
       ansible.builtin.import_tasks: tasks/preflight_sudo.yml
 
     - name: Run workspace bootstrap tasks
       ansible.builtin.import_tasks: tasks/bootstrap_workspaces.yml
+
+    - name: Run build environment bootstrap tasks
+      ansible.builtin.import_tasks: tasks/bootstrap_build_environment.yml

@@ -169,6 +169,46 @@ Deploy behavior:
 - If local `HEAD` is ahead of `origin/main`, deploy prints a warning and still uses the local committed `HEAD`.
 - Use `--force-rebuild` only when you explicitly want to replace the current artifact for the resolved `HEAD`.
 
+## Build environment SSH key
+
+Why:
+- The VPS build environment clones the private Drupal repo and may fetch private
+  Composer dependencies such as `video_forge`.
+- The bootstrap playbook expects an explicit GitHub SSH key path on the VPS.
+
+### 1) Copy the existing support key onto the VPS
+
+From your laptop:
+
+```bash
+scp /home/bevan/.ssh/bevansbench-drupal_support bb-drupal-prod:/home/bevan/.ssh/bevansbench-drupal_support
+scp /home/bevan/.ssh/bevansbench-drupal_support.pub bb-drupal-prod:/home/bevan/.ssh/bevansbench-drupal_support.pub
+```
+
+On the VPS:
+
+```bash
+chmod 600 /home/bevan/.ssh/bevansbench-drupal_support
+chmod 644 /home/bevan/.ssh/bevansbench-drupal_support.pub
+```
+
+### 2) Add the public key to GitHub
+
+Use the existing support key as a deploy-capable GitHub key for:
+- `git@github.com:thursdaybw/drupal-blog.git`
+- any private Composer dependency fetched via Git SSH
+
+### 3) Rerun bootstrap
+
+```bash
+ansible-playbook -i ops/ansible/inventory.ini ops/ansible/site.yml
+```
+
+Notes:
+- The build bootstrap now uses `/home/bevan/.ssh/bevansbench-drupal_support`
+  explicitly for both the repo clone and `composer install`.
+- No ssh-agent forwarding is required for this path.
+
 ## Production DB import
 
 Import current local dev DB into production DB container:

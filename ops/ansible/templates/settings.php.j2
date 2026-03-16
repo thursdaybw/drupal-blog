@@ -1,0 +1,66 @@
+<?php
+
+// phpcs:ignoreFile
+
+$databases['default']['default'] = [
+  'database' => getenv('MYSQL_DATABASE') ?: 'db',
+  'username' => getenv('MYSQL_USER') ?: 'db',
+  'password' => getenv('MYSQL_PASSWORD') ?: 'db',
+  'prefix' => '',
+  'host' => 'db',
+  'port' => 3306,
+  'isolation_level' => 'READ COMMITTED',
+  'driver' => 'mysql',
+  'namespace' => 'Drupal\\mysql\\Driver\\Database\\mysql',
+  'autoload' => 'core/modules/mysql/src/Driver/Database/mysql/',
+];
+
+$settings['hash_salt'] = '{{ drupal_hash_salt }}';
+$settings['config_sync_directory'] = '../config/sync';
+
+// Content Sync module expects this in the global scope.
+$GLOBALS['content_directories']['sync'] = dirname($app_root) . '/content/sync';
+
+{% if drupal_include_development_services %}
+$settings['container_yamls'][] = DRUPAL_ROOT . '/sites/default/development.services.yml';
+$config['system.logging']['error_level'] = 'verbose';
+{% endif %}
+
+$ebayEnvironment = (string) (getenv('EBAY_CONNECTOR_ENVIRONMENT') ?: '');
+if ($ebayEnvironment !== '') {
+  $config['ebay_connector.settings']['environment'] = $ebayEnvironment;
+}
+
+$ebayProdClientId = (string) (getenv('EBAY_CONNECTOR_PRODUCTION_CLIENT_ID') ?: '');
+if ($ebayProdClientId !== '') {
+  $config['ebay_connector.settings']['production']['client_id'] = $ebayProdClientId;
+}
+
+$ebayProdClientSecret = (string) (getenv('EBAY_CONNECTOR_PRODUCTION_CLIENT_SECRET') ?: '');
+if ($ebayProdClientSecret !== '') {
+  $config['ebay_connector.settings']['production']['client_secret'] = $ebayProdClientSecret;
+}
+
+$ebayProdRuName = (string) (getenv('EBAY_CONNECTOR_PRODUCTION_RU_NAME') ?: '');
+if ($ebayProdRuName !== '') {
+  $config['ebay_connector.settings']['production']['ru_name'] = $ebayProdRuName;
+}
+
+$ebaySandboxClientId = (string) (getenv('EBAY_CONNECTOR_SANDBOX_CLIENT_ID') ?: '');
+if ($ebaySandboxClientId !== '') {
+  $config['ebay_connector.settings']['sandbox']['client_id'] = $ebaySandboxClientId;
+}
+
+$ebaySandboxClientSecret = (string) (getenv('EBAY_CONNECTOR_SANDBOX_CLIENT_SECRET') ?: '');
+if ($ebaySandboxClientSecret !== '') {
+  $config['ebay_connector.settings']['sandbox']['client_secret'] = $ebaySandboxClientSecret;
+}
+
+$ebaySandboxRuName = (string) (getenv('EBAY_CONNECTOR_SANDBOX_RU_NAME') ?: '');
+if ($ebaySandboxRuName !== '') {
+  $config['ebay_connector.settings']['sandbox']['ru_name'] = $ebaySandboxRuName;
+}
+
+if (getenv('IS_DDEV_PROJECT') == 'true' && file_exists(__DIR__ . '/settings.ddev.php')) {
+  include __DIR__ . '/settings.ddev.php';
+}

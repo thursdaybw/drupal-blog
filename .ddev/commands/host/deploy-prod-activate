@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ## #ddev-generated
-## Description: Activate uploaded release artifact on production stack.
+## Description: Activate built release image on production stack.
 ## Usage: deploy-prod-activate [--dry-run]
 ## Example: ddev deploy-prod-activate --dry-run
 
@@ -53,20 +53,20 @@ validate_release_context() {
     if [ "${DRY_RUN}" = true ]; then
       return
     fi
-    fail "Activate phase aborted. Artifact metadata not found: ${LOCAL_METADATA_PATH:-missing}. Run: ddev deploy-build --force-rebuild"
+    fail "Activate phase aborted. Build metadata not found: ${LOCAL_METADATA_PATH:-missing}. Run: ddev deploy-build --force-rebuild"
   fi
 
   # shellcheck source=/dev/null
   source "${LOCAL_METADATA_PATH}"
 
   if [ "${HEAD_FULL_SHA:-}" != "${CURRENT_HEAD_FULL_SHA}" ]; then
-    fail "Activate phase aborted. Artifact metadata HEAD_FULL_SHA ${HEAD_FULL_SHA:-missing} does not match current HEAD ${CURRENT_HEAD_FULL_SHA}. Run: ddev deploy-build --force-rebuild"
+    fail "Activate phase aborted. Build metadata HEAD_FULL_SHA ${HEAD_FULL_SHA:-missing} does not match current HEAD ${CURRENT_HEAD_FULL_SHA}. Run: ddev deploy-build --force-rebuild"
   fi
   if [ "${HEAD_SHORT_SHA:-}" != "${CURRENT_HEAD_SHORT_SHA}" ]; then
-    fail "Activate phase aborted. Artifact metadata HEAD_SHORT_SHA ${HEAD_SHORT_SHA:-missing} does not match current HEAD short ${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
+    fail "Activate phase aborted. Build metadata HEAD_SHORT_SHA ${HEAD_SHORT_SHA:-missing} does not match current HEAD short ${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
   fi
   if [ "${IMAGE_TAG:-}" != "git-${CURRENT_HEAD_SHORT_SHA}" ]; then
-    fail "Activate phase aborted. Artifact metadata IMAGE_TAG ${IMAGE_TAG:-missing} does not match expected git-${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
+    fail "Activate phase aborted. Build metadata IMAGE_TAG ${IMAGE_TAG:-missing} does not match expected git-${CURRENT_HEAD_SHORT_SHA}. Run: ddev deploy-build --force-rebuild"
   fi
 }
 
@@ -75,12 +75,12 @@ validate_release_context
 
 echo "Activate phase (prod)"
 echo "- image: ${IMAGE_REF}"
-echo "- artifact: ${REMOTE_ARTIFACT_PATH}"
+echo "- build/runtime host image: ${IMAGE_REF}"
 echo "- metadata: ${LOCAL_METADATA_PATH}"
 echo "- dry run: ${DRY_RUN}"
 
 if [ "${DRY_RUN}" = true ]; then
-  echo "[dry-run] ansible-playbook -i ${ANSIBLE_INVENTORY} ${ANSIBLE_PLAYBOOK} -e deploy_env=prod -e release_image_ref=${IMAGE_REF} -e release_artifact_name=${ARTIFACT_FILE} -e release_remote_dir=${REMOTE_RELEASE_DIR}"
+  echo "[dry-run] ansible-playbook -i ${ANSIBLE_INVENTORY} ${ANSIBLE_PLAYBOOK} -e deploy_env=prod -e release_image_ref=${IMAGE_REF}"
   exit 0
 fi
 
@@ -88,9 +88,7 @@ ansible-playbook \
   -i "${ANSIBLE_INVENTORY}" \
   "${ANSIBLE_PLAYBOOK}" \
   -e "deploy_env=prod" \
-  -e "release_image_ref=${IMAGE_REF}" \
-  -e "release_artifact_name=${ARTIFACT_FILE}" \
-  -e "release_remote_dir=${REMOTE_RELEASE_DIR}"
+  -e "release_image_ref=${IMAGE_REF}"
 
 echo "Activate phase complete (prod)."
-echo "- loaded image: ${IMAGE_REF}"
+echo "- active image: ${IMAGE_REF}"

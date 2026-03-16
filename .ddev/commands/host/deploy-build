@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ## #ddev-generated
-## Description: Build production image and create a release artifact tarball locally.
+## Description: Build production image on the VPS build environment.
 ## Usage: deploy-build [--dry-run] [--image-tag=<tag>] [--force-rebuild]
 ## Example: ddev deploy-build --dry-run
 
@@ -12,6 +12,11 @@ LOCAL_ARTIFACT_DIR="${PROJECT_ROOT}/.ddev/.artifacts"
 RELEASE_ENV_PATH="${LOCAL_ARTIFACT_DIR}/release.env"
 IMAGE_REPOSITORY="bb-platform-drupal"
 REMOTE_RELEASE_DIR="/home/bevan/workspace/bb-platform-prod/releases"
+SSH_TARGET="bb-drupal-prod"
+REMOTE_BUILD_WORKSPACE="/home/bevan/build/bevansbench.com.au"
+REMOTE_COMPOSER_HOME="/home/bevan/build/.composer"
+REMOTE_COMPOSER_PATH="/home/bevan/build/tools/composer"
+REMOTE_GIT_KEY_PATH="/home/bevan/.ssh/bevansbench-drupal_support"
 
 DRY_RUN=false
 FORCE_REBUILD=false
@@ -126,6 +131,10 @@ write_release_env() {
     LOCAL_METADATA_PATH "${LOCAL_METADATA_PATH}" \
     REMOTE_RELEASE_DIR "${REMOTE_RELEASE_DIR}" \
     REMOTE_ARTIFACT_PATH "${REMOTE_ARTIFACT_PATH}" \
+    REMOTE_BUILD_WORKSPACE "${REMOTE_BUILD_WORKSPACE}" \
+    REMOTE_COMPOSER_HOME "${REMOTE_COMPOSER_HOME}" \
+    REMOTE_COMPOSER_PATH "${REMOTE_COMPOSER_PATH}" \
+    REMOTE_GIT_KEY_PATH "${REMOTE_GIT_KEY_PATH}" \
     HEAD_FULL_SHA "${HEAD_FULL_SHA}" \
     HEAD_SHORT_SHA "${HEAD_SHORT_SHA}" \
     GIT_BRANCH "${GIT_BRANCH}" \
@@ -134,7 +143,7 @@ write_release_env() {
     HEAD_VS_ORIGIN "${HEAD_VS_ORIGIN}"
 }
 
-write_artifact_metadata() {
+write_build_metadata() {
   : > "${LOCAL_METADATA_PATH}"
   write_kv_file "${LOCAL_METADATA_PATH}" \
     HEAD_FULL_SHA "${HEAD_FULL_SHA}" \
@@ -143,6 +152,11 @@ write_artifact_metadata() {
     IMAGE_REF "${IMAGE_REF}" \
     PROJECT_ROOT "${PROJECT_ROOT}" \
     BUILD_TIME "$(date -Iseconds)" \
+    BUILD_LOCATION "remote-vps" \
+    REMOTE_BUILD_WORKSPACE "${REMOTE_BUILD_WORKSPACE}" \
+    REMOTE_COMPOSER_HOME "${REMOTE_COMPOSER_HOME}" \
+    REMOTE_COMPOSER_PATH "${REMOTE_COMPOSER_PATH}" \
+    REMOTE_GIT_KEY_PATH "${REMOTE_GIT_KEY_PATH}" \
     GIT_BRANCH "${GIT_BRANCH}" \
     WORKING_TREE_DIRTY "${WORKING_TREE_DIRTY}" \
     ORIGIN_MAIN_SHA "${ORIGIN_MAIN_SHA}" \
@@ -151,33 +165,31 @@ write_artifact_metadata() {
     LOCAL_ARTIFACT_PATH "${LOCAL_ARTIFACT_PATH}"
 }
 
-validate_existing_artifact_metadata() {
-  if [ ! -f "${LOCAL_METADATA_PATH}" ]; then
-    fail "Build phase aborted. Artifact exists but metadata is missing: ${LOCAL_METADATA_PATH}. Rerun with --force-rebuild."
-  fi
+remote_image_exists() {
+  ssh "${SSH_TARGET}" "sudo -n docker image inspect '${IMAGE_REF}' >/dev/null 2>&1"
+}
 
-  # shellcheck source=/dev/null
-  source "${LOCAL_METADATA_PATH}"
-
-  if [ "${HEAD_FULL_SHA:-}" != "$(git -C "${PROJECT_ROOT}" rev-parse HEAD)" ]; then
-    fail "Build phase aborted. Metadata HEAD_FULL_SHA ${HEAD_FULL_SHA:-missing} does not match current HEAD $(git -C "${PROJECT_ROOT}" rev-parse HEAD). Rerun with --force-rebuild."
-  fi
-  if [ "${HEAD_SHORT_SHA:-}" != "$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD)" ]; then
-    fail "Build phase aborted. Metadata HEAD_SHORT_SHA ${HEAD_SHORT_SHA:-missing} does not match current HEAD short $(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD). Rerun with --force-rebuild."
-  fi
-  if [ "${IMAGE_TAG:-}" != "${EXPECTED_IMAGE_TAG}" ]; then
-    fail "Build phase aborted. Metadata IMAGE_TAG ${IMAGE_TAG:-missing} does not match expected ${EXPECTED_IMAGE_TAG}. Rerun with --force-rebuild."
-  fi
-  if [ "${ARTIFACT_FILE:-}" != "${IMAGE_REPOSITORY}-${EXPECTED_IMAGE_TAG}.tar.gz" ]; then
-    fail "Build phase aborted. Metadata artifact file ${ARTIFACT_FILE:-missing} does not match expected ${IMAGE_REPOSITORY}-${EXPECTED_IMAGE_TAG}.tar.gz. Rerun with --force-rebuild."
-  fi
+run_remote_build() {
+  ssh "${SSH_TARGET}" "
+set -euo pipefail
+export GIT_SSH_COMMAND='ssh -i ${REMOTE_GIT_KEY_PATH} -o IdentitiesOnly=yes'
+cd '${REMOTE_BUILD_WORKSPACE}'
+git fetch --all --tags --prune
+git checkout --force '${HEAD_FULL_SHA}'
+git submodule sync --recursive
+git submodule update --init --recursive
+COMPOSER_HOME='${REMOTE_COMPOSER_HOME}' '${REMOTE_COMPOSER_PATH}' install --no-interaction --prefer-dist
+sudo -n docker build -t '${IMAGE_REF}' -f Dockerfile.prod .
+"
 }
 
 print_plan() {
   echo "Build phase"
   print_git_context
   echo "- image: ${IMAGE_REF}"
-  echo "- local artifact: ${LOCAL_ARTIFACT_PATH}"
+  echo "- build host: ${SSH_TARGET}"
+  echo "- build workspace: ${REMOTE_BUILD_WORKSPACE}"
+  echo "- composer: ${REMOTE_COMPOSER_PATH}"
   echo "- metadata: ${LOCAL_METADATA_PATH}"
   echo "- release env: ${RELEASE_ENV_PATH}"
   echo "- dry run: ${DRY_RUN}"
@@ -187,36 +199,29 @@ print_plan() {
 resolve_git_context
 resolve_artifact_context
 print_plan
+write_release_env
+write_build_metadata
 
 if [ "${DRY_RUN}" = true ]; then
-  write_release_env
-  if [ -f "${LOCAL_ARTIFACT_PATH}" ] && [ "${FORCE_REBUILD}" = false ]; then
-    validate_existing_artifact_metadata
-    echo "[dry-run] verified existing artifact for current HEAD: ${LOCAL_ARTIFACT_PATH}"
-    echo "[dry-run] would skip build because artifact metadata matches current HEAD"
-  else
-    echo "[dry-run] docker build -t ${IMAGE_REF} -f ${PROJECT_ROOT}/Dockerfile.prod ${PROJECT_ROOT}"
-    echo "[dry-run] docker save ${IMAGE_REF} | gzip > ${LOCAL_ARTIFACT_PATH}"
-    echo "[dry-run] write metadata: ${LOCAL_METADATA_PATH}"
+  if [ "${FORCE_REBUILD}" = false ]; then
+    echo "[dry-run] ssh ${SSH_TARGET} \"sudo -n docker image inspect '${IMAGE_REF}' >/dev/null 2>&1\""
+    echo "[dry-run] if image exists, build is skipped"
   fi
+  echo "[dry-run] ssh ${SSH_TARGET} \"export GIT_SSH_COMMAND='ssh -i ${REMOTE_GIT_KEY_PATH} -o IdentitiesOnly=yes'; cd '${REMOTE_BUILD_WORKSPACE}'; git fetch --all --tags --prune; git checkout --force '${HEAD_FULL_SHA}'; git submodule sync --recursive; git submodule update --init --recursive; COMPOSER_HOME='${REMOTE_COMPOSER_HOME}' '${REMOTE_COMPOSER_PATH}' install --no-interaction --prefer-dist; sudo -n docker build -t '${IMAGE_REF}' -f Dockerfile.prod .\""
   exit 0
 fi
 
-write_release_env
-if [ -f "${LOCAL_ARTIFACT_PATH}" ] && [ "${FORCE_REBUILD}" = false ]; then
-  validate_existing_artifact_metadata
+if [ "${FORCE_REBUILD}" = false ] && remote_image_exists; then
   echo "Build phase skipped."
-  echo "- artifact already exists and metadata matches current HEAD: ${LOCAL_ARTIFACT_PATH}"
+  echo "- remote image already exists and matches current HEAD: ${IMAGE_REF}"
   exit 0
 fi
 
-docker build -t "${IMAGE_REF}" -f "${PROJECT_ROOT}/Dockerfile.prod" "${PROJECT_ROOT}"
-docker save "${IMAGE_REF}" | gzip > "${LOCAL_ARTIFACT_PATH}"
-write_artifact_metadata
-write_release_env
+run_remote_build
 
 echo "Build phase complete."
 echo "- image: ${IMAGE_REF}"
-echo "- artifact: ${LOCAL_ARTIFACT_PATH}"
+echo "- build host: ${SSH_TARGET}"
+echo "- build workspace: ${REMOTE_BUILD_WORKSPACE}"
 echo "- metadata: ${LOCAL_METADATA_PATH}"
 echo "- release env: ${RELEASE_ENV_PATH}"

@@ -22,8 +22,10 @@ final class EbayMirrorOfferCommand extends DrushCommands {
    * Sync eBay offers into the local mirror table.
    *
    * @command bb-ebay-mirror:sync-offers
+   * @option account-id Explicit eBay account ID.
    */
-  public function syncOffers(?int $accountId = NULL): void {
+  public function syncOffers(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $results = $this->offerSyncService->syncAll($account);
 
@@ -55,6 +57,27 @@ final class EbayMirrorOfferCommand extends DrushCommands {
     }
 
     return $account;
+  }
+
+  /**
+   * @param array{account-id?:mixed} $options
+   */
+  private function resolveRequestedAccountId(?int $accountId, array $options): ?int {
+    $namedAccountId = $options['account-id'] ?? NULL;
+    if ($namedAccountId === NULL || $namedAccountId === '') {
+      return $accountId;
+    }
+
+    $namedAccountId = (int) $namedAccountId;
+    if ($accountId !== NULL && $accountId !== $namedAccountId) {
+      throw new \RuntimeException(sprintf(
+        'Conflicting account IDs provided: positional %d and --account-id=%d.',
+        $accountId,
+        $namedAccountId
+      ));
+    }
+
+    return $namedAccountId;
   }
 
 }

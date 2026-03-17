@@ -22,8 +22,12 @@ final class EbayMirrorInventoryCommand extends DrushCommands {
    * Sync eBay inventory items into the local mirror table.
    *
    * @command bb-ebay-mirror:sync-inventory
+   * @option account-id Explicit eBay account ID.
+   * @option page-size API page size to request.
    */
-  public function syncInventory(?int $accountId = NULL, int $pageSize = 100): void {
+  public function syncInventory(?int $accountId = NULL, array $options = ['account-id' => NULL, 'page-size' => 100]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
+    $pageSize = (int) ($options['page-size'] ?? 100);
     $account = $this->resolveAccount($accountId);
     $results = $this->inventorySyncService->syncAll($account, $pageSize);
 
@@ -55,6 +59,27 @@ final class EbayMirrorInventoryCommand extends DrushCommands {
     }
 
     return $account;
+  }
+
+  /**
+   * @param array{account-id?:mixed,page-size?:mixed} $options
+   */
+  private function resolveRequestedAccountId(?int $accountId, array $options): ?int {
+    $namedAccountId = $options['account-id'] ?? NULL;
+    if ($namedAccountId === NULL || $namedAccountId === '') {
+      return $accountId;
+    }
+
+    $namedAccountId = (int) $namedAccountId;
+    if ($accountId !== NULL && $accountId !== $namedAccountId) {
+      throw new \RuntimeException(sprintf(
+        'Conflicting account IDs provided: positional %d and --account-id=%d.',
+        $accountId,
+        $namedAccountId
+      ));
+    }
+
+    return $namedAccountId;
   }
 
 }

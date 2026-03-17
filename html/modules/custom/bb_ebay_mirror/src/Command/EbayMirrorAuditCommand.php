@@ -22,8 +22,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit local published eBay listings that are missing mirrored inventory.
    *
    * @command bb-ebay-mirror:audit-missing-inventory
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditMissingInventory(?int $accountId = NULL): void {
+  public function auditMissingInventory(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findPublishedListingsMissingMirroredInventory((int) $account->id());
 
@@ -52,8 +54,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit local published eBay listings that are missing mirrored offers.
    *
    * @command bb-ebay-mirror:audit-missing-offers
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditMissingOffers(?int $accountId = NULL): void {
+  public function auditMissingOffers(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findPublishedListingsMissingMirroredOffer((int) $account->id());
 
@@ -82,8 +86,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit mirrored inventory rows that have no local published listing.
    *
    * @command bb-ebay-mirror:audit-orphaned-inventory
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditOrphanedInventory(?int $accountId = NULL): void {
+  public function auditOrphanedInventory(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findMirroredInventoryMissingLocalListing((int) $account->id());
 
@@ -118,8 +124,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit mirrored offers that have no local published listing.
    *
    * @command bb-ebay-mirror:audit-orphaned-offers
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditOrphanedOffers(?int $accountId = NULL): void {
+  public function auditOrphanedOffers(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findMirroredOffersMissingLocalListing((int) $account->id());
 
@@ -155,8 +163,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit mirrored SKUs whose embedded listing identifier disagrees with Drupal.
    *
    * @command bb-ebay-mirror:audit-sku-link-mismatch
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditSkuLinkMismatch(?int $accountId = NULL): void {
+  public function auditSkuLinkMismatch(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findSkuLinkMismatches((int) $account->id());
 
@@ -196,8 +206,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit local listings that resolve from multiple mirrored inventory SKUs.
    *
    * @command bb-ebay-mirror:audit-multiple-inventory
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditMultipleInventory(?int $accountId = NULL): void {
+  public function auditMultipleInventory(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findListingsWithMultipleMirroredInventorySkus((int) $account->id());
 
@@ -233,8 +245,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit local listings that resolve from multiple mirrored offers.
    *
    * @command bb-ebay-mirror:audit-multiple-offers
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditMultipleOffers(?int $accountId = NULL): void {
+  public function auditMultipleOffers(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findListingsWithMultipleMirroredOffers((int) $account->id());
 
@@ -271,8 +285,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit legacy listings that are not yet visible in the Sell offer mirror.
    *
    * @command bb-ebay-mirror:audit-legacy-unmigrated
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditLegacyUnmigrated(?int $accountId = NULL): void {
+  public function auditLegacyUnmigrated(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findLegacyListingsMissingMirroredSellOffer((int) $account->id());
 
@@ -308,8 +324,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit legacy listings that are already visible in the Sell offer mirror.
    *
    * @command bb-ebay-mirror:audit-legacy-migrated
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditLegacyMigrated(?int $accountId = NULL): void {
+  public function auditLegacyMigrated(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findLegacyListingsWithMirroredSellOffer((int) $account->id());
 
@@ -345,8 +363,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit legacy listings that share duplicate SKUs.
    *
    * @command bb-ebay-mirror:audit-legacy-duplicate-sku
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditLegacyDuplicateSku(?int $accountId = NULL): void {
+  public function auditLegacyDuplicateSku(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findLegacyListingsWithDuplicateSku((int) $account->id());
 
@@ -382,8 +402,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit legacy listings that have no usable SKU.
    *
    * @command bb-ebay-mirror:audit-legacy-missing-sku
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditLegacyMissingSku(?int $accountId = NULL): void {
+  public function auditLegacyMissingSku(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findLegacyListingsMissingSku((int) $account->id());
 
@@ -418,8 +440,10 @@ final class EbayMirrorAuditCommand extends DrushCommands {
    * Audit legacy listings that are clean migration candidates.
    *
    * @command bb-ebay-mirror:audit-legacy-ready-to-migrate
+   * @option account-id Explicit eBay account ID.
    */
-  public function auditLegacyReadyToMigrate(?int $accountId = NULL): void {
+  public function auditLegacyReadyToMigrate(?int $accountId = NULL, array $options = ['account-id' => NULL]): void {
+    $accountId = $this->resolveRequestedAccountId($accountId, $options);
     $account = $this->resolveAccount($accountId);
     $rows = $this->auditService->findLegacyListingsReadyToMigrate((int) $account->id());
 
@@ -470,6 +494,27 @@ final class EbayMirrorAuditCommand extends DrushCommands {
     }
 
     return $account;
+  }
+
+  /**
+   * @param array{account-id?:mixed} $options
+   */
+  private function resolveRequestedAccountId(?int $accountId, array $options): ?int {
+    $namedAccountId = $options['account-id'] ?? NULL;
+    if ($namedAccountId === NULL || $namedAccountId === '') {
+      return $accountId;
+    }
+
+    $namedAccountId = (int) $namedAccountId;
+    if ($accountId !== NULL && $accountId !== $namedAccountId) {
+      throw new \RuntimeException(sprintf(
+        'Conflicting account IDs provided: positional %d and --account-id=%d.',
+        $accountId,
+        $namedAccountId
+      ));
+    }
+
+    return $namedAccountId;
   }
 
   /**

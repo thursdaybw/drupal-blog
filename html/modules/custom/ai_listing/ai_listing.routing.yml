@@ -14,6 +14,14 @@ ai_listing.bundle_add:
   requirements:
     _permission: 'administer ai listings'
 
+ai_listing.bulk_intake:
+  path: '/admin/ai-listing/bulk-intake'
+  defaults:
+    _form: '\Drupal\ai_listing\Form\AiListingBulkIntakeForm'
+    _title: 'Bulk image intake'
+  requirements:
+    _permission: 'administer ai listings'
+
 ai_listing.workbench:
   path: '/admin/ai-listings/workbench'
   defaults:

@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 final class AiBookBundleListingUploadForm extends FormBase {
 
   use DependencySerializationTrait;
+  private const INTAKE_MEDIA_BUNDLE = 'ai_listing_intake';
 
   public function __construct(
     private FileSystemInterface $fileSystem,
@@ -38,6 +39,7 @@ final class AiBookBundleListingUploadForm extends FormBase {
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $form['#tree'] = TRUE;
     $form['#attached']['library'][] = 'ai_listing/bundle_upload';
+    $form['#attached']['library'][] = 'ai_listing/intake_picker';
 
     $bundleGroups = $this->getBundleGroups($form_state);
     $stagedImages = $this->getStagedImages($form_state);
@@ -70,8 +72,23 @@ final class AiBookBundleListingUploadForm extends FormBase {
       '#attributes' => ['accept' => 'image/*'],
       '#description' => $this->t('These images are used for listing/publishing and bundle-level condition context.'),
     ];
+    $form['workspace']['bundle_upload']['intake_picker'] = $this->buildIntakePickerElement(
+      $this->t('Attach bundle-level images from intake library'),
+      (array) $form_state->getValue(['workspace', 'bundle_upload', 'intake_picker', 'items'], []),
+    );
 
     $form['workspace']['bundle_upload']['actions'] = ['#type' => 'actions'];
+    $form['workspace']['bundle_upload']['actions']['attach_listing_intake_images'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Attach selected intake images'),
+      '#name' => 'attach_listing_intake_images',
+      '#limit_validation_errors' => [],
+      '#submit' => ['::submitAttachBundleListingIntakeImages'],
+      '#ajax' => [
+        'callback' => '::ajaxRefreshWorkspace',
+        'wrapper' => 'ai-book-bundle-upload-workspace',
+      ],
+    ];
     $form['workspace']['bundle_upload']['actions']['upload_listing_images'] = [
       '#type' => 'submit',
       '#value' => $this->t('Upload bundle-level images'),
@@ -99,8 +116,23 @@ final class AiBookBundleListingUploadForm extends FormBase {
       '#multiple' => TRUE,
       '#attributes' => ['accept' => 'image/*'],
     ];
+    $form['workspace']['upload']['intake_picker'] = $this->buildIntakePickerElement(
+      $this->t('Attach bundle item images from intake library'),
+      (array) $form_state->getValue(['workspace', 'upload', 'intake_picker', 'items'], []),
+    );
 
     $form['workspace']['upload']['actions'] = ['#type' => 'actions'];
+    $form['workspace']['upload']['actions']['attach_item_intake_images'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Attach selected intake images'),
+      '#name' => 'attach_item_intake_images',
+      '#limit_validation_errors' => [],
+      '#submit' => ['::submitAttachItemIntakeImages'],
+      '#ajax' => [
+        'callback' => '::ajaxRefreshWorkspace',
+        'wrapper' => 'ai-book-bundle-upload-workspace',
+      ],
+    ];
     $form['workspace']['upload']['actions']['upload_images'] = [
       '#type' => 'submit',
       '#value' => $this->t('Upload selected images'),
@@ -223,6 +255,72 @@ final class AiBookBundleListingUploadForm extends FormBase {
     $this->setBundleListingImageIds($form_state, $staged);
 
     $this->messenger()->addStatus((string) $this->t('Uploaded @count bundle-level image(s).', ['@count' => count($newFiles)]));
+    $form_state->setRebuild(TRUE);
+  }
+
+  public function submitAttachBundleListingIntakeImages(array &$form, FormStateInterface $form_state): void {
+    $mediaIds = $this->extractSelectedMediaIdsFromPickerRows(
+      (array) $form_state->getValue(['workspace', 'bundle_upload', 'intake_picker', 'items'], []),
+    );
+
+    if ($mediaIds === []) {
+      $this->messenger()->addWarning((string) $this->t('No intake media selected.'));
+      $form_state->setRebuild(TRUE);
+      return;
+    }
+
+    $fileIds = $this->loadIntakeFileIdsFromMediaIds($mediaIds);
+    if ($fileIds === []) {
+      $this->messenger()->addWarning((string) $this->t('Selected media did not include attachable image files.'));
+      $form_state->setRebuild(TRUE);
+      return;
+    }
+
+    $staged = $this->getBundleListingImageIds($form_state);
+    $before = count($staged);
+    $this->setBundleListingImageIds($form_state, array_merge($staged, $fileIds));
+    $after = count($this->getBundleListingImageIds($form_state));
+
+    $this->messenger()->addStatus((string) $this->t('Attached @count intake image(s).', ['@count' => $after - $before]));
+    $form_state->setRebuild(TRUE);
+  }
+
+  public function submitAttachItemIntakeImages(array &$form, FormStateInterface $form_state): void {
+    $mediaIds = $this->extractSelectedMediaIdsFromPickerRows(
+      (array) $form_state->getValue(['workspace', 'upload', 'intake_picker', 'items'], []),
+    );
+
+    if ($mediaIds === []) {
+      $this->messenger()->addWarning((string) $this->t('No intake media selected.'));
+      $form_state->setRebuild(TRUE);
+      return;
+    }
+
+    $fileIds = $this->loadIntakeFileIdsFromMediaIds($mediaIds);
+    if ($fileIds === []) {
+      $this->messenger()->addWarning((string) $this->t('Selected media did not include attachable image files.'));
+      $form_state->setRebuild(TRUE);
+      return;
+    }
+
+    $groups = $this->getBundleGroups($form_state);
+    $staged = $this->getStagedImages($form_state);
+    $targetGroup = $this->deriveNextUploadGroupKey($groups, $staged);
+    if (!in_array($targetGroup, $groups, TRUE)) {
+      $groups[] = $targetGroup;
+      $this->setBundleGroups($form_state, $groups);
+    }
+
+    $before = count($staged);
+    foreach ($fileIds as $fid) {
+      if (isset($staged[$fid])) {
+        continue;
+      }
+      $staged[$fid] = ['group' => $targetGroup];
+    }
+    $this->setStagedImages($form_state, $staged);
+
+    $this->messenger()->addStatus((string) $this->t('Attached @count intake image(s).', ['@count' => count($staged) - $before]));
     $form_state->setRebuild(TRUE);
   }
 
@@ -782,6 +880,153 @@ final class AiBookBundleListingUploadForm extends FormBase {
     $clientName = strtolower((string) $upload->getClientOriginalName());
     $extension = pathinfo($clientName, PATHINFO_EXTENSION);
     return in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff'], TRUE);
+  }
+
+  /**
+   * @param array<string,mixed> $postedItems
+   */
+  private function buildIntakePickerElement(mixed $title, array $postedItems): array {
+    $element = [
+      '#type' => 'details',
+      '#title' => $title,
+      '#open' => FALSE,
+      '#description' => $this->t('Select images by thumbnail, then click "Attach selected intake images".'),
+    ];
+
+    $rows = $this->loadRecentIntakeMediaRows();
+    if ($rows === []) {
+      $element['empty'] = [
+        '#markup' => '<p><em>' . $this->t('No AI Listing Intake media found yet.') . '</em></p>',
+      ];
+      return $element;
+    }
+
+    $element['items'] = [
+      '#type' => 'table',
+      '#header' => [
+        $this->t('Attach'),
+        $this->t('Preview'),
+        $this->t('Media name'),
+        $this->t('File'),
+      ],
+    ];
+
+    foreach ($rows as $mediaId => $row) {
+      $itemKey = (string) $mediaId;
+      $element['items'][$itemKey]['attach'] = [
+        '#type' => 'checkbox',
+        '#default_value' => !empty($postedItems[$itemKey]['attach']),
+        '#attributes' => ['class' => ['ai-intake-picker-checkbox']],
+      ];
+      $element['items'][$itemKey]['preview'] = [
+        '#theme' => 'image_style',
+        '#style_name' => 'thumbnail',
+        '#uri' => $row['file_uri'],
+      ];
+      $element['items'][$itemKey]['name'] = [
+        '#plain_text' => $row['name'],
+      ];
+      $element['items'][$itemKey]['file'] = [
+        '#plain_text' => $row['file_name'],
+      ];
+    }
+
+    return $element;
+  }
+
+  /**
+   * @return array<int,array{name:string,file_name:string,file_uri:string}>
+   */
+  private function loadRecentIntakeMediaRows(): array {
+    $ids = $this->entityTypeManager
+      ->getStorage('media')
+      ->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('bundle', self::INTAKE_MEDIA_BUNDLE)
+      ->sort('created', 'DESC')
+      ->sort('mid', 'DESC')
+      ->range(0, 200)
+      ->execute();
+
+    if ($ids === []) {
+      return [];
+    }
+
+    $rows = [];
+    $mediaEntities = $this->entityTypeManager->getStorage('media')->loadMultiple($ids);
+    foreach (array_values($ids) as $mediaId) {
+      $media = $mediaEntities[$mediaId] ?? NULL;
+      if ($media === NULL) {
+        continue;
+      }
+      if (!$media->hasField('field_media_image')) {
+        continue;
+      }
+      $imageField = $media->get('field_media_image');
+      if ($imageField->isEmpty() || $imageField->entity === NULL) {
+        continue;
+      }
+      $file = $imageField->entity;
+      $mediaId = (int) $media->id();
+
+      $rows[$mediaId] = [
+        'name' => (string) $media->label(),
+        'file_name' => (string) $file->getFilename(),
+        'file_uri' => (string) $file->getFileUri(),
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * @param array<string,mixed> $rows
+   * @return int[]
+   */
+  private function extractSelectedMediaIdsFromPickerRows(array $rows): array {
+    $ids = [];
+    foreach ($rows as $mediaId => $row) {
+      if (!is_array($row) || empty($row['attach'])) {
+        continue;
+      }
+      $id = (int) $mediaId;
+      if ($id > 0) {
+        $ids[] = $id;
+      }
+    }
+
+    return array_values(array_unique($ids));
+  }
+
+  /**
+   * @param int[] $mediaIds
+   * @return int[]
+   */
+  private function loadIntakeFileIdsFromMediaIds(array $mediaIds): array {
+    $mediaStorage = $this->entityTypeManager->getStorage('media');
+    $mediaEntities = $mediaStorage->loadMultiple($mediaIds);
+    $fileIds = [];
+
+    foreach ($mediaEntities as $media) {
+      if ($media->bundle() !== self::INTAKE_MEDIA_BUNDLE) {
+        continue;
+      }
+      if (!$media->hasField('field_media_image')) {
+        continue;
+      }
+
+      $imageField = $media->get('field_media_image');
+      if ($imageField->isEmpty()) {
+        continue;
+      }
+
+      $fileId = (int) $imageField->target_id;
+      if ($fileId > 0) {
+        $fileIds[] = $fileId;
+      }
+    }
+
+    return array_values(array_unique($fileIds));
   }
 
 }

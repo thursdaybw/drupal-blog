@@ -158,6 +158,82 @@ The system is evolvable.
 
 The next meaningful refactor is configuration extraction, not product-type polymorphism.
 
+## Image Intake Architecture
+
+Current image intake is split into two workflow stages:
+
+- `Bulk image intake` is the intake source.
+- `Add AI Book Listing` is the listing creation surface.
+
+The intent is:
+
+- ingest many photos in one batch
+- preserve grouping as sets during intake
+- create listings later from those grouped sets
+- avoid waiting on per-listing uploads during the listing workflow
+
+### Bulk Intake
+
+`/admin/ai-listing/bulk-intake` now treats one submit as a batch of sets.
+
+- The operator adds `Set 1`, `Set 2`, `Set 3`, and so on in the browser.
+- Files are not uploaded per set as they are chosen.
+- Upload happens once on final submit.
+- Each submitted set is written under `public://ai-intake/<generated-set-id>/...`.
+- Intake media names are temporary transport names only; they are not treated as durable product metadata.
+
+This matters architecturally:
+
+- grouping belongs to intake, not to the single-listing add form
+- set identity is infrastructural and temporary
+- listing metadata remains the responsibility of `bb_ai_listing` and later AI inference
+
+### Listing Creation
+
+`/admin/ai-listing/add` remains a single-listing entry point.
+
+- Manual upload is still supported.
+- Intake-backed creation now reads from available intake sets.
+- Only intake images not already linked via `listing_image` are offered.
+- The operator should select a set and save the listing.
+
+This preserves the correct boundary:
+
+- `add` creates one listing
+- `bulk-intake` creates grouped intake inventory
+
+### Assignment Rule
+
+An intake image becomes unavailable for future selection once it is linked to a listing through `listing_image`.
+
+That gives the current system a simple operational invariant:
+
+- one intake image belongs to at most one listing
+
+If reuse is required later, that should be introduced deliberately as a new capability rather than by weakening this rule accidentally.
+
+### Current UX Gap
+
+The target operator flow is:
+
+- select one or more intake sets
+- save the listing directly
+
+The architecture now supports set-based intake and set-aware availability filtering, but the listing form UX is still in transition.
+
+Known gap:
+
+- metadata-source selection is still optimized for the staged-upload path
+- when saving directly from intake selection, metadata source defaults are currently inferred in form logic rather than being made explicit in the UI
+
+That is a UX/composition gap, not a model-boundary problem.
+
+The next UI refinement should be:
+
+- make intake-set selection the primary control
+- remove redundant intermediate controls
+- only expose per-image controls when the operator explicitly drills into a set
+
 ## TODO
 
 - Split review UI by listing bundle.

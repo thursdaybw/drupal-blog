@@ -8,7 +8,6 @@ use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\file\Entity\File;
@@ -19,17 +18,17 @@ final class AiBookListingUploadForm extends FormBase {
 
   use DependencySerializationTrait;
 
+  private const INTAKE_MEDIA_BUNDLE = 'ai_listing_intake';
+
   public function __construct(
     private FileSystemInterface $fileSystem,
     private EntityTypeManagerInterface $entityTypeManager,
-    private FileUrlGeneratorInterface $fileUrlGenerator,
   ) {}
 
   public static function create(ContainerInterface $container): self {
     return new self(
       $container->get('file_system'),
       $container->get('entity_type.manager'),
-      $container->get('file_url_generator'),
     );
   }
 
@@ -40,37 +39,34 @@ final class AiBookListingUploadForm extends FormBase {
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $form['#tree'] = TRUE;
     $form['#attached']['library'][] = 'ai_listing/bundle_upload';
+    $form['#attached']['library'][] = 'ai_listing/intake_picker';
 
     $stagedFileIds = $this->getStagedFileIds($form_state);
 
     $form['workspace'] = [
       '#type' => 'container',
-      '#attributes' => [
-        'id' => 'ai-book-listing-upload-workspace',
-      ],
+      '#attributes' => ['id' => 'ai-book-listing-upload-workspace'],
     ];
 
     $form['workspace']['upload'] = [
       '#theme' => 'ai_bundle_upload_panel',
       '#title' => 'Book Images',
       '#description' => 'Select one or more images and drop them anywhere on this panel.',
-      '#attributes' => [
-        'id' => 'ai-book-upload-panel-images',
-      ],
+      '#attributes' => ['id' => 'ai-book-upload-panel-images'],
     ];
 
     $form['workspace']['upload']['file_input'] = [
       '#type' => 'file',
       '#title' => 'Add images',
       '#multiple' => TRUE,
-      '#attributes' => [
-        'accept' => 'image/*',
-      ],
+      '#attributes' => ['accept' => 'image/*'],
     ];
 
-    $form['workspace']['upload']['actions'] = [
-      '#type' => 'actions',
-    ];
+    $form['workspace']['upload']['intake_picker'] = $this->buildIntakePickerElement(
+      (array) $form_state->getValue(['workspace', 'upload', 'intake_picker'], []),
+    );
+
+    $form['workspace']['upload']['actions'] = ['#type' => 'actions'];
     $form['workspace']['upload']['actions']['upload_images'] = [
       '#type' => 'submit',
       '#value' => 'Upload selected images',
@@ -101,9 +97,7 @@ final class AiBookListingUploadForm extends FormBase {
         '#type' => 'value',
         '#value' => $stagedFileIds,
       ];
-      $form['workspace']['staged_images']['remove_actions'] = [
-        '#type' => 'actions',
-      ];
+      $form['workspace']['staged_images']['remove_actions'] = ['#type' => 'actions'];
       $form['workspace']['staged_images']['remove_actions']['remove_selected'] = [
         '#type' => 'submit',
         '#value' => 'Remove selected images',
@@ -117,9 +111,7 @@ final class AiBookListingUploadForm extends FormBase {
       ];
     }
 
-    $form['actions'] = [
-      '#type' => 'actions',
-    ];
+    $form['actions'] = ['#type' => 'actions'];
     $form['actions']['submit'] = [
       '#type' => 'submit',
       '#value' => 'Save Listing',
@@ -134,8 +126,14 @@ final class AiBookListingUploadForm extends FormBase {
   }
 
   public function validateForm(array &$form, FormStateInterface $form_state): void {
-    $fileIds = $this->getStagedFileIds($form_state);
+    $fileIds = $this->getEffectiveFileIds($form_state);
     if ($fileIds === []) {
+      return;
+    }
+
+    // Intake-selected sets/images have no staged metadata UI yet; defaulting
+    // metadata selection is handled on save.
+    if ($this->getStagedFileIds($form_state) === []) {
       return;
     }
 
@@ -152,7 +150,6 @@ final class AiBookListingUploadForm extends FormBase {
 
   public function submitUploadImages(array &$form, FormStateInterface $form_state): void {
     $stagedFileIds = $this->getStagedFileIds($form_state);
-    $this->debugUploadRequest();
     $newFiles = $this->saveUploadedImagesToTemp();
 
     if ($newFiles === []) {
@@ -204,10 +201,11 @@ final class AiBookListingUploadForm extends FormBase {
   }
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $fileIds = $this->getStagedFileIds($form_state);
+    $stagedFileIds = $this->getStagedFileIds($form_state);
+    $fileIds = $this->getEffectiveFileIds($form_state);
 
     if ($fileIds === []) {
-      $this->messenger()->addError('Upload at least one image before saving.');
+      $this->messenger()->addError('Upload at least one image or select an intake set before saving.');
       $form_state->setRebuild(TRUE);
       return;
     }
@@ -226,6 +224,7 @@ final class AiBookListingUploadForm extends FormBase {
     );
 
     $metadataSelections = (array) $form_state->getValue(['workspace', 'staged_images', 'items'], []);
+    $useDefaultMetadataSelection = ($stagedFileIds === []);
     $weight = 0;
 
     foreach ($fileIds as $fid) {
@@ -240,12 +239,13 @@ final class AiBookListingUploadForm extends FormBase {
       $file->save();
 
       $itemKey = 'file_' . $fid;
-      $isMetadataSource = !empty($metadataSelections[$itemKey]['is_metadata_source']);
+      $isMetadataSource = $useDefaultMetadataSelection
+        ? TRUE
+        : !empty($metadataSelections[$itemKey]['is_metadata_source']);
       $this->createListingImageRecord($listingId, (int) $file->id(), $weight, $isMetadataSource);
       $weight++;
     }
 
-    $listing->save();
     $this->clearStagedFileIds($form_state);
 
     $this->messenger()->addStatus('Listing created.');
@@ -296,6 +296,25 @@ final class AiBookListingUploadForm extends FormBase {
   }
 
   /**
+   * @return int[]
+   */
+  private function getEffectiveFileIds(FormStateInterface $form_state): array {
+    $stagedFileIds = $this->getStagedFileIds($form_state);
+    if ($stagedFileIds !== []) {
+      return $stagedFileIds;
+    }
+
+    $mediaIds = $this->extractSelectedMediaIdsFromPicker(
+      (array) $form_state->getValue(['workspace', 'upload', 'intake_picker'], []),
+    );
+    if ($mediaIds === []) {
+      return [];
+    }
+
+    return $this->loadIntakeFileIdsFromMediaIds($mediaIds);
+  }
+
+  /**
    * @return \Drupal\file\Entity\File[]
    */
   private function saveUploadedImagesToTemp(): array {
@@ -307,7 +326,6 @@ final class AiBookListingUploadForm extends FormBase {
       $uploaded = [$filesRoot];
     }
     elseif (is_array($filesRoot)) {
-      // With #tree enabled this file input lives under workspace[upload][new_images].
       $uploaded = $filesRoot['workspace']['upload']['new_images']
         ?? $filesRoot['workspace']
         ?? $filesRoot['upload']['new_images']
@@ -366,37 +384,6 @@ final class AiBookListingUploadForm extends FormBase {
     }
 
     return $savedFiles;
-  }
-
-  private function debugUploadRequest(): void {
-    $normalize = function (mixed $value) use (&$normalize): mixed {
-      if ($value === NULL || is_bool($value) || is_int($value) || is_float($value) || is_string($value)) {
-        return $value;
-      }
-      if (is_array($value)) {
-        $out = [];
-        foreach ($value as $k => $v) {
-          $out[(string) $k] = $normalize($v);
-        }
-        return $out;
-      }
-      if ($value instanceof UploadedFile) {
-        return [
-          'uploaded_file' => TRUE,
-          'name' => $value->getClientOriginalName(),
-          'error' => $value->getError(),
-          'mime' => $value->getMimeType(),
-        ];
-      }
-      return 'Object(' . get_debug_type($value) . ')';
-    };
-
-    $payload = [
-      'request_files' => $normalize(\Drupal::request()->files->all()),
-      'request_post' => $normalize(\Drupal::request()->request->all()),
-    ];
-
-    @file_put_contents('/tmp/ai_listing_upload_request_debug.log', json_encode($payload, JSON_PRETTY_PRINT) . PHP_EOL . str_repeat('-', 80) . PHP_EOL, FILE_APPEND);
   }
 
   /**
@@ -493,6 +480,265 @@ final class AiBookListingUploadForm extends FormBase {
     $extension = pathinfo($clientName, PATHINFO_EXTENSION);
 
     return in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff'], TRUE);
+  }
+
+  /**
+   * @param array<string,mixed> $postedItems
+   */
+  private function buildIntakePickerElement(array $postedPicker): array {
+    $element = [
+      '#type' => 'details',
+      '#title' => $this->t('Attach from intake library'),
+      '#open' => TRUE,
+      '#description' => $this->t('Select one or more sets, then save the listing. Expand a set only if you need per-image selection.'),
+    ];
+
+    $rows = $this->loadRecentIntakeMediaRows();
+    if ($rows === []) {
+      $element['empty'] = [
+        '#markup' => '<p><em>' . $this->t('No AI Listing Intake media found yet.') . '</em></p>',
+      ];
+      return $element;
+    }
+
+    $grouped = [];
+    foreach ($rows as $mediaId => $row) {
+      $setId = (string) ($row['set_id'] ?? '');
+      if ($setId === '') {
+        $setId = 'ungrouped';
+      }
+      if (!isset($grouped[$setId])) {
+        $grouped[$setId] = [];
+      }
+      $grouped[$setId][$mediaId] = $row;
+    }
+
+    $setOptions = [];
+    foreach ($grouped as $setId => $setRows) {
+      $setOptions[$setId] = $this->t('@set (@count images)', [
+        '@set' => $setId,
+        '@count' => count($setRows),
+      ])->render();
+    }
+    $element['selected_sets'] = [
+      '#type' => 'checkboxes',
+      '#title' => $this->t('Attach whole sets'),
+      '#options' => $setOptions,
+      '#default_value' => array_keys(array_filter((array) ($postedPicker['selected_sets'] ?? []))),
+      '#description' => $this->t('Select one or more sets to attach all their images in one click.'),
+    ];
+
+    $element['items_by_set'] = ['#type' => 'container'];
+    foreach ($grouped as $setId => $setRows) {
+      $element['items_by_set'][$setId] = [
+        '#type' => 'details',
+        '#title' => $this->t('Set @set images', ['@set' => $setId]),
+        '#open' => FALSE,
+      ];
+      $element['items_by_set'][$setId]['items'] = [
+        '#type' => 'table',
+        '#header' => [
+          $this->t('Attach'),
+          $this->t('Preview'),
+          $this->t('Media name'),
+          $this->t('File'),
+        ],
+      ];
+
+      foreach ($setRows as $mediaId => $row) {
+        $itemKey = (string) $mediaId;
+        $element['items_by_set'][$setId]['items'][$itemKey]['attach'] = [
+          '#type' => 'checkbox',
+          '#default_value' => !empty($postedPicker['items'][$itemKey]['attach']),
+          '#attributes' => ['class' => ['ai-intake-picker-checkbox']],
+        ];
+        $element['items_by_set'][$setId]['items'][$itemKey]['preview'] = [
+          '#theme' => 'image_style',
+          '#style_name' => 'thumbnail',
+          '#uri' => $row['file_uri'],
+        ];
+        $element['items_by_set'][$setId]['items'][$itemKey]['name'] = [
+          '#plain_text' => $row['name'],
+        ];
+        $element['items_by_set'][$setId]['items'][$itemKey]['file'] = [
+          '#plain_text' => $row['file_name'],
+        ];
+      }
+    }
+
+    return $element;
+  }
+
+  /**
+   * @return array<int,array{name:string,file_name:string,file_uri:string,set_id:string}>
+   */
+  private function loadRecentIntakeMediaRows(): array {
+    $ids = $this->entityTypeManager
+      ->getStorage('media')
+      ->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('bundle', self::INTAKE_MEDIA_BUNDLE)
+      ->sort('created', 'DESC')
+      ->sort('mid', 'DESC')
+      ->range(0, 200)
+      ->execute();
+
+    if ($ids === []) {
+      return [];
+    }
+
+    $assignedFileIds = $this->getAssignedListingFileIds();
+    $rows = [];
+    $mediaEntities = $this->entityTypeManager->getStorage('media')->loadMultiple($ids);
+    foreach (array_values($ids) as $mediaId) {
+      $media = $mediaEntities[$mediaId] ?? NULL;
+      if ($media === NULL) {
+        continue;
+      }
+      if (!$media->hasField('field_media_image')) {
+        continue;
+      }
+      $imageField = $media->get('field_media_image');
+      if ($imageField->isEmpty() || $imageField->entity === NULL) {
+        continue;
+      }
+      $file = $imageField->entity;
+      $fileId = (int) $file->id();
+      if ($fileId > 0 && isset($assignedFileIds[$fileId])) {
+        continue;
+      }
+
+      $rows[(int) $media->id()] = [
+        'name' => (string) $media->label(),
+        'file_name' => (string) $file->getFilename(),
+        'file_uri' => (string) $file->getFileUri(),
+        'set_id' => $this->extractSetIdFromFileUri((string) $file->getFileUri()),
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * @param array<string,mixed> $picker
+   * @return int[]
+   */
+  private function extractSelectedMediaIdsFromPicker(array $picker): array {
+    $ids = [];
+
+    $selectedSets = [];
+    $setRows = $this->loadRecentIntakeMediaRows();
+    foreach ((array) ($picker['selected_sets'] ?? []) as $setId => $setValue) {
+      $value = (string) $setValue;
+      if ($value === '' || $value === '0') {
+        continue;
+      }
+      $selectedSets[] = $this->normalizeSetKey((string) $setId);
+    }
+
+    if ($selectedSets !== []) {
+      foreach ($setRows as $mediaId => $row) {
+        $rowSetKey = $this->normalizeSetKey((string) ($row['set_id'] ?? ''));
+        if (in_array($rowSetKey, $selectedSets, TRUE)) {
+          $ids[] = (int) $mediaId;
+        }
+      }
+    }
+
+    foreach ((array) ($picker['items'] ?? []) as $mediaId => $row) {
+      if (!is_array($row) || empty($row['attach'])) {
+        continue;
+      }
+      $id = (int) $mediaId;
+      if ($id > 0) {
+        $ids[] = $id;
+      }
+    }
+
+    return array_values(array_unique($ids));
+  }
+
+  private function extractSetIdFromFileUri(string $uri): string {
+    $prefix = 'public://ai-intake/';
+    if (!str_starts_with($uri, $prefix)) {
+      return 'ungrouped';
+    }
+
+    $tail = substr($uri, strlen($prefix));
+    if (!is_string($tail) || $tail === '') {
+      return 'ungrouped';
+    }
+
+    $parts = explode('/', $tail, 2);
+    return (string) ($parts[0] ?? 'ungrouped');
+  }
+
+  /**
+   * @return array<int,true>
+   */
+  private function getAssignedListingFileIds(): array {
+    if (!$this->entityTypeManager->hasDefinition('listing_image')) {
+      return [];
+    }
+
+    $ids = $this->entityTypeManager
+      ->getStorage('listing_image')
+      ->getQuery()
+      ->accessCheck(FALSE)
+      ->execute();
+
+    if ($ids === []) {
+      return [];
+    }
+
+    $assigned = [];
+    $images = $this->entityTypeManager->getStorage('listing_image')->loadMultiple($ids);
+    foreach ($images as $image) {
+      if (!$image->hasField('file')) {
+        continue;
+      }
+      $fileId = (int) $image->get('file')->target_id;
+      if ($fileId > 0) {
+        $assigned[$fileId] = TRUE;
+      }
+    }
+
+    return $assigned;
+  }
+
+  private function normalizeSetKey(string $value): string {
+    return str_replace('_', '-', trim($value));
+  }
+
+  /**
+   * @param int[] $mediaIds
+   * @return int[]
+   */
+  private function loadIntakeFileIdsFromMediaIds(array $mediaIds): array {
+    $mediaStorage = $this->entityTypeManager->getStorage('media');
+    $mediaEntities = $mediaStorage->loadMultiple($mediaIds);
+    $fileIds = [];
+
+    foreach ($mediaEntities as $media) {
+      if ($media->bundle() !== self::INTAKE_MEDIA_BUNDLE) {
+        continue;
+      }
+      if (!$media->hasField('field_media_image')) {
+        continue;
+      }
+
+      $imageField = $media->get('field_media_image');
+      if ($imageField->isEmpty()) {
+        continue;
+      }
+
+      $fileId = (int) $imageField->target_id;
+      if ($fileId > 0) {
+        $fileIds[] = $fileId;
+      }
+    }
+
+    return array_values(array_unique($fileIds));
   }
 
   /**

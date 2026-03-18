@@ -17,6 +17,12 @@ ai_listing.add_bundle_menu:
   parent: ai_listing.group
   weight: 11
 
+ai_listing.bulk_intake:
+  title: 'Bulk image intake'
+  route_name: ai_listing.bulk_intake
+  parent: ai_listing.group
+  weight: 12
+
 ai_listing.workbench:
   title: 'Listing workbench'
   route_name: ai_listing.workbench

@@ -49,3 +49,17 @@ bundle_upload:
   dependencies:
     - core/drupal
     - core/once
+
+intake_picker:
+  js:
+    js/intake-picker.js: {}
+  dependencies:
+    - core/drupal
+    - core/once
+
+bulk_intake_sets:
+  js:
+    js/bulk-intake-sets.js: {}
+  dependencies:
+    - core/drupal
+    - core/once

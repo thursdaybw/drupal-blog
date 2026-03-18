@@ -1,0 +1,13 @@
+uuid: 7aab077d-4c4c-45c3-81f9-60d3c136fc4b
+langcode: en
+status: true
+dependencies: {  }
+id: ai_listing_intake
+label: 'AI Listing Intake Image'
+description: 'Image media used for bulk listing intake before assigning to individual listings.'
+source: image
+queue_thumbnail_downloads: false
+new_revision: false
+source_configuration:
+  source_field: field_media_image
+field_map: {  }

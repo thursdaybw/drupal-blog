@@ -1,0 +1,31 @@
+uuid: ced6938f-ec3e-495f-9a30-46874ce8b6d1
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.media.ai_listing_intake.field_media_image
+    - image.style.large
+    - media.type.ai_listing_intake
+  module:
+    - image
+id: media.ai_listing_intake.default
+targetEntityType: media
+bundle: ai_listing_intake
+mode: default
+content:
+  field_media_image:
+    type: image
+    label: visually_hidden
+    settings:
+      image_link: ''
+      image_style: large
+      image_loading:
+        attribute: lazy
+    third_party_settings: {  }
+    weight: 0
+    region: content
+hidden:
+  created: true
+  name: true
+  thumbnail: true
+  uid: true

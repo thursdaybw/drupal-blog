@@ -147,6 +147,8 @@ Fill real values for:
 Notes:
 - `ops/compose/prod/.env` is gitignored.
 - `APP_IMAGE` is auto-updated by `deploy-prod-activate`.
+- `deploy-prod-activate` runs Drupal post-deploy maintenance in this order:
+  `drush updb -y`, `drush cim -y`, `drush cr`.
 - `APP_PORT` and `MYSQL_VOLUME_NAME` are auto-managed by Ansible for prod.
 - `ebay_connector.settings` is config-ignored and runtime-overridden from env.
 

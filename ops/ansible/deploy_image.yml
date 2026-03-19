@@ -296,6 +296,21 @@
       changed_when: false
       failed_when: false
 
+    - name: Run database updates on environment when Drupal is bootstrapped
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
+          exec -T appserver
+          sh -lc 'cd /var/www/html && {{ app_drush_bin }} updb -y'
+      register: drush_updb
+      changed_when: >-
+        'No pending updates.' not in (drush_updb.stdout | default(''))
+      when:
+        - drush_bootstrap.rc == 0
+        - "'Successful' in (drush_bootstrap.stdout | default(''))"
+
     - name: Import config on environment when Drupal is bootstrapped
       ansible.builtin.command:
         cmd: >-

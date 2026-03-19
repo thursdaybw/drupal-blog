@@ -234,6 +234,18 @@ The next UI refinement should be:
 - remove redundant intermediate controls
 - only expose per-image controls when the operator explicitly drills into a set
 
+## Stock Cull Report
+
+`/admin/ai-listings/reports/stock-cull` is a read-model report for culling old eBay stock.
+
+- It reports only current `ebay` publications with `status = published`.
+- It uses `marketplace_started_at` as the primary age signal.
+- It falls back to `published_at` when marketplace start time is unavailable.
+- It computes `cull score = age in months / price`.
+- It orders highest cull score first.
+
+This keeps stock-age analysis out of write workflows and makes the cull surface an explicit reporting concern.
+
 ## TODO
 
 - Split review UI by listing bundle.

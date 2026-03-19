@@ -114,4 +114,60 @@ final class ListingCullServiceTest extends KernelTestBase {
     $this->assertSame('marketplace_unpublished', $historyEntries[3]->eventType);
   }
 
+  public function testCullCanMarkLostAndRecordsLostHistory(): void {
+    $listing = BbAiListing::create([
+      'listing_type' => 'book',
+      'status' => 'shelved',
+      'ebay_title' => 'Lost candidate',
+      'price' => '9.99',
+      'listing_code' => 'LOSTTEST',
+    ]);
+    $listing->save();
+
+    $publicationStorage = $this->container->get('entity_type.manager')->getStorage('ai_marketplace_publication');
+    $publicationStorage->create([
+      'listing' => (int) $listing->id(),
+      'inventory_sku_value' => 'SKU-LOST',
+      'marketplace_key' => 'ebay',
+      'status' => 'published',
+      'publication_type' => 'FIXED_PRICE',
+      'marketplace_listing_id' => '177000000201',
+      'source' => 'local_publish',
+      'published_at' => 1710001000,
+    ])->save();
+
+    $cullService = new ListingCullService(
+      $this->container->get('entity_type.manager'),
+      [new class implements MarketplaceUnpublisherInterface {
+        public function supports(string $marketplaceKey): bool {
+          return $marketplaceKey === 'ebay';
+        }
+
+        public function unpublish(MarketplaceUnpublishRequest $request): int {
+          return 1;
+        }
+      }],
+      new ListingHistoryRecorder(
+        $this->container->get('database'),
+        $this->container->get('datetime.time'),
+        $this->container->get('current_user'),
+      ),
+    );
+
+    $result = $cullService->cull($listing, 'not_found_on_shelf', 'Shelf checked twice.', ListingCullService::TARGET_LOST);
+
+    $this->assertSame(1, $result->unpublishedCount);
+    $reloadedListing = $this->container->get('entity_type.manager')->getStorage('bb_ai_listing')->load((int) $listing->id());
+    $this->assertInstanceOf(BbAiListing::class, $reloadedListing);
+    $this->assertSame('lost', (string) $reloadedListing->get('status')->value);
+
+    $historyEntries = (new ListingHistoryQuery($this->container->get('database')))
+      ->fetchByListingId((int) $listing->id(), 10);
+
+    $this->assertSame('culled', $historyEntries[0]->eventType);
+    $this->assertStringContainsString('marked listing lost', $historyEntries[0]->message);
+    $this->assertSame('listing_lost', $historyEntries[1]->eventType);
+    $this->assertSame('not_found_on_shelf', $historyEntries[1]->reasonCode);
+  }
+
 }

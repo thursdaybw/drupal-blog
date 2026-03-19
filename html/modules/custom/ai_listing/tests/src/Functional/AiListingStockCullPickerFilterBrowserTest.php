@@ -84,7 +84,9 @@ final class AiListingStockCullPickerFilterBrowserTest extends BrowserTestBase {
 
     $this->drupalGet('/admin/ai-listings/reports/stock-cull/picker');
     $this->assertSession()->statusCodeEquals(200);
-    $this->assertSession()->pageTextContains('Total matching listings: 2');
+    $this->assertSession()->pageTextContains('Apply at least one filter to load cull candidates.');
+    $this->assertSession()->pageTextContains('Total matching listings: 0');
+    $this->assertSession()->pageTextNotContains('Cheap old listing');
 
     $this->submitForm([
       'Max price' => '20',
@@ -110,7 +112,8 @@ final class AiListingStockCullPickerFilterBrowserTest extends BrowserTestBase {
     $this->assertSession()->addressEquals('/admin/ai-listings/reports/stock-cull/picker');
     $this->assertSession()->fieldValueEquals('Max price', '');
     $this->assertSession()->fieldValueEquals('Listed on or before', '');
-    $this->assertSession()->pageTextContains('Total matching listings: 2');
+    $this->assertSession()->pageTextContains('Apply at least one filter to load cull candidates.');
+    $this->assertSession()->pageTextContains('Total matching listings: 0');
   }
 
 }

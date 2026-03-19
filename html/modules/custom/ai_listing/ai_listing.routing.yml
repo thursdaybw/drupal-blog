@@ -69,3 +69,18 @@ ai_listing.marketplaces:
     parameters:
       bb_ai_listing:
         type: entity:bb_ai_listing
+
+ai_listing.stock_cull_report:
+  path: '/admin/ai-listings/reports/stock-cull'
+  defaults:
+    _controller: '\Drupal\ai_listing\Controller\AiListingStockCullReportController::build'
+    _title: 'eBay stock cull report'
+  requirements:
+    _permission: 'administer ai listings'
+
+ai_listing.stock_cull_report_csv:
+  path: '/admin/ai-listings/reports/stock-cull.csv'
+  defaults:
+    _controller: '\Drupal\ai_listing\Controller\AiListingStockCullReportController::downloadCsv'
+  requirements:
+    _permission: 'administer ai listings'

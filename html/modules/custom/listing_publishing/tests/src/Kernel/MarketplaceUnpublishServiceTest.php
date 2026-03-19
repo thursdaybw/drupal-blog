@@ -6,6 +6,7 @@ namespace Drupal\Tests\listing_publishing\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
+use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
 use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
 use Drupal\listing_publishing\Service\MarketplaceUnpublishService;
 
@@ -69,6 +70,34 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
     $this->expectException(\InvalidArgumentException::class);
     $this->expectExceptionMessage('No marketplace unpublisher is registered for "mercari".');
     $service->unpublishPublication((int) $publication->id());
+  }
+
+  public function testUnpublishPublicationTreatsAlreadyUnpublishedAsSuccess(): void {
+    $listing = $this->createListing();
+    $publication = $this->createPublication((int) $listing->id(), 'ebay', 'gone-sku-1');
+
+    $service = new MarketplaceUnpublishService(
+      $this->container->get('entity_type.manager'),
+      [new class implements MarketplaceUnpublisherInterface {
+        public function supports(string $marketplaceKey): bool {
+          return trim(strtolower($marketplaceKey)) === 'ebay';
+        }
+
+        public function unpublish(MarketplaceUnpublishRequest $request): int {
+          throw new MarketplaceAlreadyUnpublishedException($request, 'Already gone.');
+        }
+      }],
+    );
+
+    $result = $service->unpublishPublication((int) $publication->id());
+
+    $this->assertTrue($result->alreadyUnpublished);
+    $this->assertSame(0, $result->deletedOfferCount);
+    $this->assertNull(
+      $this->container->get('entity_type.manager')
+        ->getStorage('ai_marketplace_publication')
+        ->load((int) $publication->id())
+    );
   }
 
   private function createListing() {

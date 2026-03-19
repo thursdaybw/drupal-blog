@@ -950,6 +950,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
   private function humanizeHistoryEventType(string $eventType): string {
     return match ($eventType) {
       'marketplace_unpublished' => 'Marketplace unpublished',
+      'marketplace_already_unpublished' => 'Marketplace already unpublished',
       'listing_archived' => 'Listing archived',
       'listing_lost' => 'Listing marked lost',
       'culled' => 'Culled',

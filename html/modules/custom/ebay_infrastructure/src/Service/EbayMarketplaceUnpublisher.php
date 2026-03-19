@@ -6,6 +6,7 @@ namespace Drupal\ebay_infrastructure\Service;
 
 use Drupal\ebay_infrastructure\Utility\OfferExceptionHelper;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
+use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
 use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
 
 /**
@@ -53,7 +54,18 @@ final class EbayMarketplaceUnpublisher implements MarketplaceUnpublisherInterfac
       }
     }
 
-    $this->sellApiClient->deleteInventoryItem($request->sku);
+    try {
+      $this->sellApiClient->deleteInventoryItem($request->sku);
+    }
+    catch (\RuntimeException $exception) {
+      if (OfferExceptionHelper::isInventoryItemMissing($exception)) {
+        throw new MarketplaceAlreadyUnpublishedException(
+          $request,
+          sprintf('Marketplace resource already missing for SKU %s.', $request->sku),
+        );
+      }
+      throw $exception;
+    }
 
     return $deletedOfferCount;
   }

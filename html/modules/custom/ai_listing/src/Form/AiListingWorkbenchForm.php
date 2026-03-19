@@ -92,6 +92,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
         'ready_to_shelve' => $this->t('Ready to shelve'),
         'shelved' => $this->t('Shelved'),
         'archived' => $this->t('Archived'),
+        'lost' => $this->t('Lost'),
         'failed' => $this->t('Failed'),
       ],
       '#default_value' => $statusFilter,

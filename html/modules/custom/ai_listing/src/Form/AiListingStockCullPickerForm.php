@@ -52,12 +52,22 @@ final class AiListingStockCullPickerForm extends FormBase implements ContainerIn
 
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $filters = $this->resolveFilters();
-    $totalCount = $this->reportQuery->countRows($filters['listing_type'], $filters['max_price'], $filters['listed_before']);
-    $rows = $this->loadSortedRows($totalCount, $filters['listing_type'], $filters['max_price'], $filters['listed_before']);
-    $listingIds = array_map(static fn(EbayStockCullReportRow $row): int => $row->listingId, $rows);
-    $statuses = $this->selectionStore->getStatuses($listingIds);
-    $imageLookup = $this->buildListingImageLookup($listingIds);
-    $groupedRows = $this->groupRowsByLocation($rows);
+    $hasActiveFilters = $this->hasActiveFilters($filters);
+    $totalCount = 0;
+    $rows = [];
+    $listingIds = [];
+    $statuses = [];
+    $imageLookup = [];
+    $groupedRows = [];
+
+    if ($hasActiveFilters) {
+      $totalCount = $this->reportQuery->countRows($filters['listing_type'], $filters['max_price'], $filters['listed_before']);
+      $rows = $this->loadSortedRows($totalCount, $filters['listing_type'], $filters['max_price'], $filters['listed_before']);
+      $listingIds = array_map(static fn(EbayStockCullReportRow $row): int => $row->listingId, $rows);
+      $statuses = $this->selectionStore->getStatuses($listingIds);
+      $imageLookup = $this->buildListingImageLookup($listingIds);
+      $groupedRows = $this->groupRowsByLocation($rows);
+    }
 
     $form['#tree'] = FALSE;
     $form['#attached']['library'][] = 'ai_listing/photo_viewer';
@@ -125,6 +135,15 @@ final class AiListingStockCullPickerForm extends FormBase implements ContainerIn
       '#tag' => 'p',
       '#value' => sprintf('Currently marked for cull: %d', $this->selectionStore->countMarked($listingIds)),
     ];
+
+    if (!$hasActiveFilters) {
+      $form['empty'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'p',
+        '#value' => 'Apply at least one filter to load cull candidates.',
+      ];
+      return $form;
+    }
 
     $form['actions_top'] = [
       '#type' => 'actions',
@@ -573,6 +592,15 @@ final class AiListingStockCullPickerForm extends FormBase implements ContainerIn
       'max_price' => $filters['max_price'] !== NULL ? number_format($filters['max_price'], 2, '.', '') : NULL,
       'listed_before' => $filters['listed_before'] !== NULL ? date('Y-m-d', $filters['listed_before']) : NULL,
     ]);
+  }
+
+  /**
+   * @param array{listing_type:?string,max_price:?float,listed_before:?int} $filters
+   */
+  private function hasActiveFilters(array $filters): bool {
+    return $filters['listing_type'] !== NULL
+      || $filters['max_price'] !== NULL
+      || $filters['listed_before'] !== NULL;
   }
 
   private function normalizeListingTypeValue(mixed $value): ?string {

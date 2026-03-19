@@ -240,13 +240,14 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
   }
 
   /**
-   * Checks that archived is available in the listing status model.
+   * Checks that archive and lost are available in the listing status model.
    */
-  public function testArchivedStatusIsAvailableInListingUi(): void {
-    $listing = $this->createBookListing('Archived status test', 'BDMAA10');
+  public function testCullStatusesAreAvailableInListingUi(): void {
+    $listing = $this->createBookListing('Cull status test', 'BDMAA10');
     $statusOptions = $listing->getFieldDefinition('status')->getSetting('allowed_values');
     $this->assertIsArray($statusOptions);
     $this->assertArrayHasKey('archived', $statusOptions);
+    $this->assertArrayHasKey('lost', $statusOptions);
   }
 
   /**

@@ -262,11 +262,11 @@ This keeps execution concerns separate from the analytical report while still sh
 
 Listing review now has a local append-only history layer backed by `bb_ai_listing_history`.
 
-- History records operational facts such as marketplace takedowns, archive actions, and cull notes.
-- The stacked cull action on the review form:
-  - unpublishes all current marketplace publication rows for the listing
-  - sets the listing status to `archived`
-  - records history entries for the marketplace takedowns, archive action, and cull summary
+- History records operational facts such as marketplace takedowns, archive/lost actions, and cull notes.
+- The stacked cull actions on the review form:
+  - unpublish all current marketplace publication rows for the listing
+  - set the listing status to either `archived` or `lost`
+  - record history entries for the marketplace takedowns, the status transition, and the cull summary
 - History is intentionally lighter-weight than a full workflow engine or chatter system.
 
 This gives immediate audit value now without prematurely formalizing a larger status model.

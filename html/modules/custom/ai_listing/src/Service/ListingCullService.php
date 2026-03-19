@@ -15,6 +15,9 @@ use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
  */
 final class ListingCullService {
 
+  public const TARGET_ARCHIVED = 'archived';
+  public const TARGET_LOST = 'lost';
+
   /**
    * @param iterable<int,\Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface> $marketplaceUnpublishers
    */
@@ -24,10 +27,18 @@ final class ListingCullService {
     private readonly ListingHistoryRecorder $historyRecorder,
   ) {}
 
-  public function cull(BbAiListing $listing, ?string $reasonCode = NULL, string $note = ''): ListingCullResult {
+  public function cull(
+    BbAiListing $listing,
+    ?string $reasonCode = NULL,
+    string $note = '',
+    string $targetStatus = self::TARGET_ARCHIVED,
+  ): ListingCullResult {
     $listingId = (int) $listing->id();
     if ($listingId <= 0) {
       throw new \InvalidArgumentException('Cull action requires a saved listing.');
+    }
+    if (!in_array($targetStatus, [self::TARGET_ARCHIVED, self::TARGET_LOST], TRUE)) {
+      throw new \InvalidArgumentException(sprintf('Unsupported cull target status "%s".', $targetStatus));
     }
 
     $publicationStorage = $this->entityTypeManager->getStorage('ai_marketplace_publication');
@@ -82,13 +93,19 @@ final class ListingCullService {
       ]);
     }
 
-    $listing->set('status', 'archived');
+    $listing->set('status', $targetStatus);
     $listing->save();
-    $this->historyRecorder->record($listingId, 'listing_archived', 'Listing archived.', $reasonCode);
+    $this->historyRecorder->record(
+      $listingId,
+      $targetStatus === self::TARGET_LOST ? 'listing_lost' : 'listing_archived',
+      $targetStatus === self::TARGET_LOST ? 'Listing marked lost.' : 'Listing archived.',
+      $reasonCode
+    );
 
     $summary = sprintf(
-      'Cull action completed: unpublished %d marketplace record(s) and archived listing.',
+      'Cull action completed: unpublished %d marketplace record(s) and marked listing %s.',
       $unpublishedCount,
+      $targetStatus,
     );
     if (trim($note) !== '') {
       $summary .= ' Note: ' . trim($note);

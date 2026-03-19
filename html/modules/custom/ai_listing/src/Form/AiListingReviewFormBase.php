@@ -147,6 +147,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
         'ready_to_shelve' => $this->t('Ready to shelve'),
         'shelved' => $this->t('Shelved'),
         'archived' => $this->t('Archived'),
+        'lost' => $this->t('Lost'),
         'failed' => $this->t('Failed'),
       ];
     }
@@ -392,6 +393,16 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
         'class' => ['button', 'button--danger'],
       ],
     ];
+    $form['actions']['mark_lost'] = [
+      '#type' => 'submit',
+      '#value' => 'Unpublish all marketplaces and mark lost',
+      '#name' => 'ai_mark_listing_lost',
+      '#limit_validation_errors' => [['cull']],
+      '#submit' => ['::submitCullAndMarkLost'],
+      '#attributes' => [
+        'class' => ['button', 'button--danger'],
+      ],
+    ];
 
     $form['#attached']['library'][] = 'ai_listing/review_ui';
     $form['#attached']['library'][] = 'ai_listing/bargain_preset';
@@ -407,7 +418,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
 
   public function validateForm(array &$form, FormStateInterface $form_state): void {
     $triggerName = (string) (($form_state->getTriggeringElement()['#name'] ?? ''));
-    if (in_array($triggerName, ['ai_delete_listing', 'ai_cull_listing'], TRUE)) {
+    if (in_array($triggerName, ['ai_delete_listing', 'ai_cull_listing', 'ai_mark_listing_lost'], TRUE)) {
       return;
     }
 
@@ -533,6 +544,14 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
   }
 
   public function submitCullAndArchive(array &$form, FormStateInterface $form_state): void {
+    $this->submitCullWithTarget($form_state, ListingCullService::TARGET_ARCHIVED);
+  }
+
+  public function submitCullAndMarkLost(array &$form, FormStateInterface $form_state): void {
+    $this->submitCullWithTarget($form_state, ListingCullService::TARGET_LOST);
+  }
+
+  private function submitCullWithTarget(FormStateInterface $form_state, string $targetStatus): void {
     /** @var \Drupal\ai_listing\Entity\BbAiListing $listing */
     $listing = $form_state->get('listing');
     if (!$listing instanceof BbAiListing) {
@@ -548,6 +567,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
         $listing,
         $reasonCode !== '' ? $reasonCode : NULL,
         $note,
+        $targetStatus,
       );
     }
     catch (\Throwable $exception) {
@@ -556,8 +576,9 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     }
 
     $this->messenger()->addStatus(sprintf(
-      'Cull action complete. Unpublished %d marketplace record(s) and archived the listing.',
+      'Cull action complete. Unpublished %d marketplace record(s) and marked the listing %s.',
       $result->unpublishedCount,
+      $targetStatus,
     ));
     $form_state->setRedirect('entity.bb_ai_listing.canonical', ['bb_ai_listing' => (int) $listing->id()]);
   }
@@ -930,6 +951,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     return match ($eventType) {
       'marketplace_unpublished' => 'Marketplace unpublished',
       'listing_archived' => 'Listing archived',
+      'listing_lost' => 'Listing marked lost',
       'culled' => 'Culled',
       default => ucwords(str_replace('_', ' ', $eventType)),
     };

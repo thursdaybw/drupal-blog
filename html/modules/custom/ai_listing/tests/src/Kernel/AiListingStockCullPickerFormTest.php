@@ -40,11 +40,26 @@ final class AiListingStockCullPickerFormTest extends KernelTestBase {
     $this->installEntitySchema('listing_image');
   }
 
+  public function testBuildDoesNotLoadCandidatesWithoutFilters(): void {
+    $this->createPublishedListing('Shelf A title', '10.00', 'SHELF-A', 'SKU-A', '177100000001', 1700000000);
+
+    $request = Request::create('/admin/ai-listings/reports/stock-cull/picker', 'GET');
+    $request->setSession(new Session(new MockArraySessionStorage()));
+    $this->container->get('request_stack')->push($request);
+
+    $form = AiListingStockCullPickerForm::create($this->container)->buildForm([], new FormState());
+    $markup = (string) $this->container->get('renderer')->renderRoot($form);
+
+    $this->assertStringContainsString('Apply at least one filter to load cull candidates.', $markup);
+    $this->assertStringNotContainsString('SHELF-A (1 candidates, 0 marked)', $markup);
+    $this->assertStringContainsString('Total matching listings: 0', $markup);
+  }
+
   public function testBuildGroupsRowsByLocation(): void {
     $this->createPublishedListing('Shelf A title', '10.00', 'SHELF-A', 'SKU-A', '177100000001', 1700000000);
     $this->createPublishedListing('Shelf B title', '12.00', 'SHELF-B', 'SKU-B', '177100000002', 1700000001);
 
-    $request = Request::create('/admin/ai-listings/reports/stock-cull/picker', 'GET');
+    $request = Request::create('/admin/ai-listings/reports/stock-cull/picker', 'GET', ['max_price' => '20']);
     $request->setSession(new Session(new MockArraySessionStorage()));
     $this->container->get('request_stack')->push($request);
 

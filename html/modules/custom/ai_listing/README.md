@@ -267,6 +267,10 @@ Listing review now has a local append-only history layer backed by `bb_ai_listin
   - unpublish all current marketplace publication rows for the listing
   - set the listing status to either `archived` or `lost`
   - record history entries for the marketplace takedowns, the status transition, and the cull summary
+- If a marketplace adapter reports that the remote resource is already gone,
+  the cull flow treats that as already unpublished, removes the local
+  publication record, and records the abnormal condition in history instead of
+  aborting the whole action.
 - History is intentionally lighter-weight than a full workflow engine or chatter system.
 
 This gives immediate audit value now without prematurely formalizing a larger status model.

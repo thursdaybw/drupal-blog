@@ -59,13 +59,24 @@ final class MarketplacePublicationUnpublishForm extends FormBase {
 
     try {
       $result = $this->marketplaceUnpublishService->unpublishPublication($publicationId);
-      $this->messenger()->addStatus((string) $this->t(
-        'Unpublished @marketplace SKU @sku and removed the local publication record.',
-        [
-          '@marketplace' => $result->marketplaceKey,
-          '@sku' => $result->sku,
-        ]
-      ));
+      if ($result->alreadyUnpublished) {
+        $this->messenger()->addStatus((string) $this->t(
+          '@marketplace SKU @sku was already unpublished on the marketplace. Removed the local publication record.',
+          [
+            '@marketplace' => $result->marketplaceKey,
+            '@sku' => $result->sku,
+          ]
+        ));
+      }
+      else {
+        $this->messenger()->addStatus((string) $this->t(
+          'Unpublished @marketplace SKU @sku and removed the local publication record.',
+          [
+            '@marketplace' => $result->marketplaceKey,
+            '@sku' => $result->sku,
+          ]
+        ));
+      }
     }
     catch (\Throwable $exception) {
       $this->messenger()->addError((string) $this->t(

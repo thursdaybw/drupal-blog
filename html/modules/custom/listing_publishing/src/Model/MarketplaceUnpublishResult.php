@@ -14,6 +14,7 @@ final class MarketplaceUnpublishResult {
     public readonly string $marketplaceKey,
     public readonly string $sku,
     public readonly int $deletedOfferCount,
+    public readonly bool $alreadyUnpublished = false,
   ) {}
 
 }

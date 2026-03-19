@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Drupal\ebay_infrastructure\Service;
 
 use Drupal\ebay_connector\Entity\EbayAccount;
+use Drupal\ebay_infrastructure\Exception\EbaySellApiException;
 use Drupal\ebay_infrastructure\Service\EbayAccountManager;
+use Drupal\ebay_infrastructure\Utility\OfferExceptionHelper;
 use GuzzleHttp\ClientInterface;
 
 /**
@@ -151,11 +153,11 @@ final class SellApiClient {
           ]
         );
 
-      } catch (\RuntimeException $e) {
+      } catch (EbaySellApiException $e) {
 
         // If offer does not exist for this SKU,
         // that is a normal state in our domain.
-        if (str_contains($e->getMessage(), '"errorId":25713')) {
+        if (OfferExceptionHelper::isOfferUnavailable($e)) {
           continue;
         }
 
@@ -263,8 +265,8 @@ final class SellApiClient {
         $account
       );
     }
-    catch (\RuntimeException $exception) {
-      if (str_contains($exception->getMessage(), '"errorId":25713')) {
+    catch (EbaySellApiException $exception) {
+      if (OfferExceptionHelper::isOfferUnavailable($exception)) {
         return [];
       }
 
@@ -328,7 +330,11 @@ final class SellApiClient {
     $data = json_decode($body, true);
 
     if ($response->getStatusCode() >= 400) {
-      throw new \RuntimeException('eBay Sell API error: ' . $body);
+      throw new EbaySellApiException(
+        'eBay Sell API error: ' . $body,
+        $this->extractErrorIds($data),
+        $body,
+      );
     }
 
     return is_array($data) ? $data : [];
@@ -366,7 +372,11 @@ final class SellApiClient {
     $data = json_decode($body, true);
 
     if ($response->getStatusCode() >= 400) {
-      throw new \RuntimeException('eBay Sell API error: ' . $body);
+      throw new EbaySellApiException(
+        'eBay Sell API error: ' . $body,
+        $this->extractErrorIds($data),
+        $body,
+      );
     }
 
     return is_array($data) ? $data : [];
@@ -485,6 +495,27 @@ final class SellApiClient {
 
   private function encodeSku(string $sku): string {
     return rawurlencode($sku);
+  }
+
+  /**
+   * @param mixed $data
+   *
+   * @return int[]
+   */
+  private function extractErrorIds(mixed $data): array {
+    if (!is_array($data) || !isset($data['errors']) || !is_array($data['errors'])) {
+      return [];
+    }
+
+    $errorIds = [];
+    foreach ($data['errors'] as $error) {
+      if (!is_array($error) || !isset($error['errorId']) || !is_numeric($error['errorId'])) {
+        continue;
+      }
+      $errorIds[] = (int) $error['errorId'];
+    }
+
+    return array_values(array_unique($errorIds));
   }
 
 }

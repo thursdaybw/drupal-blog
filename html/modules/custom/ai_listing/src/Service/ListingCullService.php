@@ -8,6 +8,7 @@ use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Model\ListingCullResult;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
+use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
 use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
 
 /**
@@ -73,23 +74,44 @@ final class ListingCullService {
       }
 
       $adapter = $this->resolveAdapter($request->marketplaceKey);
-      $adapter->unpublish($request);
+      $alreadyUnpublished = false;
+      try {
+        $adapter->unpublish($request);
+      }
+      catch (MarketplaceAlreadyUnpublishedException) {
+        $alreadyUnpublished = true;
+      }
+
       $publication->delete();
-      $unpublishedCount++;
       if ($marketplaceKey !== '') {
         $marketplaces[] = $marketplaceKey;
       }
 
-      $message = sprintf(
-        'Unpublished %s marketplace record for SKU %s%s.',
-        $marketplaceKey !== '' ? $marketplaceKey : 'unknown',
-        $sku !== '' ? $sku : '(missing SKU)',
-        $marketplaceListingId !== '' ? ' (listing ' . $marketplaceListingId . ')' : '',
-      );
-      $this->historyRecorder->record($listingId, 'marketplace_unpublished', $message, $reasonCode, [
+      if ($alreadyUnpublished) {
+        $message = sprintf(
+          '%s marketplace record was already absent for SKU %s%s. Removed local publication record.',
+          $marketplaceKey !== '' ? ucfirst($marketplaceKey) : 'Unknown',
+          $sku !== '' ? $sku : '(missing SKU)',
+          $marketplaceListingId !== '' ? ' (listing ' . $marketplaceListingId . ')' : '',
+        );
+        $eventType = 'marketplace_already_unpublished';
+      }
+      else {
+        $unpublishedCount++;
+        $message = sprintf(
+          'Unpublished %s marketplace record for SKU %s%s.',
+          $marketplaceKey !== '' ? $marketplaceKey : 'unknown',
+          $sku !== '' ? $sku : '(missing SKU)',
+          $marketplaceListingId !== '' ? ' (listing ' . $marketplaceListingId . ')' : '',
+        );
+        $eventType = 'marketplace_unpublished';
+      }
+
+      $this->historyRecorder->record($listingId, $eventType, $message, $reasonCode, [
         'marketplace_key' => $marketplaceKey,
         'sku' => $sku,
         'marketplace_listing_id' => $marketplaceListingId,
+        'already_unpublished' => $alreadyUnpublished,
       ]);
     }
 

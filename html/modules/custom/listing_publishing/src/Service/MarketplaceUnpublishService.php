@@ -6,6 +6,7 @@ namespace Drupal\listing_publishing\Service;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
+use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
 use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
 use Drupal\listing_publishing\Model\MarketplaceUnpublishResult;
 
@@ -50,7 +51,14 @@ final class MarketplaceUnpublishService {
     }
 
     $adapter = $this->resolveAdapter($request->marketplaceKey);
-    $deletedOfferCount = $adapter->unpublish($request);
+    $deletedOfferCount = 0;
+    $alreadyUnpublished = false;
+    try {
+      $deletedOfferCount = $adapter->unpublish($request);
+    }
+    catch (MarketplaceAlreadyUnpublishedException) {
+      $alreadyUnpublished = true;
+    }
 
     $publication->delete();
 
@@ -59,6 +67,7 @@ final class MarketplaceUnpublishService {
       marketplaceKey: $request->marketplaceKey,
       sku: $request->sku,
       deletedOfferCount: $deletedOfferCount,
+      alreadyUnpublished: $alreadyUnpublished,
     );
   }
 

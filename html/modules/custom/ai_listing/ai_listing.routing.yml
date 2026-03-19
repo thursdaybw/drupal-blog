@@ -84,3 +84,11 @@ ai_listing.stock_cull_report_csv:
     _controller: '\Drupal\ai_listing\Controller\AiListingStockCullReportController::downloadCsv'
   requirements:
     _permission: 'administer ai listings'
+
+ai_listing.stock_cull_picker:
+  path: '/admin/ai-listings/reports/stock-cull/picker'
+  defaults:
+    _form: '\Drupal\ai_listing\Form\AiListingStockCullPickerForm'
+    _title: 'eBay stock cull picker'
+  requirements:
+    _permission: 'administer ai listings'

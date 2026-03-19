@@ -31,3 +31,27 @@ services:
     class: Drupal\ai_listing\Report\EbayStockCullReportQuery
     arguments:
       - '@database'
+
+  ai_listing.stock_cull_selection_store:
+    class: Drupal\ai_listing\Service\StockCullSelectionStore
+    arguments:
+      - '@keyvalue'
+
+  ai_listing.listing_history_recorder:
+    class: Drupal\ai_listing\Service\ListingHistoryRecorder
+    arguments:
+      - '@database'
+      - '@datetime.time'
+      - '@current_user'
+
+  ai_listing.listing_history_query:
+    class: Drupal\ai_listing\Service\ListingHistoryQuery
+    arguments:
+      - '@database'
+
+  ai_listing.listing_cull_service:
+    class: Drupal\ai_listing\Service\ListingCullService
+    arguments:
+      - '@entity_type.manager'
+      - !tagged_iterator listing_publishing.marketplace_unpublisher
+      - '@ai_listing.listing_history_recorder'

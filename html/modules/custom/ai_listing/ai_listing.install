@@ -3,6 +3,76 @@
 declare(strict_types=1);
 
 /**
+ * Implements hook_schema().
+ */
+function ai_listing_schema(): array {
+  return [
+    'bb_ai_listing_history' => [
+      'description' => 'Append-only operational history for BB AI listings.',
+      'fields' => [
+        'id' => [
+          'description' => 'Primary key.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'listing_id' => [
+          'description' => 'Referenced bb_ai_listing ID.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'created_at' => [
+          'description' => 'Unix timestamp when the event was recorded.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'actor_uid' => [
+          'description' => 'Drupal user ID that recorded the event, if any.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+          'default' => NULL,
+        ],
+        'event_type' => [
+          'description' => 'Machine-readable event type.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+          'default' => '',
+        ],
+        'reason_code' => [
+          'description' => 'Optional machine-readable reason code.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+          'default' => NULL,
+        ],
+        'message' => [
+          'description' => 'Human-readable event message.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'context_json' => [
+          'description' => 'Optional JSON context payload.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+          'default' => NULL,
+        ],
+      ],
+      'primary key' => ['id'],
+      'indexes' => [
+        'listing_created' => ['listing_id', 'created_at'],
+        'event_type' => ['event_type'],
+      ],
+    ],
+  ];
+}
+
+/**
  * Adds publication provenance fields to ai_marketplace_publication.
  */
 function ai_listing_update_11001(): void {
@@ -83,4 +153,17 @@ function ai_listing_update_11003(): void {
     'label' => 'Generic',
     'description' => 'General listing type for non-book marketplace items.',
   ])->save();
+}
+
+/**
+ * Creates append-only listing history storage.
+ */
+function ai_listing_update_11004(): void {
+  $schema = \Drupal::database()->schema();
+  if ($schema->tableExists('bb_ai_listing_history')) {
+    return;
+  }
+
+  $definition = ai_listing_schema();
+  $schema->createTable('bb_ai_listing_history', $definition['bb_ai_listing_history']);
 }

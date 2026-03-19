@@ -246,6 +246,31 @@ The next UI refinement should be:
 
 This keeps stock-age analysis out of write workflows and makes the cull surface an explicit reporting concern.
 
+## Stock Cull Picker
+
+`/admin/ai-listings/reports/stock-cull/picker` is the operational shelf-walking companion to the stock cull report.
+
+- It reuses the same candidate filters as the stock cull report.
+- It regroups candidates by `storage_location`.
+- It shows listing images through the existing lightbox behavior for quick spine/cover inspection.
+- It keeps cull marking local to Drupal through `StockCullSelectionStore`.
+- It does not unpublish from eBay or archive listings yet.
+
+This keeps execution concerns separate from the analytical report while still sharing the same candidate query.
+
+## Listing History And Cull Actions
+
+Listing review now has a local append-only history layer backed by `bb_ai_listing_history`.
+
+- History records operational facts such as marketplace takedowns, archive actions, and cull notes.
+- The stacked cull action on the review form:
+  - unpublishes all current marketplace publication rows for the listing
+  - sets the listing status to `archived`
+  - records history entries for the marketplace takedowns, archive action, and cull summary
+- History is intentionally lighter-weight than a full workflow engine or chatter system.
+
+This gives immediate audit value now without prematurely formalizing a larger status model.
+
 ## TODO
 
 - Split review UI by listing bundle.

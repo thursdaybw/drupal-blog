@@ -52,8 +52,11 @@ services:
     arguments:
       - '@entity_type.manager'
 
-  Drupal\listing_publishing\Service\MarketplaceUnpublishService:
+  listing_publishing.marketplace_unpublish_service:
     class: Drupal\listing_publishing\Service\MarketplaceUnpublishService
     arguments:
       - '@entity_type.manager'
       - !tagged_iterator listing_publishing.marketplace_unpublisher
+
+  Drupal\listing_publishing\Service\MarketplaceUnpublishService:
+    alias: listing_publishing.marketplace_unpublish_service

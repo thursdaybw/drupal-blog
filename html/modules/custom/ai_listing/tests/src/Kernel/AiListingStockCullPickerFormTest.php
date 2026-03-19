@@ -28,6 +28,7 @@ final class AiListingStockCullPickerFormTest extends KernelTestBase {
     'dynamic_entity_reference',
     'bb_platform',
     'ai_listing',
+    'listing_publishing',
   ];
 
   protected function setUp(): void {

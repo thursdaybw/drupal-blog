@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Drupal\ai_listing\Form;
 
 use Drupal\ai_listing\Entity\BbAiListing;
+use Drupal\ai_listing\Service\ListingCullService;
+use Drupal\ai_listing\Service\ListingHistoryQuery;
 use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\UrlHelper;
-use Drupal\Core\Render\Markup;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Render\Markup;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -22,6 +25,9 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     protected EntityTypeManagerInterface $entityTypeManager,
     protected FileUrlGeneratorInterface $fileUrlGenerator,
     protected ListingPublisher $listingPublisher,
+    protected ListingHistoryQuery $listingHistoryQuery,
+    protected ListingCullService $listingCullService,
+    protected DateFormatterInterface $dateFormatter,
   ) {}
 
   public static function create(ContainerInterface $container): static {
@@ -29,6 +35,9 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       $container->get('entity_type.manager'),
       $container->get('file_url_generator'),
       $container->get('drupal.listing_publishing.publisher'),
+      $container->get('ai_listing.listing_history_query'),
+      $container->get('ai_listing.listing_cull_service'),
+      $container->get('date.formatter'),
     );
   }
 
@@ -293,6 +302,32 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#attributes' => ['readonly' => 'readonly'],
     ];
 
+    $form['cull'] = [
+      '#type' => 'details',
+      '#title' => 'Cull action',
+      '#open' => FALSE,
+      '#tree' => TRUE,
+    ];
+    $form['cull']['reason_code'] = [
+      '#type' => 'select',
+      '#title' => 'Reason',
+      '#options' => $this->getCullReasonOptions(),
+      '#default_value' => '',
+    ];
+    $form['cull']['note'] = [
+      '#type' => 'textarea',
+      '#title' => 'Note',
+      '#rows' => 3,
+      '#description' => $this->t('Optional note recorded in listing history.'),
+    ];
+
+    $form['history'] = [
+      '#type' => 'details',
+      '#title' => 'History',
+      '#open' => FALSE,
+    ];
+    $form['history']['entries'] = $this->buildHistoryEntries((int) $listing->id());
+
     $form['actions'] = ['#type' => 'actions'];
     $form['actions']['bargain_bin'] = [
       '#type' => 'button',
@@ -347,6 +382,16 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
         'class' => ['button', 'button--danger'],
       ],
     ];
+    $form['actions']['cull'] = [
+      '#type' => 'submit',
+      '#value' => 'Unpublish all marketplaces and archive',
+      '#name' => 'ai_cull_listing',
+      '#limit_validation_errors' => [['cull']],
+      '#submit' => ['::submitCullAndArchive'],
+      '#attributes' => [
+        'class' => ['button', 'button--danger'],
+      ],
+    ];
 
     $form['#attached']['library'][] = 'ai_listing/review_ui';
     $form['#attached']['library'][] = 'ai_listing/bargain_preset';
@@ -361,6 +406,11 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
   }
 
   public function validateForm(array &$form, FormStateInterface $form_state): void {
+    $triggerName = (string) (($form_state->getTriggeringElement()['#name'] ?? ''));
+    if (in_array($triggerName, ['ai_delete_listing', 'ai_cull_listing'], TRUE)) {
+      return;
+    }
+
     $this->validatePhotoSelections($form_state);
   }
 
@@ -480,6 +530,36 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
 
     batch_set(AiListingWorkbenchForm::buildDeleteBatchDefinition($selection));
     $form_state->setRedirect('ai_listing.workbench');
+  }
+
+  public function submitCullAndArchive(array &$form, FormStateInterface $form_state): void {
+    /** @var \Drupal\ai_listing\Entity\BbAiListing $listing */
+    $listing = $form_state->get('listing');
+    if (!$listing instanceof BbAiListing) {
+      $form_state->setRedirect('ai_listing.workbench');
+      return;
+    }
+
+    $reasonCode = trim((string) ($form_state->getValue(['cull', 'reason_code']) ?? ''));
+    $note = trim((string) ($form_state->getValue(['cull', 'note']) ?? ''));
+
+    try {
+      $result = $this->listingCullService->cull(
+        $listing,
+        $reasonCode !== '' ? $reasonCode : NULL,
+        $note,
+      );
+    }
+    catch (\Throwable $exception) {
+      $this->messenger()->addError('Cull action failed: ' . $exception->getMessage());
+      return;
+    }
+
+    $this->messenger()->addStatus(sprintf(
+      'Cull action complete. Unpublished %d marketplace record(s) and archived the listing.',
+      $result->unpublishedCount,
+    ));
+    $form_state->setRedirect('entity.bb_ai_listing.canonical', ['bb_ai_listing' => (int) $listing->id()]);
   }
 
   protected function handlePublishFailure(BbAiListing $listing, string $message): void {
@@ -795,6 +875,76 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       Html::escape($url),
       $escapedListingId
     );
+  }
+
+  /**
+   * @return array<string,string>
+   */
+  private function getCullReasonOptions(): array {
+    return [
+      '' => (string) $this->t('- Select -'),
+      'stale_low_value' => (string) $this->t('Stale low value'),
+      'damaged' => (string) $this->t('Damaged'),
+      'not_found_on_shelf' => (string) $this->t('Not found on shelf'),
+      'bundled_into_other_listing' => (string) $this->t('Bundled into other listing'),
+      'duplicate' => (string) $this->t('Duplicate'),
+      'other' => (string) $this->t('Other'),
+    ];
+  }
+
+  /**
+   * @return array<string,mixed>
+   */
+  private function buildHistoryEntries(int $listingId): array {
+    $entries = $this->listingHistoryQuery->fetchByListingId($listingId, 50);
+    if ($entries === []) {
+      return [
+        '#markup' => '<p><em>No history recorded yet.</em></p>',
+      ];
+    }
+
+    $rows = [];
+    foreach ($entries as $entry) {
+      $rows[] = [
+        'when' => $this->dateFormatter->format($entry->createdAt, 'custom', 'Y-m-d H:i'),
+        'event' => $this->humanizeHistoryEventType($entry->eventType),
+        'reason' => $entry->reasonCode !== NULL && $entry->reasonCode !== '' ? $this->humanizeReasonCode($entry->reasonCode) : '',
+        'message' => $entry->message,
+      ];
+    }
+
+    return [
+      '#type' => 'table',
+      '#header' => [
+        'when' => $this->t('When'),
+        'event' => $this->t('Event'),
+        'reason' => $this->t('Reason'),
+        'message' => $this->t('Message'),
+      ],
+      '#rows' => $rows,
+      '#empty' => $this->t('No history recorded yet.'),
+    ];
+  }
+
+  private function humanizeHistoryEventType(string $eventType): string {
+    return match ($eventType) {
+      'marketplace_unpublished' => 'Marketplace unpublished',
+      'listing_archived' => 'Listing archived',
+      'culled' => 'Culled',
+      default => ucwords(str_replace('_', ' ', $eventType)),
+    };
+  }
+
+  private function humanizeReasonCode(string $reasonCode): string {
+    return match ($reasonCode) {
+      'stale_low_value' => 'Stale low value',
+      'damaged' => 'Damaged',
+      'not_found_on_shelf' => 'Not found on shelf',
+      'bundled_into_other_listing' => 'Bundled into other listing',
+      'duplicate' => 'Duplicate',
+      'other' => 'Other',
+      default => ucwords(str_replace('_', ' ', $reasonCode)),
+    };
   }
 
   abstract protected function resolveListing(?BbAiListing $listing): BbAiListing;

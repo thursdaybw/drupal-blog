@@ -25,6 +25,7 @@ final class AiListingStockCullPickerFilterBrowserTest extends BrowserTestBase {
     'dynamic_entity_reference',
     'bb_platform',
     'ai_listing',
+    'listing_publishing',
   ];
 
   protected $defaultTheme = 'stark';
@@ -99,6 +100,17 @@ final class AiListingStockCullPickerFilterBrowserTest extends BrowserTestBase {
     $this->assertSession()->pageTextContains('Total matching listings: 1');
     $this->assertSession()->pageTextContains('Cheap old listing');
     $this->assertSession()->pageTextNotContains('Expensive new listing');
+
+    $this->drupalGet('/admin/ai-listings/reports/stock-cull/picker');
+    $this->assertSession()->fieldValueEquals('Max price', '20.00');
+    $this->assertSession()->fieldValueEquals('Listed on or before', '2025-07-01');
+    $this->assertSession()->pageTextContains('Total matching listings: 1');
+
+    $this->submitForm([], 'Clear filters');
+    $this->assertSession()->addressEquals('/admin/ai-listings/reports/stock-cull/picker');
+    $this->assertSession()->fieldValueEquals('Max price', '');
+    $this->assertSession()->fieldValueEquals('Listed on or before', '');
+    $this->assertSession()->pageTextContains('Total matching listings: 2');
   }
 
 }

@@ -14,6 +14,7 @@ use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
+use Drupal\Core\TempStore\PrivateTempStore;
 use Drupal\Core\Url;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -30,6 +31,7 @@ final class AiListingStockCullPickerForm extends FormBase implements ContainerIn
     private readonly FileUrlGeneratorInterface $fileUrlGenerator,
     private readonly TimeInterface $time,
     private readonly RequestStack $currentRequestStack,
+    private readonly PrivateTempStore $filterTempStore,
   ) {}
 
   public static function create(ContainerInterface $container): self {
@@ -40,6 +42,7 @@ final class AiListingStockCullPickerForm extends FormBase implements ContainerIn
       $container->get('file_url_generator'),
       $container->get('datetime.time'),
       $container->get('request_stack'),
+      $container->get('tempstore.private')->get('ai_listing.stock_cull_picker'),
     );
   }
 
@@ -96,6 +99,12 @@ final class AiListingStockCullPickerForm extends FormBase implements ContainerIn
       '#type' => 'submit',
       '#value' => $this->t('Apply filters'),
       '#submit' => ['::submitApplyFilters'],
+      '#limit_validation_errors' => [],
+    ];
+    $form['filters']['clear_filters'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Clear filters'),
+      '#submit' => ['::submitClearFilters'],
       '#limit_validation_errors' => [],
     ];
     $form['filters']['report_link'] = Link::fromTextAndUrl(
@@ -225,7 +234,14 @@ final class AiListingStockCullPickerForm extends FormBase implements ContainerIn
   public function submitForm(array &$form, FormStateInterface $form_state): void {}
 
   public function submitApplyFilters(array &$form, FormStateInterface $form_state): void {
-    $form_state->setRedirect('ai_listing.stock_cull_picker', [], $this->buildQueryOptionsFromSubmittedFilters($form_state));
+    $filters = $this->buildFiltersFromSubmittedValues($form_state);
+    $this->storeFilters($filters);
+    $form_state->setRedirect('ai_listing.stock_cull_picker', [], $this->buildQueryOptionsFromFilters($filters));
+  }
+
+  public function submitClearFilters(array &$form, FormStateInterface $form_state): void {
+    $this->filterTempStore->delete('filters');
+    $form_state->setRedirect('ai_listing.stock_cull_picker');
   }
 
   public function submitMarkSelected(array &$form, FormStateInterface $form_state): void {
@@ -258,6 +274,24 @@ final class AiListingStockCullPickerForm extends FormBase implements ContainerIn
    * @return array{listing_type:?string,max_price:?float,listed_before:?int}
    */
   private function resolveFilters(): array {
+    $request = $this->currentRequestStack->getCurrentRequest();
+    $hasExplicitQuery = $request !== NULL && (
+      $request->query->has('listing_type')
+      || $request->query->has('max_price')
+      || $request->query->has('listed_before')
+    );
+
+    if (!$hasExplicitQuery) {
+      $stored = $this->filterTempStore->get('filters');
+      if (is_array($stored)) {
+        return [
+          'listing_type' => $this->normalizeListingTypeValue($stored['listing_type'] ?? NULL),
+          'max_price' => $this->normalizeMaxPriceValue($stored['max_price'] ?? NULL),
+          'listed_before' => $this->normalizeListedBeforeValue($stored['listed_before'] ?? NULL),
+        ];
+      }
+    }
+
     return [
       'listing_type' => $this->resolveListingTypeFilter(),
       'max_price' => $this->resolveMaxPriceFilter(),
@@ -514,26 +548,64 @@ final class AiListingStockCullPickerForm extends FormBase implements ContainerIn
   /**
    * @return array<string,array<string,string>>
    */
-  private function buildQueryOptionsFromSubmittedFilters(FormStateInterface $form_state): array {
-    $query = [];
-
+  /**
+   * @return array{listing_type:?string,max_price:?float,listed_before:?int}
+   */
+  private function buildFiltersFromSubmittedValues(FormStateInterface $form_state): array {
     $requestValues = $this->currentRequestStack->getCurrentRequest()?->request->all() ?? [];
-    $listingType = trim((string) ($requestValues['listing_type'] ?? $form_state->getValue('listing_type') ?? ''));
-    if (in_array($listingType, ['book', 'generic'], TRUE)) {
-      $query['listing_type'] = $listingType;
+    $listingType = $this->normalizeListingTypeValue($requestValues['listing_type'] ?? $form_state->getValue('listing_type'));
+    $maxPrice = $this->normalizeMaxPriceValue($requestValues['max_price'] ?? $form_state->getValue('max_price'));
+    $listedBefore = $this->normalizeListedBeforeValue($requestValues['listed_before'] ?? $form_state->getValue('listed_before'));
+
+    return [
+      'listing_type' => $listingType,
+      'max_price' => $maxPrice,
+      'listed_before' => $listedBefore,
+    ];
+  }
+
+  /**
+   * @param array{listing_type:?string,max_price:?float,listed_before:?int} $filters
+   */
+  private function storeFilters(array $filters): void {
+    $this->filterTempStore->set('filters', [
+      'listing_type' => $filters['listing_type'],
+      'max_price' => $filters['max_price'] !== NULL ? number_format($filters['max_price'], 2, '.', '') : NULL,
+      'listed_before' => $filters['listed_before'] !== NULL ? date('Y-m-d', $filters['listed_before']) : NULL,
+    ]);
+  }
+
+  private function normalizeListingTypeValue(mixed $value): ?string {
+    $value = is_string($value) ? trim($value) : '';
+    return in_array($value, ['book', 'generic'], TRUE) ? $value : NULL;
+  }
+
+  private function normalizeMaxPriceValue(mixed $value): ?float {
+    if (!is_scalar($value)) {
+      return NULL;
     }
 
-    $maxPrice = trim((string) ($requestValues['max_price'] ?? $form_state->getValue('max_price') ?? ''));
-    if ($maxPrice !== '' && is_numeric($maxPrice) && (float) $maxPrice >= 0) {
-      $query['max_price'] = number_format((float) $maxPrice, 2, '.', '');
+    $value = trim((string) $value);
+    if ($value === '' || !is_numeric($value)) {
+      return NULL;
     }
 
-    $listedBefore = trim((string) ($requestValues['listed_before'] ?? $form_state->getValue('listed_before') ?? ''));
-    if ($listedBefore !== '') {
-      $query['listed_before'] = $listedBefore;
+    $value = (float) $value;
+    return $value >= 0 ? $value : NULL;
+  }
+
+  private function normalizeListedBeforeValue(mixed $value): ?int {
+    if (!is_scalar($value)) {
+      return NULL;
     }
 
-    return $query === [] ? [] : ['query' => $query];
+    $value = trim((string) $value);
+    if ($value === '') {
+      return NULL;
+    }
+
+    $timestamp = strtotime($value . ' 23:59:59');
+    return $timestamp !== FALSE ? $timestamp : NULL;
   }
 
 }

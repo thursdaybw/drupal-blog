@@ -35,6 +35,12 @@ ai_listing.stock_cull_report:
   parent: ai_listing.group
   weight: 25
 
+ai_listing.stock_cull_picker:
+  title: 'eBay stock cull picker'
+  route_name: ai_listing.stock_cull_picker
+  parent: ai_listing.group
+  weight: 26
+
 ai_listing.types:
   title: 'Listing types'
   route_name: entity.bb_ai_listing_type.collection

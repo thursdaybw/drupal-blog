@@ -66,6 +66,7 @@ final class AiListingStockCullReportController extends ControllerBase {
             <button type="submit">{{ button }}</button>
           </form>
           <a class="button button--secondary" href="{{ csv_url }}">{{ csv_label }}</a>
+          <a class="button button--secondary" href="{{ picker_url }}">{{ picker_label }}</a>
           </div>
         ',
         '#context' => [
@@ -75,7 +76,9 @@ final class AiListingStockCullReportController extends ControllerBase {
           'listed_before_label' => $this->t('Listed on or before'),
           'button' => $this->t('Apply'),
           'csv_label' => $this->t('Download CSV'),
+          'picker_label' => $this->t('Open picker'),
           'csv_url' => Url::fromRoute('ai_listing.stock_cull_report_csv', [], $this->buildFilterQueryOptions($listingType, $maxPrice, $listedBeforeTimestamp))->toString(),
+          'picker_url' => Url::fromRoute('ai_listing.stock_cull_picker', [], $this->buildFilterQueryOptions($listingType, $maxPrice, $listedBeforeTimestamp))->toString(),
           'selected' => $listingType ?? '',
           'max_price' => $maxPrice !== NULL ? number_format($maxPrice, 2, '.', '') : '',
           'listed_before' => $listedBeforeTimestamp !== NULL ? date('Y-m-d', $listedBeforeTimestamp) : '',

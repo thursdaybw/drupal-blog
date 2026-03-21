@@ -18,12 +18,13 @@ final class EbayStockCullReportRow {
     public readonly string $inventorySku,
     public readonly string $marketplaceListingId,
     public readonly string $source,
+    public readonly ?int $firstPublishedAt,
     public readonly ?int $marketplaceStartedAt,
     public readonly ?int $publishedAt,
   ) {}
 
   public function effectiveListedAt(): ?int {
-    return $this->marketplaceStartedAt ?? $this->publishedAt;
+    return $this->firstPublishedAt ?? $this->marketplaceStartedAt ?? $this->publishedAt;
   }
 
   public function priceAsFloat(): ?float {

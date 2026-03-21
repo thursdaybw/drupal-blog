@@ -7,6 +7,7 @@ namespace Drupal\listing_publishing\Service;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\AiListingInventorySku;
 use Drupal\ai_listing\Entity\AiMarketplacePublication;
+use Drupal\ai_listing\Service\MarketplaceLifecycleRecorder;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\listing_publishing\Model\MarketplacePublishResult;
 
@@ -14,6 +15,7 @@ final class MarketplacePublicationRecorder {
 
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
+    private readonly MarketplaceLifecycleRecorder $marketplaceLifecycleRecorder,
   ) {}
 
   public function recordSuccessfulPublish(
@@ -47,6 +49,9 @@ final class MarketplacePublicationRecorder {
   ): void {
     $normalizedPublicationType = trim($publicationType);
     $publication = $this->loadPublicationRecord($listing, $marketplaceKey, $normalizedPublicationType);
+    $isNewPublication = !$publication instanceof AiMarketplacePublication;
+    $wasPublished = $publication instanceof AiMarketplacePublication
+      && (string) ($publication->get('status')->value ?? '') === 'published';
 
     if (!$publication instanceof AiMarketplacePublication) {
       $publication = $this->entityTypeManager
@@ -85,6 +90,15 @@ final class MarketplacePublicationRecorder {
     }
 
     $publication->save();
+
+    if ($status === 'published' && ($isNewPublication || !$wasPublished)) {
+      $this->marketplaceLifecycleRecorder->recordPublished(
+        (int) $listing->id(),
+        $marketplaceKey,
+        $marketplaceStartedAt !== null && $marketplaceStartedAt > 0 ? $marketplaceStartedAt : null,
+        $marketplaceListingId,
+      );
+    }
   }
 
   private function loadPublicationRecord(

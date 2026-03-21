@@ -69,6 +69,84 @@ function ai_listing_schema(): array {
         'event_type' => ['event_type'],
       ],
     ],
+    'bb_ai_listing_marketplace_lifecycle' => [
+      'description' => 'Durable per-marketplace lifecycle facts for BB AI listings.',
+      'fields' => [
+        'id' => [
+          'description' => 'Primary key.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'listing_id' => [
+          'description' => 'Referenced bb_ai_listing ID.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'marketplace_key' => [
+          'description' => 'Marketplace key, for example ebay.',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+          'default' => '',
+        ],
+        'first_published_at' => [
+          'description' => 'Unix timestamp for when this listing first went live on this marketplace.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+          'default' => NULL,
+        ],
+        'last_published_at' => [
+          'description' => 'Unix timestamp for the most recent publish/relist on this marketplace.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+          'default' => NULL,
+        ],
+        'last_unpublished_at' => [
+          'description' => 'Unix timestamp for when the most recent live publication ended.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+          'default' => NULL,
+        ],
+        'last_marketplace_listing_id' => [
+          'description' => 'Most recent marketplace listing ID seen for this listing+marketplace pair.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+          'default' => NULL,
+        ],
+        'relist_count' => [
+          'description' => 'How many relist cycles have occurred after the first publish.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+        'created_at' => [
+          'description' => 'Unix timestamp when the lifecycle row was created.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+        'changed_at' => [
+          'description' => 'Unix timestamp when the lifecycle row last changed.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+      ],
+      'primary key' => ['id'],
+      'unique keys' => [
+        'listing_marketplace' => ['listing_id', 'marketplace_key'],
+      ],
+      'indexes' => [
+        'marketplace_first_published' => ['marketplace_key', 'first_published_at'],
+      ],
+    ],
   ];
 }
 
@@ -166,4 +244,75 @@ function ai_listing_update_11004(): void {
 
   $definition = ai_listing_schema();
   $schema->createTable('bb_ai_listing_history', $definition['bb_ai_listing_history']);
+}
+
+/**
+ * Creates durable marketplace lifecycle storage and backfills current rows.
+ */
+function ai_listing_update_11005(): void {
+  $database = \Drupal::database();
+  $schema = $database->schema();
+  $definition = ai_listing_schema();
+
+  if (!$schema->tableExists('bb_ai_listing_marketplace_lifecycle')) {
+    $schema->createTable('bb_ai_listing_marketplace_lifecycle', $definition['bb_ai_listing_marketplace_lifecycle']);
+  }
+
+  $rows = $database->select('ai_marketplace_publication', 'p')
+    ->fields('p', [
+      'listing',
+      'marketplace_key',
+      'marketplace_listing_id',
+      'marketplace_started_at',
+      'published_at',
+    ])
+    ->execute()
+    ->fetchAll();
+
+  $requestTime = \Drupal::time()->getRequestTime();
+  foreach ($rows as $row) {
+    $listingId = (int) ($row->listing ?? 0);
+    $marketplaceKey = trim((string) ($row->marketplace_key ?? ''));
+    if ($listingId <= 0 || $marketplaceKey === '') {
+      continue;
+    }
+
+    $firstPublishedAt = (int) ($row->marketplace_started_at ?? 0);
+    if ($firstPublishedAt <= 0) {
+      $firstPublishedAt = (int) ($row->published_at ?? 0);
+    }
+
+    $existingId = $database->select('bb_ai_listing_marketplace_lifecycle', 'l')
+      ->fields('l', ['id'])
+      ->condition('listing_id', $listingId)
+      ->condition('marketplace_key', $marketplaceKey)
+      ->execute()
+      ->fetchField();
+
+    $fields = [
+      'last_marketplace_listing_id' => trim((string) ($row->marketplace_listing_id ?? '')) ?: NULL,
+      'changed_at' => $requestTime,
+    ];
+    if ($firstPublishedAt > 0) {
+      $fields['first_published_at'] = $firstPublishedAt;
+      $fields['last_published_at'] = $firstPublishedAt;
+    }
+
+    if ($existingId) {
+      $database->update('bb_ai_listing_marketplace_lifecycle')
+        ->fields($fields)
+        ->condition('id', (int) $existingId)
+        ->execute();
+      continue;
+    }
+
+    $database->insert('bb_ai_listing_marketplace_lifecycle')
+      ->fields($fields + [
+        'listing_id' => $listingId,
+        'marketplace_key' => $marketplaceKey,
+        'relist_count' => 0,
+        'created_at' => $requestTime,
+      ])
+      ->execute();
+  }
 }

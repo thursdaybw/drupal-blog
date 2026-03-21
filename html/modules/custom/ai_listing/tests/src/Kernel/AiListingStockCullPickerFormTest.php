@@ -38,6 +38,7 @@ final class AiListingStockCullPickerFormTest extends KernelTestBase {
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installEntitySchema('file');
     $this->installEntitySchema('listing_image');
+    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);
   }
 
   public function testBuildDoesNotLoadCandidatesWithoutFilters(): void {

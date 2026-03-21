@@ -28,9 +28,10 @@ final class EbayStockCullReportQueryTest extends KernelTestBase {
 
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_marketplace_publication');
+    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);
   }
 
-  public function testFetchRowsUsesMarketplaceStartedAtFallback(): void {
+  public function testFetchRowsUsesLifecycleFirstPublishedAtThenMarketplaceStartedAtFallback(): void {
     $oldest = $this->createListing('Oldest migrated listing', 'book', '9.99');
     $fallback = $this->createListing('Fallback published listing', 'book', '4.99');
     $newest = $this->createListing('Newest listing', 'generic', '1.99');
@@ -42,6 +43,11 @@ final class EbayStockCullReportQueryTest extends KernelTestBase {
       'marketplace_started_at' => 1700000000,
       'published_at' => 1800000000,
       'marketplace_listing_id' => '111',
+    ]);
+    $this->createLifecycle((int) $oldest->id(), [
+      'marketplace_key' => 'ebay',
+      'first_published_at' => 1600000000,
+      'last_published_at' => 1800000000,
     ]);
     $this->createPublication((int) $fallback->id(), [
       'status' => 'published',
@@ -73,7 +79,7 @@ final class EbayStockCullReportQueryTest extends KernelTestBase {
       $byId[$row->listingId] = $row;
     }
 
-    $this->assertSame(1700000000, $byId[(int) $oldest->id()]->effectiveListedAt());
+    $this->assertSame(1600000000, $byId[(int) $oldest->id()]->effectiveListedAt());
     $this->assertSame(1710000000, $byId[(int) $fallback->id()]->effectiveListedAt());
     $this->assertSame(1720000000, $byId[(int) $newest->id()]->effectiveListedAt());
     $this->assertSame('SKU-' . (int) $oldest->id(), $byId[(int) $oldest->id()]->inventorySku);
@@ -187,6 +193,20 @@ final class EbayStockCullReportQueryTest extends KernelTestBase {
     ];
 
     $this->container->get('entity_type.manager')->getStorage('ai_marketplace_publication')->create($defaults + $values)->save();
+  }
+
+  /**
+   * @param array<string,mixed> $values
+   */
+  private function createLifecycle(int $listingId, array $values): void {
+    $this->container->get('database')->insert('bb_ai_listing_marketplace_lifecycle')
+      ->fields($values + [
+        'listing_id' => $listingId,
+        'created_at' => 1700000000,
+        'changed_at' => 1700000000,
+        'relist_count' => 0,
+      ])
+      ->execute();
   }
 
 }

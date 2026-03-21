@@ -7,6 +7,7 @@ namespace Drupal\Tests\listing_publishing\Kernel;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\BbAiListingType;
 use Drupal\ai_listing\Service\AiListingInventorySkuResolver;
+use Drupal\ai_listing\Service\MarketplaceLifecycleRecorder;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\field\Entity\FieldConfig;
@@ -92,6 +93,7 @@ final class ListingPublisherTest extends KernelTestBase {
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_listing_inventory_sku');
     $this->installEntitySchema('ai_marketplace_publication');
+    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);
 
     // Install the field config needed for a basic book listing.
     $this->installConfig(['field', 'ai_listing']);
@@ -126,7 +128,13 @@ final class ListingPublisherTest extends KernelTestBase {
     $this->skuResolver = new AiListingInventorySkuResolver($entityTypeManager);
 
     // This service writes Drupal's local "published on a marketplace" row.
-    $this->publicationRecorder = new MarketplacePublicationRecorder($entityTypeManager);
+    $this->publicationRecorder = new MarketplacePublicationRecorder(
+      $entityTypeManager,
+      new MarketplaceLifecycleRecorder(
+        $this->container->get('database'),
+        $this->container->get('datetime.time'),
+      ),
+    );
 
     // This service reads Drupal's local "published on a marketplace" row back
     // out of storage so the test can inspect it.
@@ -179,6 +187,13 @@ final class ListingPublisherTest extends KernelTestBase {
     $this->assertSame('pub-1', (string) $publication->get('marketplace_publication_id')->value);
     $this->assertSame('listing-1', (string) $publication->get('marketplace_listing_id')->value);
     $this->assertSame('2026 Feb BDMAA05 ai-book-2', (string) $publication->get('inventory_sku_value')->value);
+
+    $lifecycle = $this->loadLifecycleRow((int) $listing->id(), $this->marketplacePublisher->getMarketplaceKey());
+    $this->assertNotNull($lifecycle);
+    $this->assertGreaterThan(0, (int) $lifecycle->first_published_at);
+    $this->assertSame((int) $lifecycle->first_published_at, (int) $lifecycle->last_published_at);
+    $this->assertSame('listing-1', $lifecycle->last_marketplace_listing_id);
+    $this->assertSame(0, (int) $lifecycle->relist_count);
   }
 
   public function testPublishOrUpdateUsesSavedSkuForPublishedListing(): void {
@@ -285,6 +300,49 @@ final class ListingPublisherTest extends KernelTestBase {
     $this->assertSame('new-sku', $this->skuResolver->getSku($listing));
   }
 
+  public function testLifecyclePreservesFirstPublishedAtAcrossRelist(): void {
+    $listing = $this->createBookListing(
+      ebayTitle: 'Birdy by William Wharton Paperback Book',
+      fieldTitle: 'Birdy',
+      conditionNote: 'Clean copy with light edge wear.'
+    );
+
+    $inventorySku = $this->skuResolver->setSku($listing, 'old-sku');
+    $this->publicationRecorder->recordPublicationSnapshot(
+      $listing,
+      $inventorySku,
+      $this->marketplacePublisher->getMarketplaceKey(),
+      'FIXED_PRICE',
+      'published',
+      'existing-pub-id',
+      'existing-listing-id',
+      null,
+      null,
+      1700000000,
+    );
+
+    (new MarketplaceLifecycleRecorder(
+      $this->container->get('database'),
+      $this->container->get('datetime.time'),
+    ))->recordUnpublished((int) $listing->id(), $this->marketplacePublisher->getMarketplaceKey(), 1700000100);
+    $publication = $this->publicationResolver->getPublishedPublicationForListing(
+      $listing,
+      $this->marketplacePublisher->getMarketplaceKey(),
+      'FIXED_PRICE'
+    );
+    $this->assertNotNull($publication);
+    $publication->delete();
+
+    $this->skuGenerator->setNextSku('new-sku');
+    $this->listingPublisher->publish($listing);
+
+    $lifecycle = $this->loadLifecycleRow((int) $listing->id(), $this->marketplacePublisher->getMarketplaceKey());
+    $this->assertNotNull($lifecycle);
+    $this->assertSame(1700000000, (int) $lifecycle->first_published_at);
+    $this->assertGreaterThan(1700000100, (int) $lifecycle->last_published_at);
+    $this->assertSame(1, (int) $lifecycle->relist_count);
+  }
+
   public function testUpdateFailsClearlyWhenPublishedRecordHasNoPublicationId(): void {
     // Start with a normal listing.
     $listing = $this->createBookListing(
@@ -362,6 +420,18 @@ final class ListingPublisherTest extends KernelTestBase {
       'label' => 'Book',
       'description' => 'Single book listing.',
     ])->save();
+  }
+
+  private function loadLifecycleRow(int $listingId, string $marketplaceKey): ?object {
+    $row = $this->container->get('database')
+      ->select('bb_ai_listing_marketplace_lifecycle', 'l')
+      ->fields('l')
+      ->condition('listing_id', $listingId)
+      ->condition('marketplace_key', $marketplaceKey)
+      ->execute()
+      ->fetchObject();
+
+    return $row !== FALSE ? $row : NULL;
   }
 
 }

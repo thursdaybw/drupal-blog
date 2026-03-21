@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\listing_publishing\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\ai_listing\Service\MarketplaceLifecycleRecorder;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
 use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
 use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
@@ -32,6 +33,7 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
 
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_marketplace_publication');
+    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);
   }
 
   public function testUnpublishPublicationDeletesLocalPublicationAfterAdapterSuccess(): void {
@@ -42,6 +44,10 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
     $service = new MarketplaceUnpublishService(
       $this->container->get('entity_type.manager'),
       [$adapter],
+      new MarketplaceLifecycleRecorder(
+        $this->container->get('database'),
+        $this->container->get('datetime.time'),
+      ),
     );
 
     $result = $service->unpublishPublication((int) $publication->id());
@@ -65,6 +71,10 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
     $service = new MarketplaceUnpublishService(
       $this->container->get('entity_type.manager'),
       [new TestMarketplaceUnpublisher()],
+      new MarketplaceLifecycleRecorder(
+        $this->container->get('database'),
+        $this->container->get('datetime.time'),
+      ),
     );
 
     $this->expectException(\InvalidArgumentException::class);
@@ -87,6 +97,10 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
           throw new MarketplaceAlreadyUnpublishedException($request, 'Already gone.');
         }
       }],
+      new MarketplaceLifecycleRecorder(
+        $this->container->get('database'),
+        $this->container->get('datetime.time'),
+      ),
     );
 
     $result = $service->unpublishPublication((int) $publication->id());
@@ -98,6 +112,15 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
         ->getStorage('ai_marketplace_publication')
         ->load((int) $publication->id())
     );
+    $lifecycle = $this->container->get('database')
+      ->select('bb_ai_listing_marketplace_lifecycle', 'l')
+      ->fields('l')
+      ->condition('listing_id', (int) $listing->id())
+      ->condition('marketplace_key', 'ebay')
+      ->execute()
+      ->fetchObject();
+    $this->assertNotFalse($lifecycle);
+    $this->assertGreaterThan(0, (int) $lifecycle->last_unpublished_at);
   }
 
   private function createListing() {

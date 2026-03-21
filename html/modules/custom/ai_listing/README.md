@@ -239,8 +239,8 @@ The next UI refinement should be:
 `/admin/ai-listings/reports/stock-cull` is a read-model report for culling old eBay stock.
 
 - It reports only current `ebay` publications with `status = published`.
-- It uses `marketplace_started_at` as the primary age signal.
-- It falls back to `published_at` when marketplace start time is unavailable.
+- It uses preserved marketplace lifecycle `first_published_at` as the primary age signal when available.
+- It falls back to the current publication row `marketplace_started_at`, then `published_at`.
 - It computes `cull score = age in months / price`.
 - It orders highest cull score first.
 

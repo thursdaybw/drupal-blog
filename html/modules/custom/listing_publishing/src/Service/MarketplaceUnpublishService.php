@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\listing_publishing\Service;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\ai_listing\Service\MarketplaceLifecycleRecorder;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
 use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
 use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
@@ -21,6 +22,7 @@ final class MarketplaceUnpublishService {
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly iterable $marketplaceUnpublishers,
+    private readonly MarketplaceLifecycleRecorder $marketplaceLifecycleRecorder,
   ) {}
 
   public function unpublishPublication(int $publicationId): MarketplaceUnpublishResult {
@@ -59,6 +61,11 @@ final class MarketplaceUnpublishService {
     catch (MarketplaceAlreadyUnpublishedException) {
       $alreadyUnpublished = true;
     }
+
+    $this->marketplaceLifecycleRecorder->recordUnpublished(
+      (int) ($publication->get('listing')->target_id ?? 0),
+      $request->marketplaceKey,
+    );
 
     $publication->delete();
 

@@ -46,6 +46,7 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_listing_inventory_sku');
     $this->installEntitySchema('ai_marketplace_publication');
+    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);
     $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);
     $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing', 'bb_ebay_legacy_listing_link']);
     $this->installConfig(['field', 'ai_listing']);

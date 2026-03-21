@@ -25,7 +25,7 @@ use Drupal\KernelTests\KernelTestBase;
  * screen, then submit a new location. The risky part is not the browser click.
  * The risky part is the server-side wiring:
  * - the workbench must carry the selected listing IDs into tempstore
- * - the confirm form must turn that into the normal publish/update batch
+ * - the confirm form must turn that into the location-only batch
  *
  * These tests prove that flow without touching real eBay.
  */
@@ -105,9 +105,9 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
   }
 
   /**
-   * Checks that the confirm form queues the generic publish/update batch.
+   * Checks that the confirm form queues the generic location-only batch.
    */
-  public function testLocationConfirmQueuesPublishUpdateBatch(): void {
+  public function testLocationConfirmQueuesLocationOnlyBatch(): void {
     $this->getWorkbenchTempstore()->set(AiListingWorkbenchForm::LOCATION_CONFIRM_TEMPSTORE_KEY, [
       'selection' => [
         ['listing_type' => 'book', 'id' => 12],
@@ -139,12 +139,30 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
 
     $set = reset($batch['sets']);
     $this->assertIsArray($set);
-    $this->assertSame('Setting locations and publishing listings', (string) $set['title']);
+    $this->assertSame('Updating listing locations', (string) $set['title']);
     $this->assertCount(2, $set['operations']);
 
     $firstOperation = $set['operations'][0];
     $this->assertSame([AiListingWorkbenchForm::class, 'processBatchOperation'], $firstOperation[0]);
-    $this->assertSame(['book', 12, TRUE, 'BDMAA09', 'publish_update'], $firstOperation[1]);
+    $this->assertSame(['book', 12, TRUE, 'BDMAA09', 'location_only'], $firstOperation[1]);
+  }
+
+  /**
+   * Checks that the location-only batch marks ready-to-shelve listings shelved.
+   */
+  public function testLocationOnlyBatchSetsLocationAndMarksShelved(): void {
+    $listing = $this->createBookListing('Location-only batch test', '');
+    $listing->set('status', 'ready_to_shelve');
+    $listing->save();
+
+    $context = [];
+    AiListingWorkbenchForm::processBatchOperation('book', (int) $listing->id(), TRUE, 'BDMAA09', 'location_only', $context);
+
+    $reloaded = BbAiListing::load((int) $listing->id());
+    $this->assertInstanceOf(BbAiListing::class, $reloaded);
+    $this->assertSame('BDMAA09', (string) $reloaded->get('storage_location')->value);
+    $this->assertSame('shelved', (string) $reloaded->get('status')->value);
+    $this->assertSame(1, (int) ($context['results']['success'] ?? 0));
   }
 
   /**

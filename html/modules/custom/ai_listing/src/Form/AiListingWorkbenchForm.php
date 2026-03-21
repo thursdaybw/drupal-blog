@@ -390,14 +390,26 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $translation = \Drupal::translation();
 
     return [
-      'title' => $setLocation
-        ? $translation->translate('Setting locations and publishing listings')
-        : $translation->translate('Publishing/updating listings'),
+      'title' => match ($operationMode) {
+        'location_only' => $translation->translate('Updating listing locations'),
+        'publish_update' => $setLocation
+          ? $translation->translate('Setting locations and publishing listings')
+          : $translation->translate('Publishing/updating listings'),
+        default => $setLocation
+          ? $translation->translate('Shelving and publishing listings')
+          : $translation->translate('Publishing listings'),
+      },
       'operations' => $operations,
       'finished' => [self::class, 'finishBatchOperation'],
-      'init_message' => $setLocation
-        ? $translation->translate('Starting location update and publish batch...')
-        : $translation->translate('Starting publish/update batch...'),
+      'init_message' => match ($operationMode) {
+        'location_only' => $translation->translate('Starting location update batch...'),
+        'publish_update' => $setLocation
+          ? $translation->translate('Starting location update and publish batch...')
+          : $translation->translate('Starting publish/update batch...'),
+        default => $setLocation
+          ? $translation->translate('Starting shelf and publish batch...')
+          : $translation->translate('Starting publish batch...'),
+      },
       'progress_message' => $translation->translate('Processed @current of @total listings.'),
       'error_message' => $translation->translate('The batch finished with an unexpected error.'),
     ];
@@ -425,7 +437,20 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
 
     if ($setLocation) {
       $listing->set('storage_location', $location);
+    }
+
+    if ($operationMode === 'location_only') {
+      $listing->set('status', 'shelved');
       $listing->save();
+      $context['results']['success']++;
+      $context['message'] = (string) \Drupal::translation()->translate(
+        'Updated location for listing @id: @title',
+        [
+          '@id' => $listingId,
+          '@title' => $listing->label() ?: 'Untitled',
+        ]
+      );
+      return;
     }
 
     $publisher = \Drupal::service('drupal.listing_publishing.publisher');
@@ -491,7 +516,11 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $operationMode = (string) ($results['operation_mode'] ?? 'publish');
 
     if ($processedCount > 0) {
-      if ($operationMode === 'publish_update') {
+      if ($operationMode === 'location_only') {
+        $singular = 'Updated location for one listing.';
+        $plural = 'Updated location for @count listings.';
+      }
+      elseif ($operationMode === 'publish_update') {
         $singular = $setLocation ? 'Set location and published/updated one listing.' : 'Published/updated one listing.';
         $plural = $setLocation ? 'Set location and published/updated @count listings.' : 'Published/updated @count listings.';
       }

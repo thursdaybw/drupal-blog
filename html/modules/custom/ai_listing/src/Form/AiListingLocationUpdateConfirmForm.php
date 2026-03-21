@@ -49,7 +49,7 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
       '#markup' => '<p><strong>' . $this->t('Selected listings:') . '</strong> ' . count($listingIds) . '</p>',
     ];
     $form['summary']['description'] = [
-      '#markup' => '<p>' . $this->t('Set the new storage location, then run the normal publish/update flow for the selected listings.') . '</p>',
+      '#markup' => '<p>' . $this->t('Set the new storage location for the selected listings. This action updates local inventory metadata only and does not publish/update them.') . '</p>',
     ];
     $form['summary']['selected_listings'] = [
       '#theme' => 'table',
@@ -74,7 +74,7 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
     $form['actions'] = ['#type' => 'actions'];
     $form['actions']['submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Update location and publish/update'),
+      '#value' => $this->t('Update location'),
       '#button_type' => 'primary',
     ];
     $form['actions']['cancel'] = [
@@ -107,7 +107,7 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
       return;
     }
 
-    batch_set(AiListingWorkbenchForm::buildListingBatchDefinition($selection, TRUE, $location, 'publish_update'));
+    batch_set(AiListingWorkbenchForm::buildListingBatchDefinition($selection, TRUE, $location, 'location_only'));
     $form_state->setRedirectUrl($this->getCancelUrl());
   }
 

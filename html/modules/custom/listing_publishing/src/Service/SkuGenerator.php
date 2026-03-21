@@ -16,11 +16,6 @@ final class SkuGenerator implements SkuGeneratorInterface {
       $date->format('M'),
     ];
 
-    $location = trim((string) $listing->get('storage_location')->value ?? '');
-    if ($location !== '') {
-      $parts[] = $location;
-    }
-
     if ($uniqueSuffix !== '') {
       $parts[] = $uniqueSuffix;
     }

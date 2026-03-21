@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\listing_publishing\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\ai_listing\Service\ListingHistoryRecorder;
 use Drupal\ai_listing\Service\MarketplaceLifecycleRecorder;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
 use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
@@ -33,7 +34,7 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
 
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_marketplace_publication');
-    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);
+    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle', 'bb_ai_listing_history']);
   }
 
   public function testUnpublishPublicationDeletesLocalPublicationAfterAdapterSuccess(): void {
@@ -47,6 +48,11 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
       new MarketplaceLifecycleRecorder(
         $this->container->get('database'),
         $this->container->get('datetime.time'),
+      ),
+      new ListingHistoryRecorder(
+        $this->container->get('database'),
+        $this->container->get('datetime.time'),
+        $this->container->get('current_user'),
       ),
     );
 
@@ -62,6 +68,8 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
         ->getStorage('ai_marketplace_publication')
         ->load((int) $publication->id())
     );
+    $history = $this->loadHistoryEntries((int) $listing->id());
+    $this->assertSame('marketplace_unpublished', $history[0]->event_type);
   }
 
   public function testUnpublishPublicationFailsWhenNoAdapterSupportsMarketplace(): void {
@@ -74,6 +82,11 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
       new MarketplaceLifecycleRecorder(
         $this->container->get('database'),
         $this->container->get('datetime.time'),
+      ),
+      new ListingHistoryRecorder(
+        $this->container->get('database'),
+        $this->container->get('datetime.time'),
+        $this->container->get('current_user'),
       ),
     );
 
@@ -101,6 +114,11 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
         $this->container->get('database'),
         $this->container->get('datetime.time'),
       ),
+      new ListingHistoryRecorder(
+        $this->container->get('database'),
+        $this->container->get('datetime.time'),
+        $this->container->get('current_user'),
+      ),
     );
 
     $result = $service->unpublishPublication((int) $publication->id());
@@ -121,6 +139,8 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
       ->fetchObject();
     $this->assertNotFalse($lifecycle);
     $this->assertGreaterThan(0, (int) $lifecycle->last_unpublished_at);
+    $history = $this->loadHistoryEntries((int) $listing->id());
+    $this->assertSame('marketplace_already_unpublished', $history[0]->event_type);
   }
 
   private function createListing() {
@@ -150,6 +170,20 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
     $publication->save();
 
     return $publication;
+  }
+
+  /**
+   * @return array<int,object>
+   */
+  private function loadHistoryEntries(int $listingId): array {
+    return $this->container->get('database')
+      ->select('bb_ai_listing_history', 'h')
+      ->fields('h')
+      ->condition('listing_id', $listingId)
+      ->orderBy('created_at', 'DESC')
+      ->orderBy('id', 'DESC')
+      ->execute()
+      ->fetchAll();
   }
 
 }

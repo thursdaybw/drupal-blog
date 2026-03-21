@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\listing_publishing\Service;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\ai_listing\Service\ListingHistoryRecorder;
 use Drupal\ai_listing\Service\MarketplaceLifecycleRecorder;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
 use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
@@ -23,6 +24,7 @@ final class MarketplaceUnpublishService {
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly iterable $marketplaceUnpublishers,
     private readonly MarketplaceLifecycleRecorder $marketplaceLifecycleRecorder,
+    private readonly ListingHistoryRecorder $listingHistoryRecorder,
   ) {}
 
   public function unpublishPublication(int $publicationId): MarketplaceUnpublishResult {
@@ -62,10 +64,34 @@ final class MarketplaceUnpublishService {
       $alreadyUnpublished = true;
     }
 
+    $listingId = (int) ($publication->get('listing')->target_id ?? 0);
     $this->marketplaceLifecycleRecorder->recordUnpublished(
-      (int) ($publication->get('listing')->target_id ?? 0),
+      $listingId,
       $request->marketplaceKey,
     );
+
+    $eventType = $alreadyUnpublished
+      ? 'marketplace_already_unpublished'
+      : 'marketplace_unpublished';
+    $message = $alreadyUnpublished
+      ? sprintf(
+        '%s SKU %s was already unpublished on the marketplace. Removed the local publication record.',
+        $request->marketplaceKey,
+        $request->sku
+      )
+      : sprintf(
+        'Unpublished %s SKU %s and removed the local publication record.',
+        $request->marketplaceKey,
+        $request->sku
+      );
+    $this->listingHistoryRecorder->record($listingId, $eventType, $message, NULL, [
+      'marketplace_key' => $request->marketplaceKey,
+      'marketplace_publication_id' => $request->marketplacePublicationId,
+      'marketplace_listing_id' => $request->marketplaceListingId,
+      'sku' => $request->sku,
+      'deleted_offer_count' => $deletedOfferCount,
+      'already_unpublished' => $alreadyUnpublished,
+    ]);
 
     $publication->delete();
 

@@ -7,6 +7,7 @@ namespace Drupal\Tests\listing_publishing\Kernel;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\BbAiListingType;
 use Drupal\ai_listing\Service\AiListingInventorySkuResolver;
+use Drupal\ai_listing\Service\ListingHistoryRecorder;
 use Drupal\ai_listing\Service\MarketplaceLifecycleRecorder;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
@@ -21,6 +22,7 @@ use Drupal\listing_publishing\Service\BookListingAssembler;
 use Drupal\listing_publishing\Service\ListingPublisher;
 use Drupal\listing_publishing\Service\MarketplacePublicationRecorder;
 use Drupal\listing_publishing\Service\MarketplacePublicationResolver;
+use Drupal\listing_publishing\Service\MarketplaceUnpublishService;
 
 /**
  * Tests the core publish and update rules in ListingPublisher.
@@ -85,6 +87,7 @@ final class ListingPublisherTest extends KernelTestBase {
   private AiListingInventorySkuResolver $skuResolver;
   private MarketplacePublicationRecorder $publicationRecorder;
   private MarketplacePublicationResolver $publicationResolver;
+  private ListingHistoryRecorder $historyRecorder;
 
   protected function setUp(): void {
     parent::setUp();
@@ -93,7 +96,7 @@ final class ListingPublisherTest extends KernelTestBase {
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_listing_inventory_sku');
     $this->installEntitySchema('ai_marketplace_publication');
-    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);
+    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle', 'bb_ai_listing_history']);
 
     // Install the field config needed for a basic book listing.
     $this->installConfig(['field', 'ai_listing']);
@@ -126,6 +129,11 @@ final class ListingPublisherTest extends KernelTestBase {
 
     // These are the real Drupal services we want to exercise.
     $this->skuResolver = new AiListingInventorySkuResolver($entityTypeManager);
+    $this->historyRecorder = new ListingHistoryRecorder(
+      $this->container->get('database'),
+      $this->container->get('datetime.time'),
+      $this->container->get('current_user'),
+    );
 
     // This service writes Drupal's local "published on a marketplace" row.
     $this->publicationRecorder = new MarketplacePublicationRecorder(
@@ -134,6 +142,7 @@ final class ListingPublisherTest extends KernelTestBase {
         $this->container->get('database'),
         $this->container->get('datetime.time'),
       ),
+      $this->historyRecorder,
     );
 
     // This service reads Drupal's local "published on a marketplace" row back
@@ -194,6 +203,8 @@ final class ListingPublisherTest extends KernelTestBase {
     $this->assertSame((int) $lifecycle->first_published_at, (int) $lifecycle->last_published_at);
     $this->assertSame('listing-1', $lifecycle->last_marketplace_listing_id);
     $this->assertSame(0, (int) $lifecycle->relist_count);
+    $history = $this->loadHistoryEntries((int) $listing->id());
+    $this->assertSame('marketplace_published', $history[0]->event_type);
   }
 
   public function testPublishOrUpdateUsesSavedSkuForPublishedListing(): void {
@@ -262,6 +273,75 @@ final class ListingPublisherTest extends KernelTestBase {
 
     // Drupal should now store the replacement live SKU.
     $this->assertSame('new-sku', $this->skuResolver->getSku($listing));
+  }
+
+  public function testRepublishAfterUnpublishPreservesFirstPublishedAtAndRecordsHistory(): void {
+    $listing = $this->createBookListing(
+      ebayTitle: 'Lifecycle history test listing',
+      fieldTitle: 'Lifecycle history test listing',
+      conditionNote: 'Clean copy with light edge wear.'
+    );
+
+    $firstPublishResult = $this->listingPublisher->publish($listing);
+    $this->assertTrue($firstPublishResult->isSuccess());
+
+    $firstPublication = $this->publicationResolver->getPublishedPublicationForListing(
+      $listing,
+      $this->marketplacePublisher->getMarketplaceKey(),
+      'FIXED_PRICE'
+    );
+    $this->assertNotNull($firstPublication);
+
+    $firstLifecycle = $this->loadLifecycleRow((int) $listing->id(), $this->marketplacePublisher->getMarketplaceKey());
+    $this->assertNotNull($firstLifecycle);
+    $firstPublishedAt = (int) $firstLifecycle->first_published_at;
+
+    $unpublishService = new MarketplaceUnpublishService(
+      $this->container->get('entity_type.manager'),
+      [new class implements MarketplacePublisherInterface, \Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface {
+        public function publish(ListingPublishRequest $request): MarketplacePublishResult {
+          throw new \BadMethodCallException('Not used in this test.');
+        }
+
+        public function updatePublication(string $marketplacePublicationId, ListingPublishRequest $request, ?string $publicationType = null): MarketplacePublishResult {
+          throw new \BadMethodCallException('Not used in this test.');
+        }
+
+        public function deleteSku(string $sku): void {}
+
+        public function getMarketplaceKey(): string {
+          return 'test_marketplace';
+        }
+
+        public function supports(string $marketplaceKey): bool {
+          return trim(strtolower($marketplaceKey)) === 'test_marketplace';
+        }
+
+        public function unpublish(\Drupal\listing_publishing\Model\MarketplaceUnpublishRequest $request): int {
+          return 1;
+        }
+      }],
+      new MarketplaceLifecycleRecorder(
+        $this->container->get('database'),
+        $this->container->get('datetime.time'),
+      ),
+      $this->historyRecorder,
+    );
+    $unpublishService->unpublishPublication((int) $firstPublication->id());
+
+    $secondPublishResult = $this->listingPublisher->publish($listing);
+    $this->assertTrue($secondPublishResult->isSuccess());
+
+    $secondLifecycle = $this->loadLifecycleRow((int) $listing->id(), $this->marketplacePublisher->getMarketplaceKey());
+    $this->assertNotNull($secondLifecycle);
+    $this->assertSame($firstPublishedAt, (int) $secondLifecycle->first_published_at);
+    $this->assertGreaterThan(0, (int) $secondLifecycle->last_unpublished_at);
+    $this->assertSame(1, (int) $secondLifecycle->relist_count);
+
+    $history = $this->loadHistoryEntries((int) $listing->id());
+    $this->assertSame('marketplace_republished', $history[0]->event_type);
+    $this->assertSame('marketplace_unpublished', $history[1]->event_type);
+    $this->assertSame('marketplace_published', $history[2]->event_type);
   }
 
   public function testPublishOrUpdateRepublishesWhenSkuChanges(): void {
@@ -432,6 +512,20 @@ final class ListingPublisherTest extends KernelTestBase {
       ->fetchObject();
 
     return $row !== FALSE ? $row : NULL;
+  }
+
+  /**
+   * @return array<int,object>
+   */
+  private function loadHistoryEntries(int $listingId): array {
+    return $this->container->get('database')
+      ->select('bb_ai_listing_history', 'h')
+      ->fields('h')
+      ->condition('listing_id', $listingId)
+      ->orderBy('created_at', 'DESC')
+      ->orderBy('id', 'DESC')
+      ->execute()
+      ->fetchAll();
   }
 
 }

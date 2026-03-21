@@ -41,6 +41,7 @@ services:
     class: Drupal\listing_publishing\Service\MarketplacePublicationRecorder
     arguments:
       - '@entity_type.manager'
+      - '@ai_listing.marketplace_lifecycle_recorder'
 
   drupal.listing_publishing.marketplace_publication_lifecycle_manager:
     class: Drupal\listing_publishing\Service\MarketplacePublicationLifecycleManager
@@ -57,6 +58,7 @@ services:
     arguments:
       - '@entity_type.manager'
       - !tagged_iterator listing_publishing.marketplace_unpublisher
+      - '@ai_listing.marketplace_lifecycle_recorder'
 
   Drupal\listing_publishing\Service\MarketplaceUnpublishService:
     alias: listing_publishing.marketplace_unpublish_service

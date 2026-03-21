@@ -27,6 +27,7 @@ final class EbayStockCullReportQuery {
     $query = $this->buildBaseQuery($listingType, $maxPrice, $listedBeforeTimestamp);
     $query->fields('l', ['id', 'listing_type', 'ebay_title', 'price', 'storage_location']);
     $query->fields('p', ['inventory_sku_value', 'marketplace_listing_id', 'source', 'marketplace_started_at', 'published_at']);
+    $query->addField('ml', 'first_published_at', 'first_published_at');
     $query->orderBy('effective_listed_at', 'ASC');
     $query->orderBy('l.price', 'ASC');
     $query->orderBy('l.id', 'ASC');
@@ -43,6 +44,7 @@ final class EbayStockCullReportQuery {
         trim((string) ($record->inventory_sku_value ?? '')),
         (string) $record->marketplace_listing_id,
         (string) $record->source,
+        $record->first_published_at !== NULL ? (int) $record->first_published_at : NULL,
         $record->marketplace_started_at !== NULL ? (int) $record->marketplace_started_at : NULL,
         $record->published_at !== NULL ? (int) $record->published_at : NULL,
       );
@@ -68,10 +70,15 @@ final class EbayStockCullReportQuery {
   ) {
     $query = $this->database->select('ai_marketplace_publication', 'p');
     $query->innerJoin('bb_ai_listing', 'l', 'l.id = p.listing');
-    $query->addExpression('COALESCE(p.marketplace_started_at, p.published_at)', 'effective_listed_at');
+    $query->leftJoin(
+      'bb_ai_listing_marketplace_lifecycle',
+      'ml',
+      'ml.listing_id = p.listing AND ml.marketplace_key = p.marketplace_key'
+    );
+    $query->addExpression('COALESCE(ml.first_published_at, p.marketplace_started_at, p.published_at)', 'effective_listed_at');
     $query->condition('p.marketplace_key', 'ebay');
     $query->condition('p.status', 'published');
-    $query->where('COALESCE(p.marketplace_started_at, p.published_at) IS NOT NULL');
+    $query->where('COALESCE(ml.first_published_at, p.marketplace_started_at, p.published_at) IS NOT NULL');
     if ($listingType !== NULL && $listingType !== '') {
       $query->condition('l.listing_type', $listingType);
     }
@@ -79,7 +86,7 @@ final class EbayStockCullReportQuery {
       $query->condition('l.price', (string) $maxPrice, '<=');
     }
     if ($listedBeforeTimestamp !== NULL) {
-      $query->where('COALESCE(p.marketplace_started_at, p.published_at) <= :listed_before_timestamp', [
+      $query->where('COALESCE(ml.first_published_at, p.marketplace_started_at, p.published_at) <= :listed_before_timestamp', [
         ':listed_before_timestamp' => $listedBeforeTimestamp,
       ]);
     }

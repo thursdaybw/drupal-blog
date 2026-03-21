@@ -49,6 +49,12 @@ services:
     arguments:
       - '@database'
 
+  ai_listing.marketplace_lifecycle_recorder:
+    class: Drupal\ai_listing\Service\MarketplaceLifecycleRecorder
+    arguments:
+      - '@database'
+      - '@datetime.time'
+
   ai_listing.listing_cull_service:
     class: Drupal\ai_listing\Service\ListingCullService
     arguments:

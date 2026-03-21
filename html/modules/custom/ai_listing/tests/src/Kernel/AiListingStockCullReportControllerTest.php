@@ -31,6 +31,7 @@ final class AiListingStockCullReportControllerTest extends KernelTestBase {
 
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_marketplace_publication');
+    $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);
   }
 
   public function testBuildRendersReportRowsSortedByCullScore(): void {

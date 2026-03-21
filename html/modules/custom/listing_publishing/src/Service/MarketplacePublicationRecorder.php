@@ -7,6 +7,7 @@ namespace Drupal\listing_publishing\Service;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\AiListingInventorySku;
 use Drupal\ai_listing\Entity\AiMarketplacePublication;
+use Drupal\ai_listing\Service\ListingHistoryRecorder;
 use Drupal\ai_listing\Service\MarketplaceLifecycleRecorder;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\listing_publishing\Model\MarketplacePublishResult;
@@ -16,6 +17,7 @@ final class MarketplacePublicationRecorder {
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly MarketplaceLifecycleRecorder $marketplaceLifecycleRecorder,
+    private readonly ListingHistoryRecorder $listingHistoryRecorder,
   ) {}
 
   public function recordSuccessfulPublish(
@@ -48,6 +50,10 @@ final class MarketplacePublicationRecorder {
     ?int $marketplaceStartedAt = null,
   ): void {
     $normalizedPublicationType = trim($publicationType);
+    $normalizedSource = trim((string) ($source ?? 'local_publish'));
+    $listingId = (int) $listing->id();
+    $hadLifecycle = $this->marketplaceLifecycleRecorder->hasLifecycle($listingId, $marketplaceKey);
+    $wasPreviouslyUnpublished = $this->marketplaceLifecycleRecorder->wasPreviouslyUnpublished($listingId, $marketplaceKey);
     $publication = $this->loadPublicationRecord($listing, $marketplaceKey, $normalizedPublicationType);
     $isNewPublication = !$publication instanceof AiMarketplacePublication;
     $wasPublished = $publication instanceof AiMarketplacePublication
@@ -83,7 +89,7 @@ final class MarketplacePublicationRecorder {
       $publication->set('published_at', time());
     }
 
-    $publication->set('source', trim((string) ($source ?? 'local_publish')));
+    $publication->set('source', $normalizedSource);
 
     if ($marketplaceStartedAt !== null && $marketplaceStartedAt > 0) {
       $publication->set('marketplace_started_at', $marketplaceStartedAt);
@@ -93,11 +99,36 @@ final class MarketplacePublicationRecorder {
 
     if ($status === 'published' && ($isNewPublication || !$wasPublished)) {
       $this->marketplaceLifecycleRecorder->recordPublished(
-        (int) $listing->id(),
+        $listingId,
         $marketplaceKey,
         $marketplaceStartedAt !== null && $marketplaceStartedAt > 0 ? $marketplaceStartedAt : null,
         $marketplaceListingId,
       );
+
+      if ($normalizedSource === 'local_publish') {
+        $eventType = ($hadLifecycle && $wasPreviouslyUnpublished)
+          ? 'marketplace_republished'
+          : 'marketplace_published';
+        $action = $eventType === 'marketplace_republished' ? 'Republished' : 'Published';
+        $this->listingHistoryRecorder->record(
+          $listingId,
+          $eventType,
+          sprintf(
+            '%s to %s with SKU %s.',
+            $action,
+            $marketplaceKey,
+            (string) $inventorySku->get('sku')->value
+          ),
+          NULL,
+          [
+            'marketplace_key' => $marketplaceKey,
+            'publication_type' => $normalizedPublicationType,
+            'marketplace_publication_id' => trim((string) ($marketplacePublicationId ?? '')),
+            'marketplace_listing_id' => trim((string) ($marketplaceListingId ?? '')),
+            'sku' => (string) $inventorySku->get('sku')->value,
+          ],
+        );
+      }
     }
   }
 

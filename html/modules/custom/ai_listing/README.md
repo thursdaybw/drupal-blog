@@ -250,6 +250,26 @@ This keeps stock-age analysis out of write workflows and makes the cull surface 
 
 `/admin/ai-listings/reports/stock-cull/picker` is the operational shelf-walking companion to the stock cull report.
 
+## Existing-Site DTT Coverage
+
+For existing-site Selenium coverage against your real DDEV database, use `phpunit.dtt.xml`.
+
+Example:
+
+```bash
+ddev exec vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/ai_listing/tests/src/ExistingSiteJavascript/StockCullReportLifecycleDesktopTest.php
+```
+
+`StockCullReportLifecycleDesktopTest` creates a disposable local listing plus marketplace publication/lifecycle rows, then verifies the stock-cull report shows the preserved original listing date after a simulated relist.
+
+Deliberate live marketplace smoke test:
+
+```bash
+ddev exec vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/ai_listing/tests/src/ExistingSiteJavascript/LiveMarketplaceLifecycleDesktopTest.php
+```
+
+`LiveMarketplaceLifecycleDesktopTest` is a real publish -> unpublish -> republish test against the current dev marketplace wiring. It creates a disposable listing, verifies lifecycle date preservation and review-form history visibility, then cleans the live listing back down.
+
 - It reuses the same candidate filters as the stock cull report.
 - It regroups candidates by `storage_location`.
 - It shows listing images through the existing lightbox behavior for quick spine/cover inspection.
@@ -263,6 +283,11 @@ This keeps execution concerns separate from the analytical report while still sh
 Listing review now has a local append-only history layer backed by `bb_ai_listing_history`.
 
 - History records operational facts such as marketplace takedowns, archive/lost actions, and cull notes.
+- Normal marketplace lifecycle actions now also record history:
+  - `marketplace_published`
+  - `marketplace_unpublished`
+  - `marketplace_already_unpublished`
+  - `marketplace_republished`
 - The stacked cull actions on the review form:
   - unpublish all current marketplace publication rows for the listing
   - set the listing status to either `archived` or `lost`

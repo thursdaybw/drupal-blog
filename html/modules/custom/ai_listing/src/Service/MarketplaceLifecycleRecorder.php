@@ -83,6 +83,19 @@ final class MarketplaceLifecycleRecorder {
       ->execute();
   }
 
+  public function hasLifecycle(int $listingId, string $marketplaceKey): bool {
+    return $this->loadRow($listingId, trim($marketplaceKey)) !== NULL;
+  }
+
+  public function wasPreviouslyUnpublished(int $listingId, string $marketplaceKey): bool {
+    $row = $this->loadRow($listingId, trim($marketplaceKey));
+    if ($row === NULL) {
+      return FALSE;
+    }
+
+    return !empty($row->last_unpublished_at) && (int) $row->last_unpublished_at > 0;
+  }
+
   public function recordUnpublished(int $listingId, string $marketplaceKey, ?int $unpublishedAt = NULL): void {
     if ($listingId <= 0) {
       throw new \InvalidArgumentException('Marketplace lifecycle unpublish requires a positive listing ID.');

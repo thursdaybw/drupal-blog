@@ -142,6 +142,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     if (!is_array($statusOptions) || $statusOptions === []) {
       $statusOptions = [
         'new' => $this->t('New'),
+        'ready_for_inference' => $this->t('Ready for inference'),
         'processing' => $this->t('Processing'),
         'ready_for_review' => $this->t('Ready for review'),
         'ready_to_shelve' => $this->t('Ready to shelve'),
@@ -350,7 +351,16 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     ];
 
     $currentStatus = (string) ($listing->get('status')->value ?? '');
-    if ($currentStatus === 'ready_for_review') {
+    if ($currentStatus === 'new') {
+      $form['actions']['mark_ready_for_inference'] = [
+        '#type' => 'submit',
+        '#value' => $this->t('Mark ready for inference and continue'),
+        '#submit' => ['::submitAndSetReadyForInference'],
+        '#button_type' => 'primary',
+        '#name' => 'mark_ready_for_inference',
+      ];
+    }
+    elseif ($currentStatus === 'ready_for_review') {
       $form['actions']['mark_ready_to_shelve'] = [
         '#type' => 'submit',
         '#value' => $this->t('Mark ready to shelve and continue'),
@@ -422,6 +432,11 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       return;
     }
 
+    $statusValue = (string) ($form_state->getValue(['basic', 'status']) ?? '');
+    if ($triggerName === 'ai_save_listing' && $statusValue === 'new') {
+      return;
+    }
+
     $this->validatePhotoSelections($form_state);
   }
 
@@ -487,16 +502,17 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     $trigger = $form_state->getTriggeringElement() ?: [];
     $nextStatusValue = (string) ($form_state->getValue(['basic', 'status']) ?? '');
     if (($trigger['#name'] ?? '') === 'ai_save_listing') {
-      if ($nextStatusValue === 'new') {
-        $form_state->setRedirect($this->getAddRouteName());
-        return;
-      }
-
       if ($nextStatusValue === 'ready_to_shelve') {
         $this->redirectAfterReadyToShelve($form_state);
         return;
       }
     }
+  }
+
+  public function submitAndSetReadyForInference(array &$form, FormStateInterface $form_state): void {
+    $form_state->setValue(['basic', 'status'], 'ready_for_inference');
+    $this->submitForm($form, $form_state);
+    $this->redirectAfterReadyForInference($form_state);
   }
 
   public function submitAndSetReadyToShelve(array &$form, FormStateInterface $form_state): void {
@@ -604,6 +620,18 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
 
     $form_state->setRedirect('ai_listing.workbench', [], [
       'query' => ['status_filter' => 'ready_to_shelve'],
+    ]);
+  }
+
+  protected function redirectAfterReadyForInference(FormStateInterface $form_state): void {
+    $nextId = $this->getNextNewId();
+    if ($nextId !== null) {
+      $form_state->setRedirect('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $nextId]);
+      return;
+    }
+
+    $form_state->setRedirect('ai_listing.workbench', [], [
+      'query' => ['status_filter' => 'new'],
     ]);
   }
 
@@ -745,9 +773,32 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
    * @return int[]
    */
   protected function getReadyForReviewIds(): array {
+    return $this->getListingIdsByStatus('ready_for_review');
+  }
+
+  /**
+   * @return int[]
+   */
+  protected function getNewIds(): array {
+    return $this->getListingIdsByStatus('new');
+  }
+
+  protected function getNextNewId(): ?int {
+    $ids = $this->getNewIds();
+    if ($ids === []) {
+      return null;
+    }
+
+    return (int) $ids[0];
+  }
+
+  /**
+   * @return int[]
+   */
+  private function getListingIdsByStatus(string $status): array {
     $ids = $this->entityTypeManager->getStorage('bb_ai_listing')->getQuery()
       ->accessCheck(FALSE)
-      ->condition('status', 'ready_for_review')
+      ->condition('status', $status)
       ->sort('id', 'ASC')
       ->execute();
 

@@ -87,6 +87,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       '#options' => [
         'any' => $this->t('Any'),
         'new' => $this->t('New'),
+        'ready_for_inference' => $this->t('Ready for inference'),
         'processing' => $this->t('Processing'),
         'ready_for_review' => $this->t('Ready for review'),
         'ready_to_shelve' => $this->t('Ready to shelve'),

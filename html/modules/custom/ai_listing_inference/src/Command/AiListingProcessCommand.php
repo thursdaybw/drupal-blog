@@ -12,7 +12,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand(
   name: 'ai:process-new',
-  description: 'Process all AI Book Listings with status=new'
+  description: 'Process all AI Book Listings with status=ready_for_inference'
 )]
 final class AiListingProcessCommand extends Command {
 
@@ -23,7 +23,7 @@ final class AiListingProcessCommand extends Command {
   }
 
   protected function execute(InputInterface $input, OutputInterface $output): int {
-    $ids = $this->batchProcessor->getNewListingIds();
+    $ids = $this->batchProcessor->getReadyForInferenceListingIds();
     $total = count($ids);
 
     if ($total === 0) {
@@ -31,7 +31,7 @@ final class AiListingProcessCommand extends Command {
       return self::SUCCESS;
     }
 
-    $output->writeln(sprintf('Processing %d new listing(s)...', $total));
+    $output->writeln(sprintf('Processing %d ready-for-inference listing(s)...', $total));
     $startTime = microtime(TRUE);
     $processed = 0;
     $failed = 0;

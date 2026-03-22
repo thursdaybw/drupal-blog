@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## #ddev-generated
+## Description: Stream a production DB backup into local ./backups as a timestamped .sql.gz file.
+## Usage: backup-prod [--output-dir=./backups]
+## Example: backup-prod
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+OUTPUT_DIR="${PROJECT_ROOT}/backups"
+SSH_TARGET="bb-drupal-prod"
+REMOTE_WORKSPACE="/home/bevan/workspace/bb-platform-prod"
+REMOTE_COMPOSE_PATH="${REMOTE_WORKSPACE}/docker-compose.yml"
+REMOTE_ENV_PATH="${REMOTE_WORKSPACE}/.env"
+REMOTE_COMPOSE_PREFIX="sudo -n docker compose -f ${REMOTE_COMPOSE_PATH} --env-file ${REMOTE_ENV_PATH}"
+
+for arg in "$@"; do
+  case "$arg" in
+    --output-dir=*)
+      OUTPUT_DIR="${arg#*=}"
+      if [[ "${OUTPUT_DIR}" != /* ]]; then
+        OUTPUT_DIR="${PROJECT_ROOT}/${OUTPUT_DIR}"
+      fi
+      ;;
+    *)
+      echo "Unknown argument: $arg"
+      exit 1
+      ;;
+  esac
+done
+
+mkdir -p "${OUTPUT_DIR}"
+
+timestamp="$(date +%Y%m%d-%H%M%S)"
+output_file="${OUTPUT_DIR}/prod-db-${timestamp}.sql.gz"
+
+cleanup_partial_dump() {
+  if [[ -f "${output_file}" ]]; then
+    rm -f "${output_file}"
+  fi
+}
+
+trap cleanup_partial_dump ERR INT TERM
+
+ssh "${SSH_TARGET}" "${REMOTE_COMPOSE_PREFIX} up -d appserver db" >/dev/null
+
+ssh "${SSH_TARGET}" "${REMOTE_COMPOSE_PREFIX} exec -T db sh -lc 'mysqldump --default-character-set=utf8mb4 --no-tablespaces -u\"\${MYSQL_USER}\" -p\"\${MYSQL_PASSWORD}\" \"\${MYSQL_DATABASE}\" | gzip -c'" \
+  > "${output_file}"
+
+trap - ERR INT TERM
+
+echo "${output_file}"
+ls -lh "${output_file}"

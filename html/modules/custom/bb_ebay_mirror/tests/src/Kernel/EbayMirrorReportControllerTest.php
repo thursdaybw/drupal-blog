@@ -48,7 +48,7 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installEntitySchema('ebay_account');
     $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);
-    $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing']);
+    $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing', 'bb_ebay_legacy_listing_link']);
     $this->installConfig(['field', 'ai_listing']);
 
     $this->createBookType();
@@ -72,6 +72,7 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     );
     $legacyLinkedListing->set('listing_code', 'LEGACY01');
     $legacyLinkedListing->save();
+    $this->seedLegacyListingLink(1, '176577811710', (int) $legacyLinkedListing->id());
 
     $this->createPublication((int) $listing->id(), 'sku-missing', 'listing-11');
     $this->createPublication((int) $legacyLinkedListing->id(), '2024 September A01', 'listing-22');
@@ -99,6 +100,7 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertArrayHasKey('legacy_duplicate_sku', $build);
     $this->assertArrayHasKey('legacy_missing_sku', $build);
     $this->assertArrayHasKey('legacy_ready_to_migrate', $build);
+    $this->assertStringContainsString('#legacy-unmigrated', (string) $build['summary']['items']['#items'][12]);
 
     $this->assertSame('table', $build['missing_inventory']['table']['#type']);
     $this->assertSame('table', $build['sku_identifier_missing']['table']['#type']);
@@ -135,7 +137,9 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $legacyUnmigratedRows = $build['legacy_unmigrated']['table']['#rows'];
     $this->assertCount(1, $legacyUnmigratedRows);
     $this->assertSame('176577811710', (string) $legacyUnmigratedRows[0][0]);
-    $this->assertSame('2024 September A01', (string) $legacyUnmigratedRows[0][1]);
+    $this->assertStringContainsString((string) $legacyLinkedListing->id(), (string) $legacyUnmigratedRows[0][1]);
+    $this->assertSame('LEGACY01', (string) $legacyUnmigratedRows[0][2]);
+    $this->assertSame('2024 September A01', (string) $legacyUnmigratedRows[0][3]);
 
     $legacyMigratedRows = $build['legacy_migrated']['table']['#rows'];
     $this->assertCount(1, $legacyMigratedRows);
@@ -254,6 +258,19 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
         'ebay_listing_started_at' => $startedAt,
         'listing_status' => $listingStatus,
         'last_seen' => time(),
+      ])
+      ->execute();
+  }
+
+  private function seedLegacyListingLink(int $accountId, string $ebayListingId, int $listingId): void {
+    $this->container->get('database')->insert('bb_ebay_legacy_listing_link')
+      ->fields([
+        'listing' => $listingId,
+        'account_id' => $accountId,
+        'origin_type' => 'legacy_ebay_migrated',
+        'ebay_listing_id' => $ebayListingId,
+        'created' => time(),
+        'changed' => time(),
       ])
       ->execute();
   }

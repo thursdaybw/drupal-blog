@@ -29,6 +29,7 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
     'system',
     'user',
     'field',
+    'file',
     'text',
     'filter',
     'options',
@@ -49,7 +50,7 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);
-    $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing']);
+    $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing', 'bb_ebay_legacy_listing_link']);
     $this->installConfig(['field', 'ai_listing']);
 
     $this->createBookType();
@@ -253,8 +254,18 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
   }
 
   public function testFindLegacyListingsMissingAndHavingMirroredSellOffers(): void {
+    $linkedListing = $this->createBookListing(
+      ebayTitle: 'Linked legacy listing',
+      fieldTitle: 'Linked legacy listing',
+      storageLocation: 'BDMAA13'
+    );
+    $linkedListing->set('listing_code', 'LEGACYLINK');
+    $linkedListing->save();
+
     $this->seedLegacyListing(1, '176577811710', '2024 September A01', 'Legacy unmigrated listing', 1726406100, 'Active');
     $this->seedLegacyListing(1, '176582430935', '2024 September A01', 'Legacy migrated listing', 1726406100, 'Active');
+    $this->seedLegacyListing(1, '176582430936', '2024 September A02', 'Legacy linked listing', 1726406200, 'Active');
+    $this->seedLegacyListingLink(1, '176582430936', (int) $linkedListing->id());
     $this->seedMirroredOffer(1, 'offer-legacy-migrated', '2024 September A01', '176582430935', 'ACTIVE', 'PUBLISHED');
 
     $missingRows = $this->auditService->findLegacyListingsMissingMirroredSellOffer(1);
@@ -307,11 +318,21 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
   }
 
   public function testFindLegacyListingsReadyToMigrate(): void {
+    $linkedListing = $this->createBookListing(
+      ebayTitle: 'Already linked local listing',
+      fieldTitle: 'Already linked local listing',
+      storageLocation: 'BDMAA14'
+    );
+    $linkedListing->set('listing_code', 'LINKEDREADY');
+    $linkedListing->save();
+
     $this->seedLegacyListing(1, '176577811710', '2024 September A01', 'Duplicate legacy listing one', 1726406100, 'Active');
     $this->seedLegacyListing(1, '176582430935', '2024 September A01', 'Duplicate legacy listing two', 1726406200, 'Active');
     $this->seedLegacyListing(1, '176779515895', '', 'Blank SKU legacy listing', 1754000000, 'Active');
     $this->seedLegacyListing(1, '176700000001', 'READY-SKU-1', 'Ready legacy listing', 1755000000, 'Active');
     $this->seedLegacyListing(1, '176700000002', 'MIGRATED-SKU-1', 'Already migrated legacy listing', 1755000100, 'Active');
+    $this->seedLegacyListing(1, '176700000003', 'LINKED-SKU-1', 'Linked legacy listing', 1755000200, 'Active');
+    $this->seedLegacyListingLink(1, '176700000003', (int) $linkedListing->id());
     $this->seedMirroredOffer(1, 'offer-already-migrated', 'MIGRATED-SKU-1', '176700000002', 'ACTIVE', 'PUBLISHED');
 
     $rows = $this->auditService->findLegacyListingsReadyToMigrate(1);
@@ -414,6 +435,19 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
         'ebay_listing_started_at' => $startedAt,
         'listing_status' => $listingStatus,
         'last_seen' => time(),
+      ])
+      ->execute();
+  }
+
+  private function seedLegacyListingLink(int $accountId, string $ebayListingId, int $listingId): void {
+    $this->container->get('database')->insert('bb_ebay_legacy_listing_link')
+      ->fields([
+        'listing' => $listingId,
+        'account_id' => $accountId,
+        'origin_type' => 'legacy_ebay_migrated',
+        'ebay_listing_id' => $ebayListingId,
+        'created' => time(),
+        'changed' => time(),
       ])
       ->execute();
   }

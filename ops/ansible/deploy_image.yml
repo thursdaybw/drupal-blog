@@ -292,14 +292,16 @@
                   find /var/www/html/sites/default/files -type f -exec chmod 0664 {} +'
       changed_when: true
 
-    - name: Check Drupal bootstrap state in environment app container
-      vars:
+    - name: Define Drupal bootstrap check command
+      ansible.builtin.set_fact:
         drush_bootstrap_cmd: >-
           sudo -n docker compose
           -f {{ deploy_target.compose_path }}
           --env-file {{ deploy_target.env_path }}
           exec -T appserver
           sh -lc 'cd /var/www/html && {{ app_drush_bin }} status --fields=bootstrap --format=list'
+
+    - name: Check Drupal bootstrap state in environment app container
       ansible.builtin.command:
         cmd: "{{ drush_bootstrap_cmd }}"
       register: drush_bootstrap

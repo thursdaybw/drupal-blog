@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\ebay_infrastructure\Service;
 
-use Drupal\ebay_infrastructure\Utility\OfferExceptionHelper;
+use Drupal\ebay_infrastructure\Exception\EbayInventoryItemMissingException;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
 use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
 use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
@@ -15,7 +15,7 @@ use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
 final class EbayMarketplaceUnpublisher implements MarketplaceUnpublisherInterface {
 
   public function __construct(
-    private readonly SellApiClient $sellApiClient,
+    private readonly EbaySkuRemovalService $skuRemovalService,
   ) {}
 
   public function supports(string $marketplaceKey): bool {
@@ -23,51 +23,15 @@ final class EbayMarketplaceUnpublisher implements MarketplaceUnpublisherInterfac
   }
 
   public function unpublish(MarketplaceUnpublishRequest $request): int {
-    $offers = [];
-
     try {
-      $offers = $this->sellApiClient->listOffersBySku($request->sku);
+      return $this->skuRemovalService->removeSku($request->sku);
     }
-    catch (\RuntimeException $exception) {
-      if (!OfferExceptionHelper::isOfferUnavailable($exception)) {
-        throw $exception;
-      }
-      $offers = ['offers' => []];
+    catch (EbayInventoryItemMissingException) {
+      throw new MarketplaceAlreadyUnpublishedException(
+        $request,
+        sprintf('Marketplace resource already missing for SKU %s.', $request->sku),
+      );
     }
-
-    $deletedOfferCount = 0;
-    foreach ($offers['offers'] ?? [] as $offer) {
-      $offerId = $offer['offerId'] ?? NULL;
-      if ($offerId === NULL || $offerId === '') {
-        continue;
-      }
-
-      try {
-        $this->sellApiClient->deleteOffer((string) $offerId);
-        $deletedOfferCount++;
-      }
-      catch (\RuntimeException $exception) {
-        if (OfferExceptionHelper::isOfferUnavailable($exception)) {
-          continue;
-        }
-        throw $exception;
-      }
-    }
-
-    try {
-      $this->sellApiClient->deleteInventoryItem($request->sku);
-    }
-    catch (\RuntimeException $exception) {
-      if (OfferExceptionHelper::isInventoryItemMissing($exception)) {
-        throw new MarketplaceAlreadyUnpublishedException(
-          $request,
-          sprintf('Marketplace resource already missing for SKU %s.', $request->sku),
-        );
-      }
-      throw $exception;
-    }
-
-    return $deletedOfferCount;
   }
 
 }

@@ -13,6 +13,7 @@ use Drupal\ebay_connector\Service\ConditionMapper;
 use Drupal\ebay_connector\Service\EbayMarketplacePublisher;
 use Drupal\ebay_infrastructure\Service\EbayAccountManager;
 use Drupal\ebay_infrastructure\Service\OAuthTokenService;
+use Drupal\ebay_infrastructure\Service\EbaySkuRemovalService;
 use Drupal\ebay_infrastructure\Service\SellApiClient;
 use Drupal\ebay_infrastructure\Service\StoreService;
 use Drupal\Tests\ebay_infrastructure\Support\RecordedHttpClient;
@@ -410,6 +411,55 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
     $this->assertSame('0', (string) $offerCount);
   }
 
+  public function testDeleteSkuRemovesMirrorRowsWhenInventoryAlreadyMissing(): void {
+    $publisher = $this->createPublisher(['https://images.example.com/book.jpg']);
+
+    $this->container->get('database')->insert('bb_ebay_inventory_item')
+      ->fields([
+        'account_id' => 1,
+        'sku' => 'sku-missing',
+        'title' => 'Stale title',
+        'last_seen' => time(),
+      ])
+      ->execute();
+    $this->container->get('database')->insert('bb_ebay_offer')
+      ->fields([
+        'account_id' => 1,
+        'offer_id' => 'offer-missing',
+        'sku' => 'sku-missing',
+        'status' => 'PUBLISHED',
+        'last_seen' => time(),
+      ])
+      ->execute();
+
+    $this->httpClient->queueJsonResponse([
+      'errors' => [['errorId' => 25713, 'message' => 'Offer not found.']],
+    ], 404);
+    $this->httpClient->queueJsonResponse([
+      'errors' => [['errorId' => 25710, 'message' => 'Inventory item not found.']],
+    ], 404);
+
+    $publisher->deleteSku('sku-missing');
+
+    $inventoryCount = $this->container->get('database')
+      ->select('bb_ebay_inventory_item', 'i')
+      ->condition('account_id', 1)
+      ->condition('sku', 'sku-missing')
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+    $offerCount = $this->container->get('database')
+      ->select('bb_ebay_offer', 'o')
+      ->condition('account_id', 1)
+      ->condition('sku', 'sku-missing')
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+
+    $this->assertSame('0', (string) $inventoryCount);
+    $this->assertSame('0', (string) $offerCount);
+  }
+
   private function createPublisher(array $uploadedUrls): EbayMarketplacePublisher {
     $accountManager = new EbayAccountManager(
       $this->container->get('entity_type.manager'),
@@ -429,6 +479,12 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       $sellApiClient,
       $this->container->get('database'),
     );
+    $skuRemovalService = new EbaySkuRemovalService(
+      $sellApiClient,
+      $accountManager,
+      $inventoryMirrorSyncService,
+      $offerMirrorSyncService,
+    );
 
     return new EbayMarketplacePublisher(
       $sellApiClient,
@@ -438,6 +494,7 @@ final class EbayMarketplacePublisherTest extends KernelTestBase {
       $accountManager,
       $inventoryMirrorSyncService,
       $offerMirrorSyncService,
+      $skuRemovalService,
       $this->container->get('logger.factory'),
     );
   }

@@ -8,6 +8,7 @@ Important rule
 - It also deletes mirror rows for the account that eBay did not return in the current sync run.
 - The mirror should reflect current remote state, not "anything we have ever seen".
 - Successful publish, update, and delete operations in `ebay_connector` also refresh the affected mirror rows immediately.
+- Successful unpublish/takedown operations must also delete the affected mirror rows immediately.
 - Cron/full sync is still needed later as the safety net for drift and manual eBay changes.
 
 What it stores

@@ -51,6 +51,29 @@ final class EbayMirrorReportController extends ControllerBase {
     $legacyMissingSkuRows = $this->auditService->findLegacyListingsMissingSku($accountId);
     $legacyReadyToMigrateRows = $this->auditService->findLegacyListingsReadyToMigrate($accountId);
 
+    $summaryItems = [
+      $this->t('Account: @label (@id)', [
+        '@label' => (string) $account->label(),
+        '@id' => (string) $account->id(),
+      ]),
+      $this->buildSummaryLinkItem('Mirrored inventory rows', (string) $this->auditService->countMirroredInventoryRows($accountId), 'orphaned-inventory'),
+      $this->buildSummaryLinkItem('Mirrored offer rows', (string) $this->auditService->countMirroredOfferRows($accountId), 'orphaned-offers'),
+      $this->buildSummaryLinkItem('Legacy listing rows', (string) $this->auditService->countLegacyListingRows($accountId), 'legacy-unmigrated'),
+      $this->buildSummaryLinkItem('Local published listings missing mirrored inventory', (string) count($missingInventoryRows), 'missing-inventory'),
+      $this->buildSummaryLinkItem('Local published listings missing mirrored offers', (string) count($missingOfferRows), 'missing-offers'),
+      $this->buildSummaryLinkItem('Mirrored inventory rows with no local published listing', (string) count($orphanedInventoryRows), 'orphaned-inventory'),
+      $this->buildSummaryLinkItem('Mirrored offers with no local published listing', (string) count($orphanedOfferRows), 'orphaned-offers'),
+      $this->buildSummaryLinkItem('Legacy mirrored SKUs without embedded local identifier', (string) count($skuIdentifierMissingRows), 'sku-identifier-missing'),
+      $this->buildSummaryLinkItem('Mirrored SKU/link mismatches', (string) count($trueSkuLinkMismatchRows), 'sku-link-mismatch'),
+      $this->buildSummaryLinkItem('Local listings with multiple mirrored inventory SKUs', (string) count($multipleInventoryRows), 'multiple-inventory'),
+      $this->buildSummaryLinkItem('Local listings with multiple mirrored offers', (string) count($multipleOfferRows), 'multiple-offers'),
+      $this->buildSummaryLinkItem('Legacy listings with no mirrored Sell offer', (string) count($legacyUnmigratedRows), 'legacy-unmigrated'),
+      $this->buildSummaryLinkItem('Legacy listings with mirrored Sell offer', (string) count($legacyMigratedRows), 'legacy-migrated'),
+      $this->buildSummaryLinkItem('Legacy duplicate SKU groups', (string) count($legacyDuplicateSkuRows), 'legacy-duplicate-sku'),
+      $this->buildSummaryLinkItem('Legacy listings with missing SKU', (string) count($legacyMissingSkuRows), 'legacy-missing-sku'),
+      $this->buildSummaryLinkItem('Legacy listings ready to migrate', (string) count($legacyReadyToMigrateRows), 'legacy-ready-to-migrate'),
+    ];
+
     $build = [];
     $build['summary'] = [
       '#type' => 'container',
@@ -59,82 +82,31 @@ final class EbayMirrorReportController extends ControllerBase {
       ],
       'items' => [
         '#theme' => 'item_list',
-        '#items' => [
-          $this->t('Account: @label (@id)', [
-            '@label' => (string) $account->label(),
-            '@id' => (string) $account->id(),
-          ]),
-          $this->t('Mirrored inventory rows: @count', [
-            '@count' => (string) $this->auditService->countMirroredInventoryRows($accountId),
-          ]),
-          $this->t('Mirrored offer rows: @count', [
-            '@count' => (string) $this->auditService->countMirroredOfferRows($accountId),
-          ]),
-          $this->t('Legacy listing rows: @count', [
-            '@count' => (string) $this->auditService->countLegacyListingRows($accountId),
-          ]),
-          $this->t('Local published listings missing mirrored inventory: @count', [
-            '@count' => (string) count($missingInventoryRows),
-          ]),
-          $this->t('Local published listings missing mirrored offers: @count', [
-            '@count' => (string) count($missingOfferRows),
-          ]),
-          $this->t('Mirrored inventory rows with no local published listing: @count', [
-            '@count' => (string) count($orphanedInventoryRows),
-          ]),
-          $this->t('Mirrored offers with no local published listing: @count', [
-            '@count' => (string) count($orphanedOfferRows),
-          ]),
-          $this->t('Legacy mirrored SKUs without embedded local identifier: @count', [
-            '@count' => (string) count($skuIdentifierMissingRows),
-          ]),
-          $this->t('Mirrored SKU/link mismatches: @count', [
-            '@count' => (string) count($trueSkuLinkMismatchRows),
-          ]),
-          $this->t('Local listings with multiple mirrored inventory SKUs: @count', [
-            '@count' => (string) count($multipleInventoryRows),
-          ]),
-          $this->t('Local listings with multiple mirrored offers: @count', [
-            '@count' => (string) count($multipleOfferRows),
-          ]),
-          $this->t('Legacy listings with no mirrored Sell offer: @count', [
-            '@count' => (string) count($legacyUnmigratedRows),
-          ]),
-          $this->t('Legacy listings with mirrored Sell offer: @count', [
-            '@count' => (string) count($legacyMigratedRows),
-          ]),
-          $this->t('Legacy duplicate SKU groups: @count', [
-            '@count' => (string) count($legacyDuplicateSkuRows),
-          ]),
-          $this->t('Legacy listings with missing SKU: @count', [
-            '@count' => (string) count($legacyMissingSkuRows),
-          ]),
-          $this->t('Legacy listings ready to migrate: @count', [
-            '@count' => (string) count($legacyReadyToMigrateRows),
-          ]),
-        ],
+        '#items' => $summaryItems,
       ],
     ];
 
     $build['missing_inventory'] = $this->buildLocalListingAuditTable(
       'Local Published Listings Missing Mirrored Inventory',
-      $missingInventoryRows
+      $missingInventoryRows,
+      'missing-inventory'
     );
     $build['missing_offers'] = $this->buildLocalListingAuditTable(
       'Local Published Listings Missing Mirrored Offers',
-      $missingOfferRows
+      $missingOfferRows,
+      'missing-offers'
     );
-    $build['orphaned_inventory'] = $this->buildOrphanedInventoryTable($orphanedInventoryRows);
-    $build['orphaned_offers'] = $this->buildOrphanedOfferTable($orphanedOfferRows);
-    $build['sku_identifier_missing'] = $this->buildSkuIdentifierMissingTable($skuIdentifierMissingRows);
-    $build['sku_link_mismatch'] = $this->buildSkuLinkMismatchTable($trueSkuLinkMismatchRows);
-    $build['multiple_inventory'] = $this->buildMultipleInventoryTable($multipleInventoryRows);
-    $build['multiple_offers'] = $this->buildMultipleOffersTable($multipleOfferRows);
-    $build['legacy_unmigrated'] = $this->buildLegacyUnmigratedTable($legacyUnmigratedRows);
-    $build['legacy_migrated'] = $this->buildLegacyMigratedTable($legacyMigratedRows);
-    $build['legacy_duplicate_sku'] = $this->buildLegacyDuplicateSkuTable($legacyDuplicateSkuRows);
-    $build['legacy_missing_sku'] = $this->buildLegacyMissingSkuTable($legacyMissingSkuRows);
-    $build['legacy_ready_to_migrate'] = $this->buildLegacyReadyToMigrateTable($legacyReadyToMigrateRows);
+    $build['orphaned_inventory'] = $this->buildOrphanedInventoryTable($orphanedInventoryRows, 'orphaned-inventory');
+    $build['orphaned_offers'] = $this->buildOrphanedOfferTable($orphanedOfferRows, 'orphaned-offers');
+    $build['sku_identifier_missing'] = $this->buildSkuIdentifierMissingTable($skuIdentifierMissingRows, 'sku-identifier-missing');
+    $build['sku_link_mismatch'] = $this->buildSkuLinkMismatchTable($trueSkuLinkMismatchRows, 'sku-link-mismatch');
+    $build['multiple_inventory'] = $this->buildMultipleInventoryTable($multipleInventoryRows, 'multiple-inventory');
+    $build['multiple_offers'] = $this->buildMultipleOffersTable($multipleOfferRows, 'multiple-offers');
+    $build['legacy_unmigrated'] = $this->buildLegacyUnmigratedTable($legacyUnmigratedRows, 'legacy-unmigrated');
+    $build['legacy_migrated'] = $this->buildLegacyMigratedTable($legacyMigratedRows, 'legacy-migrated');
+    $build['legacy_duplicate_sku'] = $this->buildLegacyDuplicateSkuTable($legacyDuplicateSkuRows, 'legacy-duplicate-sku');
+    $build['legacy_missing_sku'] = $this->buildLegacyMissingSkuTable($legacyMissingSkuRows, 'legacy-missing-sku');
+    $build['legacy_ready_to_migrate'] = $this->buildLegacyReadyToMigrateTable($legacyReadyToMigrateRows, 'legacy-ready-to-migrate');
 
     return $build;
   }
@@ -142,7 +114,7 @@ final class EbayMirrorReportController extends ControllerBase {
   /**
    * @param array<int,array{listing_id:int,ebay_title:?string,storage_location:?string,sku:string,marketplace_listing_id:?string}> $rows
    */
-  private function buildLocalListingAuditTable(string $title, array $rows): array {
+  private function buildLocalListingAuditTable(string $title, array $rows, string $fragment): array {
     $header = [
       $this->t('Listing'),
       $this->t('Listing code'),
@@ -165,13 +137,13 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable($title, $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable($title, $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
    * @param array<int,array{sku:string,title:?string,available_quantity:?int,condition:?string}> $rows
    */
-  private function buildOrphanedInventoryTable(array $rows): array {
+  private function buildOrphanedInventoryTable(array $rows, string $fragment): array {
     $header = [
       $this->t('SKU'),
       $this->t('eBay title'),
@@ -190,13 +162,13 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Mirrored Inventory With No Local Published Listing', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Mirrored Inventory With No Local Published Listing', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
    * @param array<int,array{offer_id:string,sku:string,listing_id:?string,listing_status:?string,status:?string}> $rows
    */
-  private function buildOrphanedOfferTable(array $rows): array {
+  private function buildOrphanedOfferTable(array $rows, string $fragment): array {
     $header = [
       $this->t('Offer ID'),
       $this->t('SKU'),
@@ -217,7 +189,7 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Mirrored Offers With No Local Published Listing', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Mirrored Offers With No Local Published Listing', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
@@ -234,7 +206,7 @@ final class EbayMirrorReportController extends ControllerBase {
    *   reason:string
    * }> $rows
    */
-  private function buildSkuLinkMismatchTable(array $rows): array {
+  private function buildSkuLinkMismatchTable(array $rows, string $fragment): array {
     $header = [
       $this->t('SKU'),
       $this->t('Identifier in SKU'),
@@ -263,7 +235,7 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Mirrored SKU Link Mismatches', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Mirrored SKU Link Mismatches', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
@@ -276,7 +248,7 @@ final class EbayMirrorReportController extends ControllerBase {
    *   reason:string
    * }> $rows
    */
-  private function buildSkuIdentifierMissingTable(array $rows): array {
+  private function buildSkuIdentifierMissingTable(array $rows, string $fragment): array {
     $header = [
       $this->t('SKU'),
       $this->t('Publication listing'),
@@ -297,7 +269,7 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Legacy Mirrored SKUs Without Embedded Local Identifier', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Legacy Mirrored SKUs Without Embedded Local Identifier', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
@@ -309,7 +281,7 @@ final class EbayMirrorReportController extends ControllerBase {
    *   mirrored_skus:string[]
    * }> $rows
    */
-  private function buildMultipleInventoryTable(array $rows): array {
+  private function buildMultipleInventoryTable(array $rows, string $fragment): array {
     $header = [
       $this->t('Listing'),
       $this->t('Listing code'),
@@ -330,7 +302,7 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Local Listings With Multiple Mirrored Inventory SKUs', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Local Listings With Multiple Mirrored Inventory SKUs', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
@@ -343,7 +315,7 @@ final class EbayMirrorReportController extends ControllerBase {
    *   mirrored_skus:string[]
    * }> $rows
    */
-  private function buildMultipleOffersTable(array $rows): array {
+  private function buildMultipleOffersTable(array $rows, string $fragment): array {
     $header = [
       $this->t('Listing'),
       $this->t('Listing code'),
@@ -366,7 +338,7 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Local Listings With Multiple Mirrored Offers', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Local Listings With Multiple Mirrored Offers', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
@@ -375,12 +347,16 @@ final class EbayMirrorReportController extends ControllerBase {
    *   sku:?string,
    *   title:?string,
    *   ebay_listing_started_at:?int,
-   *   listing_status:?string
+   *   listing_status:?string,
+   *   local_listing_id:?int,
+   *   local_listing_code:?string
    * }> $rows
    */
-  private function buildLegacyUnmigratedTable(array $rows): array {
+  private function buildLegacyUnmigratedTable(array $rows, string $fragment): array {
     $header = [
       $this->t('eBay listing ID'),
+      $this->t('Local listing'),
+      $this->t('Listing code'),
       $this->t('SKU'),
       $this->t('Title'),
       $this->t('Legacy start time'),
@@ -391,6 +367,8 @@ final class EbayMirrorReportController extends ControllerBase {
     foreach ($rows as $row) {
       $tableRows[] = [
         $row['ebay_listing_id'],
+        $row['local_listing_id'] === NULL ? (string) $this->t('Unknown') : $this->buildListingLinkCell($row['local_listing_id']),
+        $row['local_listing_code'] ?? (string) $this->t('Unset'),
         $row['sku'] ?? (string) $this->t('Unset'),
         $row['title'] ?? (string) $this->t('Untitled legacy listing'),
         $row['ebay_listing_started_at'] === NULL ? (string) $this->t('Unknown') : gmdate('Y-m-d H:i:s', $row['ebay_listing_started_at']),
@@ -398,7 +376,7 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Legacy Listings With No Mirrored Sell Offer', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Legacy Listings With No Mirrored Sell Offer', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
@@ -412,7 +390,7 @@ final class EbayMirrorReportController extends ControllerBase {
    *   mirrored_offer_status:?string
    * }> $rows
    */
-  private function buildLegacyMigratedTable(array $rows): array {
+  private function buildLegacyMigratedTable(array $rows, string $fragment): array {
     $header = [
       $this->t('eBay listing ID'),
       $this->t('SKU'),
@@ -436,7 +414,7 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Legacy Listings With Mirrored Sell Offer', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Legacy Listings With Mirrored Sell Offer', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
@@ -448,7 +426,7 @@ final class EbayMirrorReportController extends ControllerBase {
    *   listing_statuses:string[]
    * }> $rows
    */
-  private function buildLegacyDuplicateSkuTable(array $rows): array {
+  private function buildLegacyDuplicateSkuTable(array $rows, string $fragment): array {
     $header = [
       $this->t('SKU'),
       $this->t('Legacy listing count'),
@@ -468,7 +446,7 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Legacy Listings With Duplicate SKUs', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Legacy Listings With Duplicate SKUs', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
@@ -480,7 +458,7 @@ final class EbayMirrorReportController extends ControllerBase {
    *   listing_status:?string
    * }> $rows
    */
-  private function buildLegacyMissingSkuTable(array $rows): array {
+  private function buildLegacyMissingSkuTable(array $rows, string $fragment): array {
     $header = [
       $this->t('eBay listing ID'),
       $this->t('Title'),
@@ -498,7 +476,7 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Legacy Listings With Missing SKU', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Legacy Listings With Missing SKU', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
@@ -510,7 +488,7 @@ final class EbayMirrorReportController extends ControllerBase {
    *   listing_status:?string
    * }> $rows
    */
-  private function buildLegacyReadyToMigrateTable(array $rows): array {
+  private function buildLegacyReadyToMigrateTable(array $rows, string $fragment): array {
     $header = [
       $this->t('eBay listing ID'),
       $this->t('SKU'),
@@ -530,15 +508,18 @@ final class EbayMirrorReportController extends ControllerBase {
       ];
     }
 
-    return $this->buildSectionTable('Legacy Listings Ready To Migrate', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Legacy Listings Ready To Migrate', $header, $tableRows, 'No rows in this bucket.', $fragment);
   }
 
   /**
    * @param array<int,array<int|string,\Drupal\Core\StringTranslation\TranslatableMarkup>> $rows
    */
-  private function buildSectionTable(string $title, array $header, array $rows, string $emptyText): array {
+  private function buildSectionTable(string $title, array $header, array $rows, string $emptyText, string $fragment): array {
     return [
       '#type' => 'container',
+      '#attributes' => [
+        'id' => $fragment,
+      ],
       'title' => [
         '#markup' => '<h2>' . $this->t($title) . '</h2>',
       ],
@@ -549,6 +530,11 @@ final class EbayMirrorReportController extends ControllerBase {
         '#empty' => $this->t($emptyText),
       ],
     ];
+  }
+
+  private function buildSummaryLinkItem(string $label, string $count, string $fragment): string|\Drupal\Component\Render\MarkupInterface {
+    $url = Url::fromRoute('<current>', [], ['fragment' => $fragment]);
+    return Link::fromTextAndUrl(sprintf('%s: %s', $label, $count), $url)->toString();
   }
 
   private function buildListingLinkCell(int $listingId): string|\Drupal\Component\Render\MarkupInterface {

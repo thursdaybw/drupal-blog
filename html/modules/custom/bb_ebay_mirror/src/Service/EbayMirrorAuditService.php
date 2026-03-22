@@ -445,7 +445,9 @@ final class EbayMirrorAuditService {
    *   sku:?string,
    *   title:?string,
    *   ebay_listing_started_at:?int,
-   *   listing_status:?string
+   *   listing_status:?string,
+   *   local_listing_id:?int,
+   *   local_listing_code:?string
    * }>
    */
   public function findLegacyListingsMissingMirroredSellOffer(int $accountId): array {
@@ -455,6 +457,12 @@ final class EbayMirrorAuditService {
       'offer',
       'offer.account_id = legacy.account_id AND offer.listing_id = legacy.ebay_listing_id'
     );
+    $query->leftJoin(
+      'bb_ebay_legacy_listing_link',
+      'legacy_link',
+      'legacy_link.account_id = legacy.account_id AND legacy_link.ebay_listing_id = legacy.ebay_listing_id'
+    );
+    $query->leftJoin('bb_ai_listing', 'listing', 'listing.id = legacy_link.listing');
 
     $query->fields('legacy', [
       'ebay_listing_id',
@@ -463,8 +471,11 @@ final class EbayMirrorAuditService {
       'ebay_listing_started_at',
       'listing_status',
     ]);
+    $query->fields('legacy_link', ['listing']);
+    $query->fields('listing', ['listing_code']);
     $query->condition('legacy.account_id', $accountId);
     $query->isNull('offer.offer_id');
+    $query->isNull('legacy_link.id');
     $query->orderBy('legacy.ebay_listing_id', 'ASC');
 
     $results = $query->execute()->fetchAll();
@@ -477,6 +488,8 @@ final class EbayMirrorAuditService {
         'title' => $this->normalizeNullableString($result->title ?? NULL),
         'ebay_listing_started_at' => $this->normalizeNullableInt($result->ebay_listing_started_at ?? NULL),
         'listing_status' => $this->normalizeNullableString($result->listing_status ?? NULL),
+        'local_listing_id' => $this->normalizeNullableInt($result->listing ?? NULL),
+        'local_listing_code' => $this->normalizeNullableString($result->listing_code ?? NULL),
       ];
     }
 
@@ -669,6 +682,11 @@ final class EbayMirrorAuditService {
       'offer.account_id = legacy.account_id AND offer.listing_id = legacy.ebay_listing_id'
     );
     $query->leftJoin(
+      'bb_ebay_legacy_listing_link',
+      'legacy_link',
+      'legacy_link.account_id = legacy.account_id AND legacy_link.ebay_listing_id = legacy.ebay_listing_id'
+    );
+    $query->leftJoin(
       $duplicateSkuQuery,
       'duplicate_sku',
       'duplicate_sku.sku = legacy.sku'
@@ -683,6 +701,7 @@ final class EbayMirrorAuditService {
     ]);
     $query->condition('legacy.account_id', $accountId);
     $query->isNull('offer.offer_id');
+    $query->isNull('legacy_link.id');
     $query->isNotNull('legacy.sku');
     $query->where("TRIM(legacy.sku) <> ''");
     $query->isNull('duplicate_sku.sku');

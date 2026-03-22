@@ -200,6 +200,14 @@
         create: true
         mode: "0600"
 
+    - name: Set DEPLOYMENT_IDENTIFIER in environment .env for this release
+      ansible.builtin.lineinfile:
+        path: "{{ deploy_target.env_path }}"
+        regexp: '^DEPLOYMENT_IDENTIFIER='
+        line: "DEPLOYMENT_IDENTIFIER={{ release_image_ref }}"
+        create: true
+        mode: "0600"
+
     - name: Set APP_PORT in environment .env
       ansible.builtin.lineinfile:
         path: "{{ deploy_target.env_path }}"
@@ -285,16 +293,28 @@
       changed_when: true
 
     - name: Check Drupal bootstrap state in environment app container
-      ansible.builtin.command:
-        cmd: >-
+      vars:
+        drush_bootstrap_cmd: >-
           sudo -n docker compose
           -f {{ deploy_target.compose_path }}
           --env-file {{ deploy_target.env_path }}
           exec -T appserver
           sh -lc 'cd /var/www/html && {{ app_drush_bin }} status --fields=bootstrap --format=list'
+      ansible.builtin.command:
+        cmd: "{{ drush_bootstrap_cmd }}"
       register: drush_bootstrap
       changed_when: false
       failed_when: false
+
+    - name: Show Drupal bootstrap check details when bootstrap fails
+      ansible.builtin.debug:
+        msg:
+          - "Bootstrap command: {{ drush_bootstrap_cmd }}"
+          - "Return code: {{ drush_bootstrap.rc }}"
+          - "Stdout: {{ drush_bootstrap.stdout | default('') }}"
+          - "Stderr: {{ drush_bootstrap.stderr | default('') }}"
+      when:
+        - drush_bootstrap.rc != 0 or ('Successful' not in (drush_bootstrap.stdout | default('')))
 
     - name: Run database updates on environment when Drupal is bootstrapped
       ansible.builtin.command:
@@ -341,8 +361,8 @@
     - name: Note config import was skipped because Drupal is not bootstrapped
       ansible.builtin.debug:
         msg: >-
-          Skipping drush cim/cr on {{ deploy_target.name }} because Drupal bootstrap is not ready yet
-          (likely empty database on first boot).
+          Skipping drush updb/cim/cr on {{ deploy_target.name }} because the bootstrap check failed.
+          See the bootstrap command, stdout, and stderr printed above.
       when:
         - drush_bootstrap.rc != 0 or ('Successful' not in (drush_bootstrap.stdout | default('')))
 

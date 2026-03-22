@@ -31,7 +31,6 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
   private const MAX_BOOK_TITLE_ASPECT_LENGTH = 65;
 
   private LoggerChannelInterface $logger;
-  private ?EbaySkuRemovalService $skuRemovalService;
 
   public function __construct(
     private readonly SellApiClient $sellApiClient,
@@ -41,19 +40,9 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     private readonly ?EbayAccountManager $accountManager,
     private readonly ?EbayInventoryMirrorSyncService $inventoryMirrorSyncService,
     private readonly ?EbayOfferMirrorSyncService $offerMirrorSyncService,
-    LoggerChannelFactoryInterface|EbaySkuRemovalService $loggerFactoryOrSkuRemovalService,
-    ?LoggerChannelFactoryInterface $loggerFactory = null,
+    private readonly EbaySkuRemovalService $skuRemovalService,
+    LoggerChannelFactoryInterface $loggerFactory,
   ) {
-    if ($loggerFactoryOrSkuRemovalService instanceof LoggerChannelFactoryInterface) {
-      $this->skuRemovalService = null;
-      $this->logger = $loggerFactoryOrSkuRemovalService->get('ebay_connector');
-      return;
-    }
-
-    $this->skuRemovalService = $loggerFactoryOrSkuRemovalService;
-    if (!$loggerFactory instanceof LoggerChannelFactoryInterface) {
-      throw new \InvalidArgumentException('Logger factory is required when SKU removal service is injected.');
-    }
     $this->logger = $loggerFactory->get('ebay_connector');
   }
 
@@ -134,10 +123,6 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
   }
 
   public function deleteSku(string $sku): void {
-    if (!$this->skuRemovalService instanceof EbaySkuRemovalService) {
-      throw new \RuntimeException('eBay SKU removal service is not available.');
-    }
-
     try {
       $this->skuRemovalService->removeSku($sku);
     }

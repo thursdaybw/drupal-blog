@@ -14,6 +14,7 @@ services:
       - '@?drupal.ebay_infrastructure.account_manager'
       - '@?bb_ebay_mirror.inventory_sync_service'
       - '@?bb_ebay_mirror.offer_sync_service'
+      - '@drupal.ebay_infrastructure.sku_removal'
       - '@logger.factory'
 
   drupal.ebay_connector.condition_mapper:

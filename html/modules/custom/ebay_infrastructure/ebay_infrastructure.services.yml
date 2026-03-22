@@ -39,9 +39,17 @@ services:
     arguments:
       - '@drupal.ebay_infrastructure.sell_api'
 
+  drupal.ebay_infrastructure.sku_removal:
+    class: Drupal\ebay_infrastructure\Service\EbaySkuRemovalService
+    arguments:
+      - '@drupal.ebay_infrastructure.sell_api'
+      - '@?drupal.ebay_infrastructure.account_manager'
+      - '@?bb_ebay_mirror.inventory_sync_service'
+      - '@?bb_ebay_mirror.offer_sync_service'
+
   drupal.ebay_infrastructure.marketplace_unpublisher:
     class: Drupal\ebay_infrastructure\Service\EbayMarketplaceUnpublisher
     arguments:
-      - '@drupal.ebay_infrastructure.sell_api'
+      - '@drupal.ebay_infrastructure.sku_removal'
     tags:
       - { name: listing_publishing.marketplace_unpublisher }

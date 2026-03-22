@@ -13,9 +13,11 @@ use Drupal\listing_publishing\Contract\MarketplacePublisherInterface;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
 use Drupal\listing_publishing\Model\MarketplacePublishResult;
 use Drupal\ebay_infrastructure\Service\EbayAccountManager;
+use Drupal\ebay_infrastructure\Service\EbaySkuRemovalService;
 use Drupal\ebay_infrastructure\Service\SellApiClient;
 use Drupal\ebay_infrastructure\Service\StoreService;
 use Drupal\ebay_connector\Service\ConditionMapper;
+use Drupal\ebay_infrastructure\Exception\EbayInventoryItemMissingException;
 
 final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
 
@@ -38,6 +40,7 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     private readonly ?EbayAccountManager $accountManager,
     private readonly ?EbayInventoryMirrorSyncService $inventoryMirrorSyncService,
     private readonly ?EbayOfferMirrorSyncService $offerMirrorSyncService,
+    private readonly EbaySkuRemovalService $skuRemovalService,
     LoggerChannelFactoryInterface $loggerFactory,
   ) {
     $this->logger = $loggerFactory->get('ebay_connector');
@@ -120,33 +123,11 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
   }
 
   public function deleteSku(string $sku): void {
-    $offers = $this->sellApiClient->listOffersBySku($sku);
-    foreach (($offers['offers'] ?? []) as $offer) {
-      if (empty($offer['offerId'])) {
-        continue;
-      }
-
-      try {
-        $this->sellApiClient->deleteOffer((string) $offer['offerId']);
-      }
-      catch (\RuntimeException $e) {
-        // Swallow not found errors so retries clean up whatever exists.
-        if (!str_contains($e->getMessage(), '404')) {
-          throw $e;
-        }
-      }
-    }
-
     try {
-      $this->sellApiClient->deleteInventoryItem($sku);
+      $this->skuRemovalService->removeSku($sku);
     }
-    catch (\RuntimeException $e) {
-      if (!str_contains($e->getMessage(), '404')) {
-        throw $e;
-      }
+    catch (EbayInventoryItemMissingException) {
     }
-
-    $this->deleteMirrorRowsForSku($sku);
   }
 
   public function getMarketplaceKey(): string {
@@ -285,17 +266,6 @@ final class EbayMarketplacePublisher implements MarketplacePublisherInterface {
     $this->inventoryMirrorSyncService->syncSku($account, $sku);
     $this->offerMirrorSyncService->syncSku($account, $sku);
   }
-
-  private function deleteMirrorRowsForSku(string $sku): void {
-    if ($this->accountManager === null || $this->inventoryMirrorSyncService === null || $this->offerMirrorSyncService === null) {
-      return;
-    }
-
-    $accountId = (int) $this->accountManager->loadPrimaryAccount()->id();
-    $this->offerMirrorSyncService->deleteSku($accountId, $sku);
-    $this->inventoryMirrorSyncService->deleteSku($accountId, $sku);
-  }
-
   private function truncateBookTitleAspect(string $value): string {
     $normalized = preg_replace('/\s+/', ' ', trim($value));
     return (string) mb_substr((string) $normalized, 0, self::MAX_BOOK_TITLE_ASPECT_LENGTH);

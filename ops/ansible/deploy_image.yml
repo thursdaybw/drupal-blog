@@ -294,12 +294,32 @@
 
     - name: Define Drupal bootstrap check command
       ansible.builtin.set_fact:
+        drupal_container_rebuild_cmd: >-
+          sudo -n docker compose
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
+          exec -T appserver
+          sh -lc 'cd /var/www/html &&
+                  php -r '\''require "/var/www/vendor/autoload.php";
+                  $autoloader = require "/var/www/vendor/autoload.php";
+                  chdir("/var/www/html");
+                  $request = Symfony\Component\HttpFoundation\Request::createFromGlobals();
+                  $kernel = Drupal\Core\DrupalKernel::createFromRequest($request, $autoloader, "prod", TRUE, "/var/www/html");
+                  $kernel->invalidateContainer();
+                  $kernel->boot();
+                  print "Drupal container rebuilt\n";'\'''
         drush_bootstrap_cmd: >-
           sudo -n docker compose
           -f {{ deploy_target.compose_path }}
           --env-file {{ deploy_target.env_path }}
           exec -T appserver
           sh -lc 'cd /var/www/html && {{ app_drush_bin }} status --fields=bootstrap --format=list'
+
+    - name: Force Drupal container rebuild in environment app container
+      ansible.builtin.command:
+        cmd: "{{ drupal_container_rebuild_cmd }}"
+      register: drupal_container_rebuild
+      changed_when: true
 
     - name: Check Drupal bootstrap state in environment app container
       ansible.builtin.command:

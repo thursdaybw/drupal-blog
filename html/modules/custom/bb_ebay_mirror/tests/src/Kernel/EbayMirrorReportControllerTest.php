@@ -27,6 +27,7 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     'system',
     'user',
     'field',
+    'file',
     'text',
     'filter',
     'options',
@@ -64,9 +65,19 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $listing->set('listing_code', 'MIRROR01');
     $listing->save();
 
+    $legacyLinkedListing = $this->createBookListing(
+      ebayTitle: 'Legacy linked listing',
+      fieldTitle: 'Legacy linked listing',
+      storageLocation: 'BDMAA11'
+    );
+    $legacyLinkedListing->set('listing_code', 'LEGACY01');
+    $legacyLinkedListing->save();
+
     $this->createPublication((int) $listing->id(), 'sku-missing', 'listing-11');
+    $this->createPublication((int) $legacyLinkedListing->id(), '2024 September A01', 'listing-22');
     $this->seedMirroredInventorySku(1, '2026 Mar BDMCC05 ai-book-MIRROR01');
     $this->seedMirroredOffer(1, 'offer-mirror', '2026 Mar BDMCC05 ai-book-MIRROR01');
+    $this->seedMirroredInventorySku(1, '2024 September A01');
     $this->seedLegacyListing(1, '176577811710', '2024 September A01', 'Legacy unmigrated listing', 1726406100, 'Active');
     $this->seedLegacyListing(1, '176582430935', '2024 September A01', 'Legacy migrated listing', 1726406100, 'Active');
     $this->seedMirroredOffer(1, 'offer-legacy-migrated', '2024 September A01', '176582430935', 'ACTIVE', 'PUBLISHED');
@@ -79,6 +90,7 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertArrayHasKey('missing_offers', $build);
     $this->assertArrayHasKey('orphaned_inventory', $build);
     $this->assertArrayHasKey('orphaned_offers', $build);
+    $this->assertArrayHasKey('sku_identifier_missing', $build);
     $this->assertArrayHasKey('sku_link_mismatch', $build);
     $this->assertArrayHasKey('multiple_inventory', $build);
     $this->assertArrayHasKey('multiple_offers', $build);
@@ -89,6 +101,7 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertArrayHasKey('legacy_ready_to_migrate', $build);
 
     $this->assertSame('table', $build['missing_inventory']['table']['#type']);
+    $this->assertSame('table', $build['sku_identifier_missing']['table']['#type']);
     $this->assertSame('table', $build['sku_link_mismatch']['table']['#type']);
     $this->assertSame('table', $build['multiple_inventory']['table']['#type']);
     $this->assertSame('table', $build['multiple_offers']['table']['#type']);
@@ -103,11 +116,18 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     $this->assertStringContainsString((string) $listing->id(), (string) $missingInventoryRows[0][0]);
     $this->assertSame('MIRROR01', (string) $missingInventoryRows[0][1]);
 
+    $skuIdentifierMissingRows = $build['sku_identifier_missing']['table']['#rows'];
+    $this->assertCount(1, $skuIdentifierMissingRows);
+    $this->assertSame('2024 September A01', (string) $skuIdentifierMissingRows[0][0]);
+    $this->assertStringContainsString((string) $legacyLinkedListing->id(), (string) $skuIdentifierMissingRows[0][1]);
+    $this->assertSame('LEGACY01', strip_tags((string) $skuIdentifierMissingRows[0][2]));
+
     $skuMismatchRows = $build['sku_link_mismatch']['table']['#rows'];
     $this->assertCount(1, $skuMismatchRows);
     $this->assertSame('2026 Mar BDMCC05 ai-book-MIRROR01', (string) $skuMismatchRows[0][0]);
     $this->assertSame('MIRROR01', (string) $skuMismatchRows[0][1]);
     $this->assertStringContainsString((string) $listing->id(), (string) $skuMismatchRows[0][2]);
+    $this->assertSame('MIRROR01', strip_tags((string) $skuMismatchRows[0][3]));
 
     $this->assertSame('No rows in this bucket.', (string) $build['multiple_inventory']['table']['#empty']);
     $this->assertSame('No rows in this bucket.', (string) $build['multiple_offers']['table']['#empty']);

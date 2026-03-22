@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\ai_listing\Form;
 
+use Drupal\ai_listing\Service\IntakeSetListingMaterializer;
 use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -22,17 +23,20 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
   protected FileSystemInterface $fileSystem;
   protected AccountProxyInterface $currentUser;
   protected DateFormatterInterface $dateFormatter;
+  protected IntakeSetListingMaterializer $intakeSetListingMaterializer;
 
   public function __construct(
     EntityTypeManagerInterface $entity_type_manager,
     FileSystemInterface $file_system,
     AccountProxyInterface $current_user,
     DateFormatterInterface $date_formatter,
+    IntakeSetListingMaterializer $intake_set_listing_materializer,
   ) {
     $this->entityTypeManager = $entity_type_manager;
     $this->fileSystem = $file_system;
     $this->currentUser = $current_user;
     $this->dateFormatter = $date_formatter;
+    $this->intakeSetListingMaterializer = $intake_set_listing_materializer;
   }
 
   public static function create(ContainerInterface $container): self {
@@ -41,6 +45,7 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       $container->get('file_system'),
       $container->get('current_user'),
       $container->get('date.formatter'),
+      $container->get('ai_listing.intake_set_listing_materializer'),
     );
   }
 
@@ -152,6 +157,7 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
 
     $created = 0;
     $setCount = 0;
+    $listingCount = 0;
 
     foreach ($uploadedSets as $uploads) {
       if ($uploads === []) {
@@ -170,6 +176,8 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       if (!$realSetDirectory) {
         continue;
       }
+
+      $setFileIds = [];
 
       foreach ($uploads as $upload) {
         if (!$upload instanceof UploadedFile || $upload->getError() !== UPLOAD_ERR_OK) {
@@ -204,12 +212,19 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
         ]);
         $media->save();
         $created++;
+        $setFileIds[] = (int) $file->id();
+      }
+
+      if ($setFileIds !== []) {
+        $this->intakeSetListingMaterializer->materializeNewBookListing($setFileIds);
+        $listingCount++;
       }
     }
 
-    $this->messenger()->addStatus($this->t('Ingested @count image(s) across @sets set(s).', [
+    $this->messenger()->addStatus($this->t('Ingested @count image(s) across @sets set(s) and created @listings new listing(s).', [
       '@count' => (string) $created,
       '@sets' => (string) $setCount,
+      '@listings' => (string) $listingCount,
     ]));
     $form_state->setRebuild(TRUE);
   }

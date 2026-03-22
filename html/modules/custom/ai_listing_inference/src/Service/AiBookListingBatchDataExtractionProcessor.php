@@ -14,8 +14,8 @@ final class AiBookListingBatchDataExtractionProcessor {
     private readonly AiBookListingDataExtractionProcessor $processor,
   ) {}
 
-  public function processAllNew(): int {
-    $ids = $this->getNewListingIds();
+  public function processAllReadyForInference(): int {
+    $ids = $this->getReadyForInferenceListingIds();
     if (empty($ids)) {
       return 0;
     }
@@ -34,11 +34,11 @@ final class AiBookListingBatchDataExtractionProcessor {
     return $count;
   }
 
-  public function getNewListingIds(): array {
+  public function getReadyForInferenceListingIds(): array {
     return array_values($this->entityTypeManager->getStorage('bb_ai_listing')
       ->getQuery()
       ->accessCheck(FALSE)
-      ->condition('status', 'new')
+      ->condition('status', 'ready_for_inference')
       ->condition('listing_type', ['book', 'book_bundle'], 'IN')
       ->execute());
   }
@@ -56,7 +56,7 @@ final class AiBookListingBatchDataExtractionProcessor {
       $this->processor->process($listing);
     }
     catch (\Throwable $e) {
-      $listing->set('status', 'new');
+      $listing->set('status', 'ready_for_inference');
       $listing->save();
       throw $e;
     }

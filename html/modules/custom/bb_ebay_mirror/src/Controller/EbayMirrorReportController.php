@@ -35,6 +35,14 @@ final class EbayMirrorReportController extends ControllerBase {
     $orphanedInventoryRows = $this->auditService->findMirroredInventoryMissingLocalListing($accountId);
     $orphanedOfferRows = $this->auditService->findMirroredOffersMissingLocalListing($accountId);
     $skuLinkMismatchRows = $this->auditService->findSkuLinkMismatches($accountId);
+    $skuIdentifierMissingRows = array_values(array_filter(
+      $skuLinkMismatchRows,
+      static fn (array $row): bool => $row['reason'] === 'sku_identifier_missing'
+    ));
+    $trueSkuLinkMismatchRows = array_values(array_filter(
+      $skuLinkMismatchRows,
+      static fn (array $row): bool => $row['reason'] !== 'sku_identifier_missing'
+    ));
     $multipleInventoryRows = $this->auditService->findListingsWithMultipleMirroredInventorySkus($accountId);
     $multipleOfferRows = $this->auditService->findListingsWithMultipleMirroredOffers($accountId);
     $legacyUnmigratedRows = $this->auditService->findLegacyListingsMissingMirroredSellOffer($accountId);
@@ -77,8 +85,11 @@ final class EbayMirrorReportController extends ControllerBase {
           $this->t('Mirrored offers with no local published listing: @count', [
             '@count' => (string) count($orphanedOfferRows),
           ]),
+          $this->t('Legacy mirrored SKUs without embedded local identifier: @count', [
+            '@count' => (string) count($skuIdentifierMissingRows),
+          ]),
           $this->t('Mirrored SKU/link mismatches: @count', [
-            '@count' => (string) count($skuLinkMismatchRows),
+            '@count' => (string) count($trueSkuLinkMismatchRows),
           ]),
           $this->t('Local listings with multiple mirrored inventory SKUs: @count', [
             '@count' => (string) count($multipleInventoryRows),
@@ -115,7 +126,8 @@ final class EbayMirrorReportController extends ControllerBase {
     );
     $build['orphaned_inventory'] = $this->buildOrphanedInventoryTable($orphanedInventoryRows);
     $build['orphaned_offers'] = $this->buildOrphanedOfferTable($orphanedOfferRows);
-    $build['sku_link_mismatch'] = $this->buildSkuLinkMismatchTable($skuLinkMismatchRows);
+    $build['sku_identifier_missing'] = $this->buildSkuIdentifierMissingTable($skuIdentifierMissingRows);
+    $build['sku_link_mismatch'] = $this->buildSkuLinkMismatchTable($trueSkuLinkMismatchRows);
     $build['multiple_inventory'] = $this->buildMultipleInventoryTable($multipleInventoryRows);
     $build['multiple_offers'] = $this->buildMultipleOffersTable($multipleOfferRows);
     $build['legacy_unmigrated'] = $this->buildLegacyUnmigratedTable($legacyUnmigratedRows);
@@ -226,9 +238,49 @@ final class EbayMirrorReportController extends ControllerBase {
     $header = [
       $this->t('SKU'),
       $this->t('Identifier in SKU'),
+      $this->t('Actual local listing'),
+      $this->t('Actual listing code'),
       $this->t('Resolved local listing'),
-      $this->t('Resolved listing code'),
+      $this->t('Offer'),
+      $this->t('Reason'),
+    ];
+
+    $tableRows = [];
+
+    foreach ($rows as $row) {
+      $actualListingId = $row['publication_listing_id'] ?? $row['resolved_listing_id'];
+      $actualListingCode = $row['publication_listing_id'] === NULL
+        ? ($row['resolved_listing_code'] ?? (string) $this->t('Unset'))
+        : (string) $this->buildListingCodeCell($row['publication_listing_id']);
+      $tableRows[] = [
+        $row['sku'],
+        $row['sku_identifier'] ?? (string) $this->t('Unknown'),
+        $actualListingId === NULL ? (string) $this->t('Unknown') : $this->buildListingLinkCell($actualListingId),
+        $actualListingCode,
+        $row['resolved_listing_id'] === NULL ? (string) $this->t('Unknown') : $this->buildListingLinkCell($row['resolved_listing_id']),
+        $row['offer_id'] ?? (string) $this->t('None'),
+        str_replace('_', ' ', $row['reason']),
+      ];
+    }
+
+    return $this->buildSectionTable('Mirrored SKU Link Mismatches', $header, $tableRows, 'No rows in this bucket.');
+  }
+
+  /**
+   * @param array<int,array{
+   *   sku:string,
+   *   publication_listing_id:?int,
+   *   publication_marketplace_listing_id:?string,
+   *   offer_id:?string,
+   *   offer_status:?string,
+   *   reason:string
+   * }> $rows
+   */
+  private function buildSkuIdentifierMissingTable(array $rows): array {
+    $header = [
+      $this->t('SKU'),
       $this->t('Publication listing'),
+      $this->t('Publication listing code'),
       $this->t('Offer'),
       $this->t('Reason'),
     ];
@@ -238,16 +290,14 @@ final class EbayMirrorReportController extends ControllerBase {
     foreach ($rows as $row) {
       $tableRows[] = [
         $row['sku'],
-        $row['sku_identifier'] ?? (string) $this->t('Unknown'),
-        $row['resolved_listing_id'] === NULL ? (string) $this->t('Unknown') : $this->buildListingLinkCell($row['resolved_listing_id']),
-        $row['resolved_listing_code'] ?? (string) $this->t('Unset'),
-        $row['publication_listing_id'] === NULL ? (string) $this->t('None') : $this->buildListingLinkCell($row['publication_listing_id']),
+        $row['publication_listing_id'] === NULL ? (string) $this->t('Unknown') : $this->buildListingLinkCell($row['publication_listing_id']),
+        $row['publication_listing_id'] === NULL ? (string) $this->t('Unset') : (string) $this->buildListingCodeCell($row['publication_listing_id']),
         $row['offer_id'] ?? (string) $this->t('None'),
         str_replace('_', ' ', $row['reason']),
       ];
     }
 
-    return $this->buildSectionTable('Mirrored SKU Link Mismatches', $header, $tableRows, 'No rows in this bucket.');
+    return $this->buildSectionTable('Legacy Mirrored SKUs Without Embedded Local Identifier', $header, $tableRows, 'No rows in this bucket.');
   }
 
   /**

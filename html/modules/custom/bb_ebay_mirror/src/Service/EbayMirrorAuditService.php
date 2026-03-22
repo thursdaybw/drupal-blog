@@ -234,6 +234,7 @@ final class EbayMirrorAuditService {
 
     foreach ($results as $result) {
       $sku = (string) ($result->sku ?? '');
+      $publication = $this->loadPublishedPublicationBySku($sku);
       $skuIdentifier = $this->extractSkuIdentifier($sku);
 
       if ($skuIdentifier === NULL) {
@@ -243,8 +244,8 @@ final class EbayMirrorAuditService {
           'resolved_listing_id' => NULL,
           'resolved_listing_code' => NULL,
           'resolved_ebay_title' => NULL,
-          'publication_listing_id' => NULL,
-          'publication_marketplace_listing_id' => NULL,
+          'publication_listing_id' => $publication['listing_id'] ?? NULL,
+          'publication_marketplace_listing_id' => $publication['marketplace_listing_id'] ?? NULL,
           'offer_id' => $this->normalizeNullableString($result->offer_id ?? NULL),
           'offer_status' => $this->normalizeNullableString($result->status ?? NULL),
           'reason' => 'sku_identifier_missing',
@@ -253,7 +254,6 @@ final class EbayMirrorAuditService {
       }
 
       $resolvedListing = $this->resolveListingFromSkuIdentifier($skuIdentifier);
-      $publication = $this->loadPublishedPublicationBySku($sku);
 
       if ($resolvedListing === NULL) {
         $rows[] = [

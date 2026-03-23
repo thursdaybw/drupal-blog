@@ -74,6 +74,34 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $this->assertSame([], $formState->getErrors());
   }
 
+  public function testSavePersistsKeepScore(): void {
+    $listing = BbAiListing::create([
+      'listing_type' => 'book',
+      'status' => 'new',
+      'price' => '9.99',
+    ]);
+    $listing->save();
+
+    $form = $this->buildReviewForm();
+    $formState = new FormState();
+    $formState->set('listing', $listing);
+    $formState->setTriggeringElement(['#name' => 'ai_save_listing']);
+    $formState->setValue(['basic', 'status'], 'new');
+    $formState->setValue(['basic', 'price'], '9.99');
+    $formState->setValue(['basic', 'keep_score'], 'high');
+    $formState->setValue(['ebay', 'description'], ['value' => '', 'format' => 'basic_html']);
+    $formState->setValue(['condition', 'condition_grade'], 'good');
+    $formState->setValue(['condition', 'condition_issues'], []);
+    $formState->setValue(['condition', 'condition_note'], '');
+
+    $built = [];
+    $form->submitForm($built, $formState);
+
+    $reloaded = BbAiListing::load((int) $listing->id());
+    $this->assertInstanceOf(BbAiListing::class, $reloaded);
+    $this->assertSame('high', (string) $reloaded->get('keep_score')->value);
+  }
+
   public function testReadyForInferenceActionRequiresMetadataSelection(): void {
     $listing = BbAiListing::create([
       'listing_type' => 'book',

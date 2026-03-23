@@ -316,3 +316,17 @@ function ai_listing_update_11005(): void {
       ->execute();
   }
 }
+
+/**
+ * Adds keep_score to bb_ai_listing.
+ */
+function ai_listing_update_11006(): void {
+  $entityType = \Drupal::entityTypeManager()->getDefinition('bb_ai_listing');
+  $definition = \Drupal\ai_listing\Entity\BbAiListing::baseFieldDefinitions($entityType)['keep_score'];
+  \Drupal::entityDefinitionUpdateManager()->installFieldStorageDefinition(
+    'keep_score',
+    'bb_ai_listing',
+    'ai_listing',
+    $definition
+  );
+}

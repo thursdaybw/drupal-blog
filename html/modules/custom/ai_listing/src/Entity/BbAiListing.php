@@ -44,6 +44,7 @@ final class BbAiListing extends ContentEntityBase {
     'processing' => 'Processing',
     'ready_for_review' => 'Ready for review',
     'ready_to_shelve' => 'Ready to shelve',
+    'ready_to_publish' => 'Ready to publish',
     'shelved' => 'Shelved',
     'archived' => 'Archived',
     'lost' => 'Lost',

@@ -148,9 +148,9 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
   }
 
   /**
-   * Checks that the location-only batch marks ready-to-shelve listings shelved.
+   * Checks that the location-only batch marks ready-to-shelve listings ready to publish.
    */
-  public function testLocationOnlyBatchSetsLocationAndMarksShelved(): void {
+  public function testLocationOnlyBatchSetsLocationAndMarksReadyToPublish(): void {
     $listing = $this->createBookListing('Location-only batch test', '');
     $listing->set('status', 'ready_to_shelve');
     $listing->save();
@@ -161,7 +161,7 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
     $reloaded = BbAiListing::load((int) $listing->id());
     $this->assertInstanceOf(BbAiListing::class, $reloaded);
     $this->assertSame('BDMAA09', (string) $reloaded->get('storage_location')->value);
-    $this->assertSame('shelved', (string) $reloaded->get('status')->value);
+    $this->assertSame('ready_to_publish', (string) $reloaded->get('status')->value);
     $this->assertSame(1, (int) ($context['results']['success'] ?? 0));
   }
 

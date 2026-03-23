@@ -91,6 +91,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
         'processing' => $this->t('Processing'),
         'ready_for_review' => $this->t('Ready for review'),
         'ready_to_shelve' => $this->t('Ready to shelve'),
+        'ready_to_publish' => $this->t('Ready to publish'),
         'shelved' => $this->t('Shelved'),
         'archived' => $this->t('Archived'),
         'lost' => $this->t('Lost'),
@@ -441,7 +442,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
 
     if ($operationMode === 'location_only') {
-      $listing->set('status', 'shelved');
+      $listing->set('status', 'ready_to_publish');
       $listing->save();
       $context['results']['success']++;
       $context['message'] = (string) \Drupal::translation()->translate(

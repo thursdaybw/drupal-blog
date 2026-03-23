@@ -58,6 +58,12 @@ final class BbAiListing extends ContentEntityBase {
     'like_new' => 'Like new',
   ];
 
+  private const KEEP_SCORE_ALLOWED_VALUES = [
+    'low' => 'Low',
+    'medium' => 'Medium',
+    'high' => 'High',
+  ];
+
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type): array {
     $fields = parent::baseFieldDefinitions($entity_type);
 
@@ -90,6 +96,12 @@ final class BbAiListing extends ContentEntityBase {
       ->setLabel('Storage location')
       ->setDefaultValue('')
       ->setSettings(['max_length' => 255]);
+
+    $fields['keep_score'] = BaseFieldDefinition::create('list_string')
+      ->setLabel('Keep score')
+      ->setDescription('Operator judgement for how worth keeping this item is in inventory.')
+      ->setRequired(FALSE)
+      ->setSetting('allowed_values', self::KEEP_SCORE_ALLOWED_VALUES);
 
     $fields['condition_grade'] = BaseFieldDefinition::create('list_string')
       ->setLabel('Condition grade')

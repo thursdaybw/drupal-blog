@@ -132,6 +132,19 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#description' => $this->t('Set this once the listing is ready to shelve so the SKU can encode where the book lives.'),
       '#default_value' => (string) ($listing->get('storage_location')->value ?? ''),
     ];
+    $form['basic']['keep_score'] = [
+      '#type' => 'select',
+      '#title' => 'Keep score',
+      '#description' => $this->t('Your judgement of how worth keeping this item is in inventory.'),
+      '#options' => [
+        '' => $this->t('- None -'),
+        'low' => $this->t('Low'),
+        'medium' => $this->t('Medium'),
+        'high' => $this->t('High'),
+      ],
+      '#default_value' => (string) ($listing->get('keep_score')->value ?? ''),
+      '#required' => FALSE,
+    ];
     $form['basic']['listing_code'] = [
       '#type' => 'item',
       '#title' => 'Listing code',
@@ -493,6 +506,11 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     $storageLocation = $form_state->getValue(['basic', 'storage_location']);
     if ($storageLocation !== null) {
       $listing->set('storage_location', $storageLocation);
+    }
+
+    $keepScore = $form_state->getValue(['basic', 'keep_score']);
+    if ($keepScore !== null) {
+      $listing->set('keep_score', $keepScore);
     }
 
     $this->savePhotoSelections($listing, $form_state);

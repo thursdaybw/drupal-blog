@@ -1,0 +1,9 @@
+uuid: 4686c07a-f063-4327-b734-052baf4c71d2
+langcode: en
+status: true
+dependencies: {  }
+name: 'Storage location'
+vid: storage_location
+description: 'Registered shelf, bin, and storage location codes for inventory.'
+weight: 0
+new_revision: false

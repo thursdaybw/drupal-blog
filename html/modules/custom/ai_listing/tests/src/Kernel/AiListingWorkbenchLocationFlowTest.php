@@ -190,6 +190,68 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
   }
 
   /**
+   * Checks that the normalized entity autocomplete post value resolves.
+   */
+  public function testLocationConfirmAcceptsNormalizedAutocompleteValue(): void {
+    $this->getWorkbenchTempstore()->set(AiListingWorkbenchForm::LOCATION_CONFIRM_TEMPSTORE_KEY, [
+      'selection' => [
+        ['listing_type' => 'book', 'id' => 12],
+      ],
+      'listing_ids' => [12],
+      'selected_count' => 1,
+      'created_at' => time(),
+    ]);
+
+    $formObject = AiListingLocationUpdateConfirmForm::create($this->container);
+    $formState = new FormState();
+    $locationTerm = $this->createStorageLocationTerm('BDMAA02');
+    $formState->setValue('location_term', [
+      ['target_id' => (int) $locationTerm->id()],
+    ]);
+
+    $form = $formObject->buildForm([], $formState);
+    $formObject->validateForm($form, $formState);
+
+    $this->assertSame([], $formState->getErrors());
+
+    $build = [];
+    $formObject->submitForm($build, $formState);
+
+    $batch = batch_get();
+    $this->assertIsArray($batch);
+    $set = reset($batch['sets']);
+    $this->assertIsArray($set);
+    $firstOperation = $set['operations'][0];
+    $this->assertSame(['book', 12, TRUE, 'BDMAA02', 'location_only', (int) $locationTerm->id()], $firstOperation[1]);
+  }
+
+  /**
+   * Checks that nested autocomplete target_id labels resolve too.
+   */
+  public function testLocationConfirmAcceptsNestedAutocompleteLabelValue(): void {
+    $this->getWorkbenchTempstore()->set(AiListingWorkbenchForm::LOCATION_CONFIRM_TEMPSTORE_KEY, [
+      'selection' => [
+        ['listing_type' => 'book', 'id' => 12],
+      ],
+      'listing_ids' => [12],
+      'selected_count' => 1,
+      'created_at' => time(),
+    ]);
+
+    $formObject = AiListingLocationUpdateConfirmForm::create($this->container);
+    $formState = new FormState();
+    $locationTerm = $this->createStorageLocationTerm('BDMAA02');
+    $formState->setValue('location_term', [
+      ['target_id' => 'BDMAA02 (' . (int) $locationTerm->id() . ')'],
+    ]);
+
+    $form = $formObject->buildForm([], $formState);
+    $formObject->validateForm($form, $formState);
+
+    $this->assertSame([], $formState->getErrors());
+  }
+
+  /**
    * Checks that the location-only batch marks ready-to-shelve listings ready to publish.
    */
   public function testLocationOnlyBatchSetsLocationAndMarksReadyToPublish(): void {

@@ -1,0 +1,7 @@
+langcode: en
+status: true
+dependencies: {  }
+name: 'Storage location'
+vid: storage_location
+description: 'Registered shelf, bin, and storage location codes for inventory.'
+weight: 0

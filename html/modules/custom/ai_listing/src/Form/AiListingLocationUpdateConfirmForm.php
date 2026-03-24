@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Drupal\ai_listing\Form;
 
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
+use Drupal\Core\Entity\Element\EntityAutocomplete;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
 use Drupal\Core\TempStore\PrivateTempStoreFactory;
 use Drupal\Core\Url;
+use Drupal\taxonomy\Entity\Term;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 final class AiListingLocationUpdateConfirmForm extends FormBase implements ContainerInjectionInterface {
@@ -64,10 +66,16 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
       '#empty' => $this->t('No selected listings found.'),
     ];
 
-    $form['location'] = [
-      '#type' => 'textfield',
+    $form['location_term'] = [
+      '#type' => 'entity_autocomplete',
       '#title' => $this->t('Storage location'),
-      '#description' => $this->t('Set the shelf or bin code to apply to the selected listings.'),
+      '#description' => $this->t('Select an existing registered storage location to apply to the selected listings.'),
+      '#target_type' => 'taxonomy_term',
+      '#selection_handler' => 'default:taxonomy_term',
+      '#selection_settings' => [
+        'target_bundles' => ['storage_location' => 'storage_location'],
+      ],
+      '#tags' => FALSE,
       '#required' => TRUE,
     ];
 
@@ -88,16 +96,20 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
   }
 
   public function validateForm(array &$form, FormStateInterface $form_state): void {
-    $location = trim((string) $form_state->getValue('location'));
-    if ($location === '') {
-      $form_state->setErrorByName('location', $this->t('Provide a storage location before submitting.'));
+    if (!$this->resolveLocationTerm($form_state->getValue('location_term')) instanceof Term) {
+      $form_state->setErrorByName('location_term', $this->t('Select an existing registered storage location before submitting.'));
     }
   }
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     $payload = $this->getPayload();
     $selection = $this->getSelectionFromPayload($payload);
-    $location = trim((string) $form_state->getValue('location'));
+    $locationTerm = $this->resolveLocationTerm($form_state->getValue('location_term'));
+    if (!$locationTerm instanceof Term) {
+      $this->messenger()->addError($this->t('Select an existing registered storage location before submitting.'));
+      $form_state->setRedirectUrl($this->getCancelUrl());
+      return;
+    }
 
     $this->getConfirmTempStore()->delete(AiListingWorkbenchForm::LOCATION_CONFIRM_TEMPSTORE_KEY);
 
@@ -107,8 +119,36 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
       return;
     }
 
-    batch_set(AiListingWorkbenchForm::buildListingBatchDefinition($selection, TRUE, $location, 'location_only'));
+    batch_set(AiListingWorkbenchForm::buildListingBatchDefinition($selection, TRUE, $locationTerm->label(), 'location_only', (int) $locationTerm->id()));
     $form_state->setRedirectUrl($this->getCancelUrl());
+  }
+
+  private function resolveLocationTerm(mixed $submittedValue): ?Term {
+    if ($submittedValue instanceof Term) {
+      return $submittedValue;
+    }
+
+    if (is_array($submittedValue) && isset($submittedValue['target_id'])) {
+      $term = $this->getEntityTypeManager()->getStorage('taxonomy_term')->load((int) $submittedValue['target_id']);
+      return $term instanceof Term ? $term : null;
+    }
+
+    if (is_string($submittedValue)) {
+      $input = trim($submittedValue);
+      if ($input === '') {
+        return null;
+      }
+
+      $termId = EntityAutocomplete::extractEntityIdFromAutocompleteInput($input);
+      if ($termId === null) {
+        return null;
+      }
+
+      $term = $this->getEntityTypeManager()->getStorage('taxonomy_term')->load((int) $termId);
+      return $term instanceof Term ? $term : null;
+    }
+
+    return null;
   }
 
   private function getPayload(): array {

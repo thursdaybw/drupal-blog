@@ -11,12 +11,14 @@ use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Datetime\DateFormatterInterface;
+use Drupal\Core\Entity\Element\EntityAutocomplete;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Markup;
 use Drupal\listing_publishing\Service\ListingPublisher;
+use Drupal\taxonomy\Entity\Term;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 abstract class AiListingReviewFormBase extends FormBase implements ContainerInjectionInterface {
@@ -127,10 +129,16 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       '#required' => TRUE,
     ];
     $form['basic']['storage_location'] = [
-      '#type' => 'textfield',
+      '#type' => 'entity_autocomplete',
       '#title' => 'Storage location',
-      '#description' => $this->t('Set this once the listing is ready to shelve so the SKU can encode where the book lives.'),
-      '#default_value' => (string) ($listing->get('storage_location')->value ?? ''),
+      '#description' => $this->t('Select an existing registered storage location.'),
+      '#target_type' => 'taxonomy_term',
+      '#selection_handler' => 'default:taxonomy_term',
+      '#selection_settings' => [
+        'target_bundles' => ['storage_location' => 'storage_location'],
+      ],
+      '#tags' => FALSE,
+      '#default_value' => $this->loadStorageLocationTerm($listing),
     ];
     $form['basic']['keep_score'] = [
       '#type' => 'select',
@@ -504,9 +512,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     }
 
     $storageLocation = $form_state->getValue(['basic', 'storage_location']);
-    if ($storageLocation !== null) {
-      $listing->set('storage_location', $storageLocation);
-    }
+    $this->applyStorageLocationSelection($listing, $storageLocation);
 
     $keepScore = $form_state->getValue(['basic', 'keep_score']);
     if ($keepScore !== null) {
@@ -670,6 +676,54 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     }
 
     return $default;
+  }
+
+  protected function loadStorageLocationTerm(BbAiListing $listing): ?Term {
+    $termId = (int) ($listing->get('storage_location_term')->target_id ?? 0);
+    if ($termId <= 0) {
+      return null;
+    }
+
+    $term = $this->entityTypeManager->getStorage('taxonomy_term')->load($termId);
+    return $term instanceof Term ? $term : null;
+  }
+
+  protected function applyStorageLocationSelection(BbAiListing $listing, mixed $submittedValue): void {
+    $term = $this->resolveStorageLocationTerm($submittedValue);
+    if ($term instanceof Term) {
+      $listing->set('storage_location_term', ['target_id' => (int) $term->id()]);
+      $listing->set('storage_location', $term->label());
+      return;
+    }
+
+    $listing->set('storage_location_term', null);
+    $listing->set('storage_location', '');
+  }
+
+  protected function resolveStorageLocationTerm(mixed $submittedValue): ?Term {
+    if ($submittedValue instanceof Term) {
+      return $submittedValue;
+    }
+
+    if (is_array($submittedValue) && isset($submittedValue['target_id'])) {
+      $term = $this->entityTypeManager->getStorage('taxonomy_term')->load((int) $submittedValue['target_id']);
+      return $term instanceof Term ? $term : null;
+    }
+
+    if (is_string($submittedValue)) {
+      $input = trim($submittedValue);
+      if ($input === '') {
+        return null;
+      }
+      $termId = EntityAutocomplete::extractEntityIdFromAutocompleteInput($input);
+      if ($termId === null) {
+        return null;
+      }
+      $term = $this->entityTypeManager->getStorage('taxonomy_term')->load((int) $termId);
+      return $term instanceof Term ? $term : null;
+    }
+
+    return null;
   }
 
   /**

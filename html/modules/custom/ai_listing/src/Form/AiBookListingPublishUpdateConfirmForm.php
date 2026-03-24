@@ -121,7 +121,7 @@ final class AiBookListingPublishUpdateConfirmForm extends ConfirmFormBase implem
     }
 
     $batchSelection = $selection !== [] ? $selection : $listingIds;
-    batch_set(AiListingWorkbenchForm::buildListingBatchDefinition($batchSelection, $setLocation, $location, $operationMode));
+    batch_set(AiListingWorkbenchForm::buildListingBatchDefinition($batchSelection, $setLocation, $location, $operationMode, (int) ($payload['location_term_id'] ?? 0)));
   }
 
   private function getPayload(): array {

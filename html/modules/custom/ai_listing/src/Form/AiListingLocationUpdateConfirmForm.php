@@ -128,15 +128,28 @@ final class AiListingLocationUpdateConfirmForm extends FormBase implements Conta
       return $submittedValue;
     }
 
-    if (is_array($submittedValue) && isset($submittedValue['target_id'])) {
-      $term = $this->getEntityTypeManager()->getStorage('taxonomy_term')->load((int) $submittedValue['target_id']);
+    if (is_int($submittedValue)) {
+      $term = $this->getEntityTypeManager()->getStorage('taxonomy_term')->load($submittedValue);
       return $term instanceof Term ? $term : null;
+    }
+
+    if (is_array($submittedValue) && isset($submittedValue['target_id'])) {
+      return $this->resolveLocationTerm($submittedValue['target_id']);
+    }
+
+    if (is_array($submittedValue) && isset($submittedValue[0])) {
+      return $this->resolveLocationTerm($submittedValue[0]);
     }
 
     if (is_string($submittedValue)) {
       $input = trim($submittedValue);
       if ($input === '') {
         return null;
+      }
+
+      if (ctype_digit($input)) {
+        $term = $this->getEntityTypeManager()->getStorage('taxonomy_term')->load((int) $input);
+        return $term instanceof Term ? $term : null;
       }
 
       $termId = EntityAutocomplete::extractEntityIdFromAutocompleteInput($input);

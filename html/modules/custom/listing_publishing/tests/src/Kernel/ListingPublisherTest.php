@@ -14,6 +14,7 @@ use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\listing_publishing\Contract\MarketplacePublisherInterface;
 use Drupal\listing_publishing\Contract\SkuGeneratorInterface;
 use Drupal\listing_publishing\Model\ListingPublishRequest;
@@ -69,6 +70,8 @@ use Drupal\listing_publishing\Service\MarketplaceUnpublishService;
  */
 final class ListingPublisherTest extends KernelTestBase {
 
+  use InstallsBbAiListingKernelSchemaTrait;
+
   protected static $modules = [
     'system',
     'user',
@@ -76,6 +79,7 @@ final class ListingPublisherTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -93,7 +97,7 @@ final class ListingPublisherTest extends KernelTestBase {
     parent::setUp();
 
     // Install the real entity tables this use case writes to.
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_listing_inventory_sku');
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle', 'bb_ai_listing_history']);

@@ -7,9 +7,12 @@ namespace Drupal\Tests\listing_publishing\Kernel;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\BbAiListingType;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\listing_publishing\Service\SkuGenerator;
 
 final class SkuGeneratorTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -18,6 +21,7 @@ final class SkuGeneratorTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -26,7 +30,7 @@ final class SkuGeneratorTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     BbAiListingType::create([
       'id' => 'book',
       'label' => 'Book',

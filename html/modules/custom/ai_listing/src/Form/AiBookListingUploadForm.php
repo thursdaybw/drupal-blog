@@ -212,7 +212,7 @@ final class AiBookListingUploadForm extends FormBase {
 
     $listing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'new',
+      'status' => 'ready_for_inference',
     ]);
     $listing->save();
     $listingId = (int) $listing->id();

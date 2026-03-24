@@ -14,11 +14,14 @@ use Drupal\bb_ai_listing_sync\Contract\ListingSyncGraphBuilderInterface;
 use Drupal\bb_ai_listing_sync\Service\ListingSyncGraphFingerprintService;
 use Drupal\file\Entity\File;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 
 /**
  * Proves graph traversal and fingerprint drift for bb_ai_listing sync.
  */
 final class ListingSyncGraphFingerprintTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -29,6 +32,7 @@ final class ListingSyncGraphFingerprintTest extends KernelTestBase {
     'filter',
     'options',
     'dynamic_entity_reference',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'bb_ai_listing_sync',
@@ -43,7 +47,7 @@ final class ListingSyncGraphFingerprintTest extends KernelTestBase {
 
     $this->installEntitySchema('user');
     $this->installEntitySchema('file');
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_book_bundle_item');
     $this->installEntitySchema('ai_listing_inventory_sku');
     $this->installEntitySchema('ai_marketplace_publication');

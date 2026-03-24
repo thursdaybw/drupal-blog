@@ -11,6 +11,7 @@ use Drupal\ebay_connector\Entity\EbayAccount;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\user\Entity\User;
 
 /**
@@ -23,6 +24,8 @@ use Drupal\user\Entity\User;
  */
 final class EbayMirrorReportControllerTest extends KernelTestBase {
 
+  use InstallsBbAiListingKernelSchemaTrait;
+
   protected static $modules = [
     'system',
     'user',
@@ -31,6 +34,7 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -44,7 +48,7 @@ final class EbayMirrorReportControllerTest extends KernelTestBase {
     parent::setUp();
 
     $this->installEntitySchema('user');
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installEntitySchema('ebay_account');
     $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);

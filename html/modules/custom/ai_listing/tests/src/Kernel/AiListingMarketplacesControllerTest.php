@@ -6,12 +6,15 @@ namespace Drupal\Tests\ai_listing\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\ai_listing\Controller\AiListingMarketplacesController;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
  * Verifies the marketplaces tab controller render model.
  */
 final class AiListingMarketplacesControllerTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -20,6 +23,7 @@ final class AiListingMarketplacesControllerTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -28,7 +32,7 @@ final class AiListingMarketplacesControllerTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_marketplace_publication');
   }
 

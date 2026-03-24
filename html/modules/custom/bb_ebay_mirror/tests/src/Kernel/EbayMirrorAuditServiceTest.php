@@ -10,6 +10,7 @@ use Drupal\bb_ebay_mirror\Service\EbayMirrorAuditService;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 
 /**
  * Tests the first eBay mirror audit report.
@@ -25,6 +26,8 @@ use Drupal\KernelTests\KernelTestBase;
  */
 final class EbayMirrorAuditServiceTest extends KernelTestBase {
 
+  use InstallsBbAiListingKernelSchemaTrait;
+
   protected static $modules = [
     'system',
     'user',
@@ -33,6 +36,7 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -47,7 +51,7 @@ final class EbayMirrorAuditServiceTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installSchema('bb_ebay_mirror', ['bb_ebay_inventory_item', 'bb_ebay_offer']);
     $this->installSchema('bb_ebay_legacy_migration', ['bb_ebay_legacy_listing', 'bb_ebay_legacy_listing_link']);

@@ -7,11 +7,14 @@ namespace Drupal\Tests\ai_listing_inference\Kernel;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Entity\BbAiListingType;
 use Drupal\ai_listing\Service\BookExtractionInterface;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\ai_listing_inference\Service\AiBookListingBatchDataExtractionProcessor;
 use Drupal\ai_listing_inference\Service\AiBookListingDataExtractionProcessor;
 use Drupal\KernelTests\KernelTestBase;
 
 final class AiBookListingBatchDataExtractionProcessorTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -22,6 +25,7 @@ final class AiBookListingBatchDataExtractionProcessorTest extends KernelTestBase
     'filter',
     'options',
     'dynamic_entity_reference',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
   ];
@@ -29,7 +33,7 @@ final class AiBookListingBatchDataExtractionProcessorTest extends KernelTestBase
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('listing_image');
     $this->installConfig(['ai_listing']);
 

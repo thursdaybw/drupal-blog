@@ -7,6 +7,7 @@ namespace Drupal\Tests\ai_listing\Kernel;
 use Drupal\ai_listing\Entity\BbAiListing;
 use Drupal\ai_listing\Model\AiListingBatchFilter;
 use Drupal\ai_listing\Service\AiListingBatchDatasetProvider;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\KernelTests\KernelTestBase;
 
 /**
@@ -38,6 +39,8 @@ use Drupal\KernelTests\KernelTestBase;
  */
 final class AiListingBatchDatasetProviderTest extends KernelTestBase {
 
+  use InstallsBbAiListingKernelSchemaTrait;
+
   protected static $modules = [
     'system',
     'user',
@@ -45,6 +48,7 @@ final class AiListingBatchDatasetProviderTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
   ];
@@ -54,7 +58,7 @@ final class AiListingBatchDatasetProviderTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_listing_inventory_sku');
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installConfig(['ai_listing']);

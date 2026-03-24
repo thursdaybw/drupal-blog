@@ -8,6 +8,7 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\ai_listing\Form\AiListingStockCullPickerForm;
 use Drupal\ai_listing\Service\StockCullSelectionStore;
 use Drupal\Core\Form\FormState;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
@@ -16,6 +17,8 @@ use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
  * Verifies the stock cull picker workflow surface.
  */
 final class AiListingStockCullPickerFormTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -26,6 +29,7 @@ final class AiListingStockCullPickerFormTest extends KernelTestBase {
     'filter',
     'options',
     'dynamic_entity_reference',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -34,7 +38,7 @@ final class AiListingStockCullPickerFormTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installEntitySchema('file');
     $this->installEntitySchema('listing_image');

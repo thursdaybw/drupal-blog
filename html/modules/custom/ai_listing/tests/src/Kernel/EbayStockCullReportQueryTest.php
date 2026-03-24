@@ -6,11 +6,14 @@ namespace Drupal\Tests\ai_listing\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\ai_listing\Report\EbayStockCullReportQuery;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 
 /**
  * Verifies the eBay stock cull report query.
  */
 final class EbayStockCullReportQueryTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -19,6 +22,7 @@ final class EbayStockCullReportQueryTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
   ];
@@ -26,7 +30,7 @@ final class EbayStockCullReportQueryTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);
   }

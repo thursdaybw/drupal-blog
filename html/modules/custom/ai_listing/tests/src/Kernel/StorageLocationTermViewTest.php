@@ -9,10 +9,13 @@ use Drupal\ai_listing\Entity\BbAiListingType;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\taxonomy\Entity\Term;
 use Drupal\taxonomy\Entity\Vocabulary;
 
 final class StorageLocationTermViewTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -29,8 +32,7 @@ final class StorageLocationTermViewTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
-    $this->installEntitySchema('taxonomy_term');
+    $this->installBbAiListingKernelSchema();
     $this->installConfig(['system', 'taxonomy', 'ai_listing']);
 
     $this->createBookType();

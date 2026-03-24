@@ -10,6 +10,7 @@ use Drupal\ebay_connector\Entity\EbayAccount;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\user\Entity\User;
 
 /**
@@ -20,6 +21,8 @@ use Drupal\user\Entity\User;
  */
 final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
 
+  use InstallsBbAiListingKernelSchemaTrait;
+
   protected static $modules = [
     'system',
     'user',
@@ -28,6 +31,7 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -43,7 +47,7 @@ final class EbayLegacyListingAdoptionServiceTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('file');
     $this->installEntitySchema('ebay_account');
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_listing_inventory_sku');
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle']);

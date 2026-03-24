@@ -11,6 +11,7 @@ use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\listing_publishing\Contract\SkuGeneratorInterface;
 use Drupal\listing_publishing\Service\BookListingAssembler;
 
@@ -23,6 +24,8 @@ use Drupal\listing_publishing\Service\BookListingAssembler;
  */
 final class BookListingAssemblerTest extends KernelTestBase {
 
+  use InstallsBbAiListingKernelSchemaTrait;
+
   protected static $modules = [
     'system',
     'user',
@@ -30,6 +33,7 @@ final class BookListingAssemblerTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -38,7 +42,7 @@ final class BookListingAssemblerTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installConfig(['field', 'ai_listing']);
     $this->createBookBundleType();
     $this->createBookField('field_title');

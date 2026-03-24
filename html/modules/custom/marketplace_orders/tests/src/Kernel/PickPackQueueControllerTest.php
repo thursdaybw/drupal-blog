@@ -6,12 +6,15 @@ namespace Drupal\Tests\marketplace_orders\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\marketplace_orders\Controller\PickPackQueueController;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
  * Verifies the pick-pack controller can be built from the container and render.
  */
 final class PickPackQueueControllerTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -20,6 +23,7 @@ final class PickPackQueueControllerTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -30,7 +34,7 @@ final class PickPackQueueControllerTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installSchema('marketplace_orders', [
       'marketplace_order',
       'marketplace_order_line',

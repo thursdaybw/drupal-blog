@@ -7,10 +7,13 @@ namespace Drupal\Tests\ai_listing\Kernel;
 use Drupal\ai_listing\Entity\BbAiListingType;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\file\Entity\File;
 use Drupal\KernelTests\KernelTestBase;
 
 final class IntakeSetListingMaterializerTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -21,6 +24,7 @@ final class IntakeSetListingMaterializerTest extends KernelTestBase {
     'filter',
     'options',
     'dynamic_entity_reference',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
   ];
@@ -29,7 +33,7 @@ final class IntakeSetListingMaterializerTest extends KernelTestBase {
     parent::setUp();
 
     $this->installEntitySchema('file');
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('listing_image');
     $this->installConfig(['field', 'ai_listing']);
 

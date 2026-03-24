@@ -16,6 +16,7 @@ use Drupal\Core\Url;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\taxonomy\Entity\Term;
 use Drupal\taxonomy\Entity\Vocabulary;
 
@@ -32,6 +33,8 @@ use Drupal\taxonomy\Entity\Vocabulary;
  * These tests prove that flow without touching real eBay.
  */
 final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -52,12 +55,11 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_listing_inventory_sku');
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installEntitySchema('file');
     $this->installEntitySchema('listing_image');
-    $this->installEntitySchema('taxonomy_term');
     $this->installConfig(['system', 'ai_listing', 'taxonomy']);
     $this->createStorageLocationVocabulary();
     $this->createBookType();

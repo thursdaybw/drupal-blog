@@ -6,11 +6,14 @@ namespace Drupal\Tests\marketplace_orders\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\marketplace_orders\Service\PickPackQueueQueryService;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 
 /**
  * Verifies pick-pack queue read-model filtering and joins.
  */
 final class PickPackQueueQueryServiceTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -19,6 +22,7 @@ final class PickPackQueueQueryServiceTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -31,7 +35,7 @@ final class PickPackQueueQueryServiceTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
 
     $this->installSchema('marketplace_orders', [
       'marketplace_order',

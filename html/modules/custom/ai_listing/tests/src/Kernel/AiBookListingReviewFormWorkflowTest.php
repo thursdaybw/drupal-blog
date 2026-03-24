@@ -13,10 +13,13 @@ use Drupal\Core\Form\FormState;
 use Drupal\file\Entity\File;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\listing_publishing\Service\ListingPublisher;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\taxonomy\Entity\Term;
 use Drupal\taxonomy\Entity\Vocabulary;
 
 final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
+
+  use InstallsBbAiListingKernelSchemaTrait;
 
   protected static $modules = [
     'system',
@@ -36,10 +39,9 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     parent::setUp();
 
     $this->installEntitySchema('file');
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('listing_image');
     $this->installEntitySchema('ai_marketplace_publication');
-    $this->installEntitySchema('taxonomy_term');
     $this->installConfig(['ai_listing', 'taxonomy']);
     $this->installSchema('ai_listing', ['bb_ai_listing_history']);
 

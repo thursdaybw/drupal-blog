@@ -7,6 +7,7 @@ namespace Drupal\Tests\listing_publishing\Kernel;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\ai_listing\Service\ListingHistoryRecorder;
 use Drupal\ai_listing\Service\MarketplaceLifecycleRecorder;
+use Drupal\Tests\ai_listing\Traits\InstallsBbAiListingKernelSchemaTrait;
 use Drupal\listing_publishing\Contract\MarketplaceUnpublisherInterface;
 use Drupal\listing_publishing\Exception\MarketplaceAlreadyUnpublishedException;
 use Drupal\listing_publishing\Model\MarketplaceUnpublishRequest;
@@ -17,6 +18,8 @@ use Drupal\listing_publishing\Service\MarketplaceUnpublishService;
  */
 final class MarketplaceUnpublishServiceTest extends KernelTestBase {
 
+  use InstallsBbAiListingKernelSchemaTrait;
+
   protected static $modules = [
     'system',
     'user',
@@ -24,6 +27,7 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
     'text',
     'filter',
     'options',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
     'listing_publishing',
@@ -32,7 +36,7 @@ final class MarketplaceUnpublishServiceTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    $this->installEntitySchema('bb_ai_listing');
+    $this->installBbAiListingKernelSchema();
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installSchema('ai_listing', ['bb_ai_listing_marketplace_lifecycle', 'bb_ai_listing_history']);
   }

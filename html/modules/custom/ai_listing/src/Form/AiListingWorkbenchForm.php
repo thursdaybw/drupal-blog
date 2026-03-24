@@ -348,7 +348,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     batch_set(self::buildDeleteBatchDefinition($selection));
   }
 
-  private function queueListingBatch(FormStateInterface $form_state, bool $setLocation, string $location, string $operationMode): void {
+  private function queueListingBatch(FormStateInterface $form_state, bool $setLocation, string $location, string $operationMode, int $locationTermId = 0): void {
     $selection = $this->getSelectedListingRefs($form_state);
     if ($selection === []) {
       $this->messenger()->addError($this->t('Select at least one listing to update.'));
@@ -362,13 +362,13 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       return;
     }
 
-    batch_set(self::buildListingBatchDefinition($selection, $setLocation, $location, $operationMode));
+    batch_set(self::buildListingBatchDefinition($selection, $setLocation, $location, $operationMode, $locationTermId));
   }
 
   /**
    * @param array<int,array{entity_type:string,id:int}|int|string> $selection
    */
-  public static function buildListingBatchDefinition(array $selection, bool $setLocation, string $location, string $operationMode = 'publish'): array {
+  public static function buildListingBatchDefinition(array $selection, bool $setLocation, string $location, string $operationMode = 'publish', int $locationTermId = 0): array {
     $operations = [];
     foreach ($selection as $item) {
       if (is_int($item) || (is_string($item) && ctype_digit($item))) {
@@ -385,7 +385,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       }
       $operations[] = [
         [self::class, 'processBatchOperation'],
-        [$item['listing_type'], (int) $item['id'], $setLocation, $location, $operationMode],
+        [$item['listing_type'], (int) $item['id'], $setLocation, $location, $operationMode, $locationTermId],
       ];
     }
 
@@ -417,7 +417,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     ];
   }
 
-  public static function processBatchOperation(string $listingType, int $listingId, bool $setLocation, string $location, string $operationMode, array &$context): void {
+  public static function processBatchOperation(string $listingType, int $listingId, bool $setLocation, string $location, string $operationMode, int $locationTermId, array &$context): void {
     $entityTypeManager = \Drupal::entityTypeManager();
     $storage = $entityTypeManager->getStorage('bb_ai_listing');
     /** @var \Drupal\ai_listing\Entity\BbAiListing|null $listing */
@@ -439,6 +439,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
 
     if ($setLocation) {
       $listing->set('storage_location', $location);
+      $listing->set('storage_location_term', $locationTermId > 0 ? ['target_id' => $locationTermId] : null);
     }
 
     if ($operationMode === 'location_only') {

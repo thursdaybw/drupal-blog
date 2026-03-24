@@ -16,6 +16,8 @@ use Drupal\Core\Url;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\taxonomy\Entity\Term;
+use Drupal\taxonomy\Entity\Vocabulary;
 
 /**
  * Tests the server-side location update flow from the workbench.
@@ -40,6 +42,7 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
     'filter',
     'options',
     'dynamic_entity_reference',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
   ];
@@ -54,7 +57,9 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
     $this->installEntitySchema('ai_marketplace_publication');
     $this->installEntitySchema('file');
     $this->installEntitySchema('listing_image');
-    $this->installConfig(['system', 'ai_listing']);
+    $this->installEntitySchema('taxonomy_term');
+    $this->installConfig(['system', 'ai_listing', 'taxonomy']);
+    $this->createStorageLocationVocabulary();
     $this->createBookType();
     $this->createBookField('field_title');
     $this->createBookField('field_full_title');
@@ -120,7 +125,8 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
 
     $formObject = AiListingLocationUpdateConfirmForm::create($this->container);
     $formState = new FormState();
-    $formState->setValue('location', 'BDMAA09');
+    $locationTerm = $this->createStorageLocationTerm('BDMAA09');
+    $formState->setValue('location_term', 'BDMAA09 (' . (int) $locationTerm->id() . ')');
     $build = [];
 
     $formObject->submitForm($build, $formState);
@@ -144,7 +150,7 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
 
     $firstOperation = $set['operations'][0];
     $this->assertSame([AiListingWorkbenchForm::class, 'processBatchOperation'], $firstOperation[0]);
-    $this->assertSame(['book', 12, TRUE, 'BDMAA09', 'location_only'], $firstOperation[1]);
+    $this->assertSame(['book', 12, TRUE, 'BDMAA09', 'location_only', (int) $locationTerm->id()], $firstOperation[1]);
   }
 
   /**
@@ -154,13 +160,15 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
     $listing = $this->createBookListing('Location-only batch test', '');
     $listing->set('status', 'ready_to_shelve');
     $listing->save();
+    $locationTerm = $this->createStorageLocationTerm('BDMAA09');
 
     $context = [];
-    AiListingWorkbenchForm::processBatchOperation('book', (int) $listing->id(), TRUE, 'BDMAA09', 'location_only', $context);
+    AiListingWorkbenchForm::processBatchOperation('book', (int) $listing->id(), TRUE, 'BDMAA09', 'location_only', (int) $locationTerm->id(), $context);
 
     $reloaded = BbAiListing::load((int) $listing->id());
     $this->assertInstanceOf(BbAiListing::class, $reloaded);
     $this->assertSame('BDMAA09', (string) $reloaded->get('storage_location')->value);
+    $this->assertSame((int) $locationTerm->id(), (int) $reloaded->get('storage_location_term')->target_id);
     $this->assertSame('ready_to_publish', (string) $reloaded->get('status')->value);
     $this->assertSame(1, (int) ($context['results']['success'] ?? 0));
   }
@@ -349,6 +357,36 @@ final class AiListingWorkbenchLocationFlowTest extends KernelTestBase {
       'label' => 'Book',
       'description' => 'Single book listing.',
     ])->save();
+  }
+
+  private function createStorageLocationVocabulary(): void {
+    if (Vocabulary::load('storage_location') !== NULL) {
+      return;
+    }
+
+    Vocabulary::create([
+      'vid' => 'storage_location',
+      'name' => 'Storage location',
+    ])->save();
+  }
+
+  private function createStorageLocationTerm(string $name): Term {
+    $existing = $this->container->get('entity_type.manager')->getStorage('taxonomy_term')->loadByProperties([
+      'vid' => 'storage_location',
+      'name' => $name,
+    ]);
+    if ($existing !== []) {
+      $term = reset($existing);
+      assert($term instanceof Term);
+      return $term;
+    }
+
+    $term = Term::create([
+      'vid' => 'storage_location',
+      'name' => $name,
+    ]);
+    $term->save();
+    return $term;
   }
 
 }

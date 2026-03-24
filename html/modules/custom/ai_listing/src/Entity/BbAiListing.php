@@ -97,6 +97,19 @@ final class BbAiListing extends ContentEntityBase {
       ->setDefaultValue('')
       ->setSettings(['max_length' => 255]);
 
+    $fields['storage_location_term'] = BaseFieldDefinition::create('entity_reference')
+      ->setLabel('Storage location term')
+      ->setDescription('Registered storage location term for this listing.')
+      ->setSetting('target_type', 'taxonomy_term')
+      ->setSetting('handler', 'default:taxonomy_term')
+      ->setSetting('handler_settings', [
+        'target_bundles' => [
+          'storage_location' => 'storage_location',
+        ],
+        'auto_create' => FALSE,
+      ])
+      ->setRequired(FALSE);
+
     $fields['keep_score'] = BaseFieldDefinition::create('list_string')
       ->setLabel('Keep score')
       ->setDescription('Operator judgement for how worth keeping this item is in inventory.')

@@ -330,3 +330,95 @@ function ai_listing_update_11006(): void {
     $definition
   );
 }
+
+/**
+ * Adds registered storage location taxonomy support.
+ */
+function ai_listing_update_11007(): void {
+  $vocabularyStorage = \Drupal::entityTypeManager()->getStorage('taxonomy_vocabulary');
+  if ($vocabularyStorage->load('storage_location') === NULL) {
+    $modulePath = \Drupal::service('extension.list.module')->getPath('ai_listing');
+    $configPath = $modulePath . '/config/install/taxonomy.vocabulary.storage_location.yml';
+    if (!is_file($configPath)) {
+      throw new \RuntimeException(sprintf('Missing storage location vocabulary config at %s', $configPath));
+    }
+
+    $data = \Symfony\Component\Yaml\Yaml::parseFile($configPath);
+    if (!is_array($data)) {
+      throw new \RuntimeException('Storage location vocabulary config could not be parsed.');
+    }
+
+    unset($data['uuid'], $data['_core'], $data['langcode'], $data['dependencies'], $data['status']);
+    $vocabularyStorage->create($data)->save();
+  }
+
+  $entityType = \Drupal::entityTypeManager()->getDefinition('bb_ai_listing');
+  $definition = \Drupal\ai_listing\Entity\BbAiListing::baseFieldDefinitions($entityType)['storage_location_term'];
+  $updateManager = \Drupal::entityDefinitionUpdateManager();
+  if ($updateManager->getFieldStorageDefinition('storage_location_term', 'bb_ai_listing') === NULL) {
+    $updateManager->installFieldStorageDefinition(
+      'storage_location_term',
+      'bb_ai_listing',
+      'ai_listing',
+      $definition
+    );
+  }
+
+  $database = \Drupal::database();
+  $termStorage = \Drupal::entityTypeManager()->getStorage('taxonomy_term');
+
+  $locations = $database->select('bb_ai_listing', 'listing')
+    ->fields('listing', ['storage_location'])
+    ->isNotNull('storage_location')
+    ->condition('storage_location', '', '<>')
+    ->distinct()
+    ->execute()
+    ->fetchCol();
+
+  $termIdsByName = [];
+  foreach ($locations as $location) {
+    $name = trim((string) $location);
+    if ($name === '') {
+      continue;
+    }
+
+    $existing = $termStorage->loadByProperties([
+      'vid' => 'storage_location',
+      'name' => $name,
+    ]);
+    $term = $existing ? reset($existing) : NULL;
+    if (!$term) {
+      $term = $termStorage->create([
+        'vid' => 'storage_location',
+        'name' => $name,
+      ]);
+      $term->save();
+    }
+
+    $termIdsByName[$name] = (int) $term->id();
+  }
+
+  if ($termIdsByName === []) {
+    return;
+  }
+
+  $listingStorage = \Drupal::entityTypeManager()->getStorage('bb_ai_listing');
+  $ids = $listingStorage->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('storage_location', '', '<>')
+    ->execute();
+
+  foreach (array_chunk(array_map('intval', $ids), 50) as $chunk) {
+    /** @var \Drupal\ai_listing\Entity\BbAiListing[] $listings */
+    $listings = $listingStorage->loadMultiple($chunk);
+    foreach ($listings as $listing) {
+      $name = trim((string) ($listing->get('storage_location')->value ?? ''));
+      $termId = $termIdsByName[$name] ?? 0;
+      if ($termId <= 0) {
+        continue;
+      }
+      $listing->set('storage_location_term', ['target_id' => $termId]);
+      $listing->save();
+    }
+  }
+}

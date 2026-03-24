@@ -13,6 +13,8 @@ use Drupal\Core\Form\FormState;
 use Drupal\file\Entity\File;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\listing_publishing\Service\ListingPublisher;
+use Drupal\taxonomy\Entity\Term;
+use Drupal\taxonomy\Entity\Vocabulary;
 
 final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
 
@@ -25,6 +27,7 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     'filter',
     'options',
     'dynamic_entity_reference',
+    'taxonomy',
     'bb_platform',
     'ai_listing',
   ];
@@ -36,9 +39,11 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $this->installEntitySchema('bb_ai_listing');
     $this->installEntitySchema('listing_image');
     $this->installEntitySchema('ai_marketplace_publication');
-    $this->installConfig(['ai_listing']);
+    $this->installEntitySchema('taxonomy_term');
+    $this->installConfig(['ai_listing', 'taxonomy']);
     $this->installSchema('ai_listing', ['bb_ai_listing_history']);
 
+    $this->createStorageLocationVocabulary();
     $this->createBookType();
   }
 
@@ -100,6 +105,36 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $reloaded = BbAiListing::load((int) $listing->id());
     $this->assertInstanceOf(BbAiListing::class, $reloaded);
     $this->assertSame('high', (string) $reloaded->get('keep_score')->value);
+  }
+
+  public function testSavePersistsStorageLocationTermAndLegacyString(): void {
+    $listing = BbAiListing::create([
+      'listing_type' => 'book',
+      'status' => 'new',
+      'price' => '9.99',
+    ]);
+    $listing->save();
+    $locationTerm = $this->createStorageLocationTerm('BDMAA12');
+
+    $form = $this->buildReviewForm();
+    $formState = new FormState();
+    $formState->set('listing', $listing);
+    $formState->setTriggeringElement(['#name' => 'ai_save_listing']);
+    $formState->setValue(['basic', 'status'], 'new');
+    $formState->setValue(['basic', 'price'], '9.99');
+    $formState->setValue(['basic', 'storage_location'], 'BDMAA12 (' . (int) $locationTerm->id() . ')');
+    $formState->setValue(['ebay', 'description'], ['value' => '', 'format' => 'basic_html']);
+    $formState->setValue(['condition', 'condition_grade'], 'good');
+    $formState->setValue(['condition', 'condition_issues'], []);
+    $formState->setValue(['condition', 'condition_note'], '');
+
+    $built = [];
+    $form->submitForm($built, $formState);
+
+    $reloaded = BbAiListing::load((int) $listing->id());
+    $this->assertInstanceOf(BbAiListing::class, $reloaded);
+    $this->assertSame((int) $locationTerm->id(), (int) $reloaded->get('storage_location_term')->target_id);
+    $this->assertSame('BDMAA12', (string) $reloaded->get('storage_location')->value);
   }
 
   public function testReadyForInferenceActionRequiresMetadataSelection(): void {
@@ -205,6 +240,36 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
       'label' => 'Book',
       'description' => 'Single book listing.',
     ])->save();
+  }
+
+  private function createStorageLocationVocabulary(): void {
+    if (Vocabulary::load('storage_location') !== NULL) {
+      return;
+    }
+
+    Vocabulary::create([
+      'vid' => 'storage_location',
+      'name' => 'Storage location',
+    ])->save();
+  }
+
+  private function createStorageLocationTerm(string $name): Term {
+    $existing = $this->container->get('entity_type.manager')->getStorage('taxonomy_term')->loadByProperties([
+      'vid' => 'storage_location',
+      'name' => $name,
+    ]);
+    if ($existing !== []) {
+      $term = reset($existing);
+      assert($term instanceof Term);
+      return $term;
+    }
+
+    $term = Term::create([
+      'vid' => 'storage_location',
+      'name' => $name,
+    ]);
+    $term->save();
+    return $term;
   }
 
 }

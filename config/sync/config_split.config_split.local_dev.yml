@@ -1,0 +1,17 @@
+uuid: 89ee1e55-f85f-4884-bc4d-4a82e601d490
+langcode: en
+status: false
+dependencies: {  }
+id: local_dev
+label: 'Local development'
+description: 'Local-only modules and config for DDEV development.'
+weight: 0
+stackable: false
+no_patching: false
+storage: folder
+folder: ../config/splits/local_dev
+module:
+  stage_file_proxy: 0
+theme: {  }
+complete_list: {  }
+partial_list: {  }

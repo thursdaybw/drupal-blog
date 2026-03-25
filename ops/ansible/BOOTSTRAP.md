@@ -32,7 +32,7 @@ bevan ALL=(root) NOPASSWD: BB_NGINX, BB_CERTBOT, BB_DOCKER, BB_NGINX_WRITE, BB_N
 Why `docker build` is included:
 - the VPS now hosts a dedicated Drupal `build` environment under `/home/bevan/build`
 - `deploy-build` runs `sudo -n docker build ...` there
-- without this sudoers entry, remote image builds fail after `composer install`
+- without this sudoers entry, remote image builds fail after `composer install --no-dev`
 
 Set secure permissions:
 
@@ -213,7 +213,7 @@ ansible-playbook -i ops/ansible/inventory.ini ops/ansible/site.yml
 
 Notes:
 - The build bootstrap now uses `/home/bevan/.ssh/bevansbench-drupal_support`
-  explicitly for both the repo clone and `composer install`.
+  explicitly for both the repo clone and `composer install --no-dev`.
 - No ssh-agent forwarding is required for this path.
 
 ## Production DB import

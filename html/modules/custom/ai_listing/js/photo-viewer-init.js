@@ -3,6 +3,9 @@
 
   const thumbnailSelector = '#edit-photos img.image-style-thumbnail';
   const lightboxLinkClass = 'ai-listing-photo-link';
+  const preloadedSources = new Set();
+  const preloadQueue = [];
+  let preloadScheduled = false;
 
   function deriveOriginalImageUrlFromThumbnail(thumbnailUrl) {
     if (!thumbnailUrl) {
@@ -21,6 +24,42 @@
     return leadingPath + '/' + relativeFilePath;
   }
 
+  function flushPreloadQueue() {
+    preloadScheduled = false;
+
+    while (preloadQueue.length > 0) {
+      const source = preloadQueue.shift();
+      if (!source || preloadedSources.has(source)) {
+        continue;
+      }
+
+      preloadedSources.add(source);
+      const image = new Image();
+      image.decoding = 'async';
+      image.fetchPriority = 'low';
+      image.src = source;
+    }
+  }
+
+  function schedulePreload(source) {
+    if (!source || preloadedSources.has(source)) {
+      return;
+    }
+
+    preloadQueue.push(source);
+    if (preloadScheduled) {
+      return;
+    }
+
+    preloadScheduled = true;
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(flushPreloadQueue, {timeout: 1500});
+      return;
+    }
+
+    window.setTimeout(flushPreloadQueue, 0);
+  }
+
   Drupal.behaviors.aiListingLightbox = {
     attach(context) {
       once('aiListingLightboxWrap', thumbnailSelector, context).forEach((imageElement) => {
@@ -35,6 +74,8 @@
         if (!fullImageSource) {
           return;
         }
+
+        schedulePreload(fullImageSource);
 
         if (parentElement && parentElement.tagName === 'A') {
           parentElement.classList.add(lightboxLinkClass);

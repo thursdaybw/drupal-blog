@@ -57,7 +57,7 @@
 
 - name: Run composer install in build checkout
   ansible.builtin.command:
-    cmd: "{{ build_composer_path }} install --no-interaction --prefer-dist"
+    cmd: "{{ build_composer_path }} install --no-dev --no-interaction --prefer-dist"
     chdir: "{{ build_workspace }}"
   environment:
     COMPOSER_HOME: "{{ build_cache_dir }}"

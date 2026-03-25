@@ -178,7 +178,7 @@ git fetch --all --tags --prune
 git checkout --force '${HEAD_FULL_SHA}'
 git submodule sync --recursive
 git submodule update --init --recursive
-COMPOSER_HOME='${REMOTE_COMPOSER_HOME}' '${REMOTE_COMPOSER_PATH}' install --no-interaction --prefer-dist
+COMPOSER_HOME='${REMOTE_COMPOSER_HOME}' '${REMOTE_COMPOSER_PATH}' install --no-dev --no-interaction --prefer-dist
 sudo -n docker build -t '${IMAGE_REF}' -f Dockerfile.prod .
 "
 }
@@ -207,7 +207,7 @@ if [ "${DRY_RUN}" = true ]; then
     echo "[dry-run] ssh ${SSH_TARGET} \"sudo -n docker image inspect '${IMAGE_REF}' >/dev/null 2>&1\""
     echo "[dry-run] if image exists, build is skipped"
   fi
-  echo "[dry-run] ssh ${SSH_TARGET} \"export GIT_SSH_COMMAND='ssh -i ${REMOTE_GIT_KEY_PATH} -o IdentitiesOnly=yes'; cd '${REMOTE_BUILD_WORKSPACE}'; git fetch --all --tags --prune; git checkout --force '${HEAD_FULL_SHA}'; git submodule sync --recursive; git submodule update --init --recursive; COMPOSER_HOME='${REMOTE_COMPOSER_HOME}' '${REMOTE_COMPOSER_PATH}' install --no-interaction --prefer-dist; sudo -n docker build -t '${IMAGE_REF}' -f Dockerfile.prod .\""
+  echo "[dry-run] ssh ${SSH_TARGET} \"export GIT_SSH_COMMAND='ssh -i ${REMOTE_GIT_KEY_PATH} -o IdentitiesOnly=yes'; cd '${REMOTE_BUILD_WORKSPACE}'; git fetch --all --tags --prune; git checkout --force '${HEAD_FULL_SHA}'; git submodule sync --recursive; git submodule update --init --recursive; COMPOSER_HOME='${REMOTE_COMPOSER_HOME}' '${REMOTE_COMPOSER_PATH}' install --no-dev --no-interaction --prefer-dist; sudo -n docker build -t '${IMAGE_REF}' -f Dockerfile.prod .\""
   exit 0
 fi
 

@@ -12,6 +12,9 @@ storage: folder
 folder: ../config/splits/local_dev
 module:
   stage_file_proxy: 0
+  devel: 0
+  devel_entity_updates: 0
+  video_forge_dev: 0
 theme: {  }
 complete_list: {  }
 partial_list: {  }

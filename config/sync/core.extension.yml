@@ -33,8 +33,6 @@ module:
   datetime: 0
   dblog: 0
   default_content: 0
-  devel: 0
-  devel_entity_updates: 0
   drupal_blog: 0
   dynamic_entity_reference: 0
   dynamic_page_cache: 0
@@ -90,7 +88,6 @@ module:
   update: 0
   user: 0
   video_forge: 0
-  video_forge_dev: 0
   video_forge_tasks: 0
   views_ui: 0
   pathauto: 1

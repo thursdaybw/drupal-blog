@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\ai_listing\Form;
 
 use Drupal\ai_listing\Entity\BbAiListing;
+use Drupal\ai_listing\Service\UploadedFileTreeExtractor;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileSystemInterface;
@@ -23,12 +24,14 @@ final class AiBookListingUploadForm extends FormBase {
   public function __construct(
     private FileSystemInterface $fileSystem,
     private EntityTypeManagerInterface $entityTypeManager,
+    private UploadedFileTreeExtractor $uploadedFileTreeExtractor,
   ) {}
 
   public static function create(ContainerInterface $container): self {
     return new self(
       $container->get('file_system'),
       $container->get('entity_type.manager'),
+      $container->get('ai_listing.uploaded_file_tree_extractor'),
     );
   }
 
@@ -319,30 +322,8 @@ final class AiBookListingUploadForm extends FormBase {
    */
   private function saveUploadedImagesToTemp(): array {
     $requestFiles = \Drupal::request()->files->all();
-    $filesRoot = $requestFiles['files'] ?? NULL;
-    $uploaded = [];
-
-    if ($filesRoot instanceof UploadedFile) {
-      $uploaded = [$filesRoot];
-    }
-    elseif (is_array($filesRoot)) {
-      $uploaded = $filesRoot['workspace']['upload']['new_images']
-        ?? $filesRoot['workspace']
-        ?? $filesRoot['upload']['new_images']
-        ?? ($filesRoot['new_images'] ?? []);
-    }
-    elseif (isset($requestFiles['workspace']['upload']['new_images'])) {
-      $uploaded = $requestFiles['workspace']['upload']['new_images'];
-    }
-    elseif (isset($requestFiles['upload']['new_images'])) {
-      $uploaded = $requestFiles['upload']['new_images'];
-    }
-
-    if ($uploaded instanceof UploadedFile) {
-      $uploaded = [$uploaded];
-    }
-
-    if (!is_array($uploaded) || $uploaded === []) {
+    $uploaded = $this->uploadedFileTreeExtractor->extract($requestFiles);
+    if ($uploaded === []) {
       return [];
     }
 

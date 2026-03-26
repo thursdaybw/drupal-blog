@@ -2,7 +2,7 @@ name: AI Listing
 type: module
 description: AI-driven book listing workflow entity.
 core_version_requirement: ^10
-package: Custom
+package: 'BB AI Listing'
 dependencies:
   - bb_platform
   - taxonomy

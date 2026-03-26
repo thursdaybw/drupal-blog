@@ -1,0 +1,7 @@
+name: AI Listing Marketplace Test Stub
+package: Testing
+type: module
+description: 'Test-only marketplace publisher stub for AI listing browser tests.'
+core_version_requirement: ^10 || ^11
+dependencies:
+  - listing_publishing

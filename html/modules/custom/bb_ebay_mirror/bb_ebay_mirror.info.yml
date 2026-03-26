@@ -1,7 +1,7 @@
 name: 'BB eBay Mirror'
 type: module
 description: 'Local mirror of eBay Inventory/Offer state for auditing and reconciliation.'
-package: 'BB'
+package: 'BB AI Listing'
 core_version_requirement: ^10
 dependencies:
   - ebay_infrastructure

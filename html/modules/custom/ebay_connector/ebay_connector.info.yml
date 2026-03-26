@@ -1,7 +1,7 @@
 name: 'Ebay Connector'
 type: module
 description: 'eBay OAuth infrastructure connector'
-package: Custom
+package: 'BB AI Listing'
 core_version_requirement: ^10 || ^11
 dependencies:
   - ebay_infrastructure

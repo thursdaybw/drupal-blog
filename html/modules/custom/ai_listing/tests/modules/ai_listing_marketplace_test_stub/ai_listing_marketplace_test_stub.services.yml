@@ -1,0 +1,7 @@
+services:
+  listing_publishing.marketplace_publisher:
+    class: Drupal\ai_listing_marketplace_test_stub\Service\StateBackedMarketplacePublisher
+    arguments:
+      - '@state'
+  'Drupal\listing_publishing\Contract\MarketplacePublisherInterface':
+    alias: listing_publishing.marketplace_publisher

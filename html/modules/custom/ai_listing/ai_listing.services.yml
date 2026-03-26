@@ -21,6 +21,9 @@ services:
   ai_listing.batch_selection_manager:
     class: Drupal\ai_listing\Service\AiListingBatchSelectionManager
 
+  ai_listing.uploaded_file_tree_extractor:
+    class: Drupal\ai_listing\Service\UploadedFileTreeExtractor
+
   ai_listing.intake_set_listing_materializer:
     class: Drupal\ai_listing\Service\IntakeSetListingMaterializer
     arguments:

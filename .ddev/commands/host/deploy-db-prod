@@ -109,6 +109,8 @@ echo "- local dump: ${SQL_FILE_ABS}"
 echo "- remote dump: ${SSH_TARGET}:${REMOTE_SQL_PATH}"
 echo "- dump gzip: ${SQL_IS_GZIP}"
 echo "- dry run: ${DRY_RUN}"
+echo "WARNING: This replaces production DB data, including eBay OAuth grant records (ebay_account refresh_token)."
+echo "After import you may need to reconnect eBay via /admin/ebay/authorize."
 
 if [ "${DRY_RUN}" = true ]; then
   echo "[dry-run] ssh ${SSH_TARGET} mkdir -p ${REMOTE_DB_DIR}"

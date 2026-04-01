@@ -68,22 +68,26 @@ final class EbayAccountManager {
     }
 
     $storage = $this->entityTypeManager->getStorage('ebay_account');
-    $accounts = $storage->loadByProperties(['environment' => 'production']);
+    $accountIds = $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('environment', 'production')
+      ->sort('id', 'DESC')
+      ->range(0, 1)
+      ->execute();
 
-    if (!$accounts) {
+    if ($accountIds === []) {
       throw new \RuntimeException('No connected eBay account found.');
     }
 
-    $this->cachedAccount = reset($accounts);
+    $accountId = (int) reset($accountIds);
+    $account = $storage->load($accountId);
 
-    if (!$this->cachedAccount instanceof EbayAccount) {
+    if (!$account instanceof EbayAccount) {
       throw new \RuntimeException('Invalid eBay account entity.');
     }
 
-    $accountId = (int) $this->cachedAccount->id();
-    if ($accountId > 0) {
-      $this->cachedAccountsById[$accountId] = $this->cachedAccount;
-    }
+    $this->cachedAccount = $account;
+    $this->cachedAccountsById[$accountId] = $this->cachedAccount;
 
     return $this->cachedAccount;
   }

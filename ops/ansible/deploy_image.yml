@@ -260,6 +260,26 @@
           File:
           {{ deploy_target.env_path }}
 
+    - name: Assert required eBay connector variables exist for production deploy
+      ansible.builtin.assert:
+        that:
+          - "(env_content.content | b64decode) is regex('(?m)^EBAY_CONNECTOR_ENVIRONMENT=(production|sandbox)$')"
+          - "(env_content.content | b64decode) is regex('(?m)^EBAY_CONNECTOR_PRODUCTION_CLIENT_ID=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^EBAY_CONNECTOR_PRODUCTION_CLIENT_SECRET=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^EBAY_CONNECTOR_PRODUCTION_RU_NAME=.+$')"
+        fail_msg: |
+          {{ deploy_target.name | upper }} .env is present but missing required eBay connector values.
+
+          Required non-empty keys:
+          - EBAY_CONNECTOR_ENVIRONMENT (production|sandbox)
+          - EBAY_CONNECTOR_PRODUCTION_CLIENT_ID
+          - EBAY_CONNECTOR_PRODUCTION_CLIENT_SECRET
+          - EBAY_CONNECTOR_PRODUCTION_RU_NAME
+
+          File:
+          {{ deploy_target.env_path }}
+      when: deploy_env_effective == 'prod'
+
     - name: Validate environment compose configuration
       ansible.builtin.command:
         cmd: >-
@@ -377,6 +397,34 @@
           sh -lc 'cd /var/www/html && {{ app_drush_bin }} cr'
       changed_when: true
       when:
+        - drush_bootstrap.rc == 0
+        - "'Successful' in (drush_bootstrap.stdout | default(''))"
+
+    - name: Read effective eBay production ru_name at runtime
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
+          exec -T appserver
+          sh -lc 'cd /var/www/html && {{ app_drush_bin }} php:eval
+          "print trim((string) \Drupal::config(\"ebay_connector.settings\")->get(\"production.ru_name\"));"'
+      register: ebay_ru_name_check
+      changed_when: false
+      when:
+        - deploy_env_effective == 'prod'
+        - drush_bootstrap.rc == 0
+        - "'Successful' in (drush_bootstrap.stdout | default(''))"
+
+    - name: Assert effective eBay production ru_name is configured at runtime
+      ansible.builtin.assert:
+        that:
+          - (ebay_ru_name_check.stdout | default('') | trim | length) > 0
+        fail_msg: |
+          Missing effective ebay_connector.settings production.ru_name at runtime.
+          Check production .env values and settings.php env overrides.
+      when:
+        - deploy_env_effective == 'prod'
         - drush_bootstrap.rc == 0
         - "'Successful' in (drush_bootstrap.stdout | default(''))"
 

@@ -19,6 +19,7 @@
       server {
         listen 80;
         server_name {{ staging_domain }};
+        client_max_body_size {{ staging_client_max_body_size }};
 
         location / {
           proxy_pass http://{{ staging_upstream_host }}:{{ staging_upstream_port }};

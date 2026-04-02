@@ -49,10 +49,10 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $this->createBookType();
   }
 
-  public function testNewListingShowsReadyForInferenceAction(): void {
+  public function testImageSelectionListingShowsReadyForInferenceAction(): void {
     $listing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'new',
+      'status' => 'ready_for_image_selection',
     ]);
     $listing->save();
 
@@ -63,17 +63,17 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $this->assertArrayNotHasKey('mark_ready_to_shelve', $built['actions']);
   }
 
-  public function testNewListingCanBeSavedWithoutMetadataSelection(): void {
+  public function testImageSelectionListingCanBeSavedWithoutMetadataSelection(): void {
     $listing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'new',
+      'status' => 'ready_for_image_selection',
     ]);
     $listing->save();
 
     $form = $this->buildReviewForm();
     $formState = new FormState();
     $formState->setTriggeringElement(['#name' => 'ai_save_listing']);
-    $formState->setValue(['basic', 'status'], 'new');
+    $formState->setValue(['basic', 'status'], 'ready_for_image_selection');
     $built = $form->buildForm([], $formState, $listing);
 
     $form->validateForm($built, $formState);
@@ -84,7 +84,7 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
   public function testSavePersistsKeepScore(): void {
     $listing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'new',
+      'status' => 'ready_for_image_selection',
       'price' => '9.99',
     ]);
     $listing->save();
@@ -93,7 +93,7 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $formState = new FormState();
     $formState->set('listing', $listing);
     $formState->setTriggeringElement(['#name' => 'ai_save_listing']);
-    $formState->setValue(['basic', 'status'], 'new');
+    $formState->setValue(['basic', 'status'], 'ready_for_image_selection');
     $formState->setValue(['basic', 'price'], '9.99');
     $formState->setValue(['basic', 'keep_score'], 'high');
     $formState->setValue(['ebay', 'description'], ['value' => '', 'format' => 'basic_html']);
@@ -112,7 +112,7 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
   public function testSavePersistsStorageLocationTermAndLegacyString(): void {
     $listing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'new',
+      'status' => 'ready_for_image_selection',
       'price' => '9.99',
     ]);
     $listing->save();
@@ -122,7 +122,7 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $formState = new FormState();
     $formState->set('listing', $listing);
     $formState->setTriggeringElement(['#name' => 'ai_save_listing']);
-    $formState->setValue(['basic', 'status'], 'new');
+    $formState->setValue(['basic', 'status'], 'ready_for_image_selection');
     $formState->setValue(['basic', 'price'], '9.99');
     $formState->setValue(['basic', 'storage_location'], 'BDMAA12 (' . (int) $locationTerm->id() . ')');
     $formState->setValue(['ebay', 'description'], ['value' => '', 'format' => 'basic_html']);
@@ -142,14 +142,14 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
   public function testReadyForInferenceActionRequiresMetadataSelection(): void {
     $listing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'new',
+      'status' => 'ready_for_image_selection',
     ]);
     $listing->save();
 
     $form = $this->buildReviewForm();
     $formState = new FormState();
     $formState->setTriggeringElement(['#name' => 'mark_ready_for_inference']);
-    $formState->setValue(['basic', 'status'], 'new');
+    $formState->setValue(['basic', 'status'], 'ready_for_image_selection');
     $built = $form->buildForm([], $formState, $listing);
 
     $form->validateForm($built, $formState);
@@ -157,17 +157,17 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $this->assertArrayHasKey('photos][items][listing_image_items', $formState->getErrors());
   }
 
-  public function testReadyForInferenceActionUpdatesStatusAndRedirectsToNextNewListing(): void {
+  public function testReadyForInferenceActionUpdatesStatusAndRedirectsToNextImageSelectionListing(): void {
     $listing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'new',
+      'status' => 'ready_for_image_selection',
       'price' => '9.99',
     ]);
     $listing->save();
 
     $nextListing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'new',
+      'status' => 'ready_for_image_selection',
       'price' => '9.99',
     ]);
     $nextListing->save();
@@ -187,7 +187,7 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $form = $this->buildReviewForm();
     $formState = new FormState();
     $formState->set('listing', $listing);
-    $formState->setValue(['basic', 'status'], 'new');
+    $formState->setValue(['basic', 'status'], 'ready_for_image_selection');
     $formState->setValue(['basic', 'price'], '9.99');
     $formState->setValue(['ebay', 'description'], ['value' => '', 'format' => 'basic_html']);
     $formState->setValue(['condition', 'condition_grade'], 'good');

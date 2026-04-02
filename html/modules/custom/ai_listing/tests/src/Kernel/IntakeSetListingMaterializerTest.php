@@ -49,7 +49,7 @@ final class IntakeSetListingMaterializerTest extends KernelTestBase {
     $listing = $materializer->materializeNewBookListing([(int) $fileOne->id(), (int) $fileTwo->id()]);
 
     $this->assertSame('book', $listing->bundle());
-    $this->assertSame('new', (string) $listing->get('status')->value);
+    $this->assertSame('ready_for_image_selection', (string) $listing->get('status')->value);
 
     $imageIds = $this->container->get('entity_type.manager')
       ->getStorage('listing_image')

@@ -40,6 +40,7 @@ final class BbAiListing extends ContentEntityBase {
 
   private const STATUS_ALLOWED_VALUES = [
     'new' => 'New',
+    'ready_for_image_selection' => 'Ready for image selection',
     'ready_for_inference' => 'Ready for inference',
     'processing' => 'Processing',
     'ready_for_review' => 'Ready for review',

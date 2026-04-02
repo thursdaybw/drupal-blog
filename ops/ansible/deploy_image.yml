@@ -40,6 +40,15 @@
         include_development_services: true
         tls_email: bevan@bevansbench.com
         nginx_site_filename: bb-drupal-staging.conf
+        # Contract target: support normal workflow up to ~70 staged sets.
+        # Sizing basis:
+        # - observed payload: 30 sets ~= 368.3 MiB
+        # - projected 70 sets ~= 859 MiB
+        # - configured cap: 1280 MiB (~49% headroom over projected)
+        client_max_body_size: 1280m
+        min_upload_max_filesize_bytes: 1342177280
+        min_post_max_size_bytes: 1342177280
+        min_max_file_uploads: 250
         proxy_tasks: tasks/reverse_proxy_staging.yml
       prod:
         name: prod
@@ -59,6 +68,15 @@
         include_development_services: false
         tls_email: bevan@bevansbench.com
         nginx_site_filename: bb-platform-prod.conf
+        # Contract target: support normal workflow up to ~70 staged sets.
+        # Sizing basis:
+        # - observed payload: 30 sets ~= 368.3 MiB
+        # - projected 70 sets ~= 859 MiB
+        # - configured cap: 1280 MiB (~49% headroom over projected)
+        client_max_body_size: 1280m
+        min_upload_max_filesize_bytes: 1342177280
+        min_post_max_size_bytes: 1342177280
+        min_max_file_uploads: 250
         proxy_tasks: tasks/reverse_proxy_prod.yml
 
   tasks:
@@ -428,6 +446,20 @@
         - drush_bootstrap.rc == 0
         - "'Successful' in (drush_bootstrap.stdout | default(''))"
 
+    - name: Verify app upload contract limits inside runtime container
+      ansible.builtin.command:
+        cmd: >-
+          sudo -n docker compose
+          -f {{ deploy_target.compose_path }}
+          --env-file {{ deploy_target.env_path }}
+          exec -T appserver
+          sh -lc 'php -r '\''function toBytes($v){$v=trim((string)$v); if($v===""){return 0;} $last=strtolower(substr($v,-1)); $num=(float)$v; switch($last){case "g": $num*=1024; case "m": $num*=1024; case "k": $num*=1024;} return (int)round($num);} $u=toBytes(ini_get("upload_max_filesize")); $p=toBytes(ini_get("post_max_size")); $m=(int)ini_get("max_file_uploads"); $minU={{ deploy_target.min_upload_max_filesize_bytes }}; $minP={{ deploy_target.min_post_max_size_bytes }}; $minM={{ deploy_target.min_max_file_uploads }}; if($u<$minU || $p<$minP || $m<$minM){fwrite(STDERR, "Upload contract failed: upload_max_filesize=".$u.", post_max_size=".$p.", max_file_uploads=".$m."\\nExpected >= ".$minU.", ".$minP.", ".$minM."\\n"); exit(1);} print "Upload contract ok: upload_max_filesize=".$u.", post_max_size=".$p.", max_file_uploads=".$m."\\n";'\'''
+      register: app_upload_contract_check
+      changed_when: false
+      when:
+        - drush_bootstrap.rc == 0
+        - "'Successful' in (drush_bootstrap.stdout | default(''))"
+
     - name: Note config import was skipped because Drupal is not bootstrapped
       ansible.builtin.debug:
         msg: >-
@@ -443,12 +475,14 @@
         staging_upstream_port: "{{ deploy_target.upstream_port }}"
         staging_tls_email: "{{ deploy_target.tls_email }}"
         nginx_staging_site_filename: "{{ deploy_target.nginx_site_filename }}"
+        staging_client_max_body_size: "{{ deploy_target.client_max_body_size }}"
         prod_domain: "{{ deploy_target.domain }}"
         prod_apex_domain: "{{ deploy_target.apex_domain | default('') }}"
         prod_upstream_host: "{{ deploy_target.upstream_host }}"
         prod_upstream_port: "{{ deploy_target.upstream_port }}"
         prod_tls_email: "{{ deploy_target.tls_email }}"
         nginx_prod_site_filename: "{{ deploy_target.nginx_site_filename }}"
+        prod_client_max_body_size: "{{ deploy_target.client_max_body_size }}"
 
     - name: Run environment reverse proxy tasks
       ansible.builtin.include_tasks: "{{ deploy_target.proxy_tasks }}"

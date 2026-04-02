@@ -8,6 +8,7 @@
       server {
         listen 80;
         server_name {{ prod_apex_domain }};
+        client_max_body_size {{ prod_client_max_body_size }};
 
         return 301 https://{{ prod_domain }}$request_uri;
       }
@@ -15,6 +16,7 @@
       server {
         listen 80;
         server_name {{ prod_domain }};
+        client_max_body_size {{ prod_client_max_body_size }};
 
         location / {
           proxy_pass http://{{ prod_upstream_host }}:{{ prod_upstream_port }};

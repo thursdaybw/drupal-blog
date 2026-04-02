@@ -1,0 +1,25 @@
+.ai-bulk-intake-sets-root [data-ai-bulk-intake-set-row] {
+  margin-bottom: 14px;
+}
+
+.ai-bulk-intake-sets-root .ai-bulk-intake-file-input {
+  display: block;
+  width: 100%;
+  max-width: none;
+  min-height: 84px;
+  padding: 16px;
+  border: 2px dashed #9aa0a6;
+  border-radius: 6px;
+  background: #f8fafc;
+  box-sizing: border-box;
+}
+
+.ai-bulk-intake-sets-root .ai-bulk-intake-file-input:hover {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+
+.ai-bulk-intake-sets-root .ai-bulk-intake-file-input:focus {
+  outline: 2px solid #4f46e5;
+  outline-offset: 1px;
+}

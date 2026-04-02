@@ -59,6 +59,9 @@ intake_picker:
     - core/once
 
 bulk_intake_sets:
+  css:
+    theme:
+      css/bulk-intake.css: {}
   js:
     js/bulk-intake-sets.js: {}
   dependencies:

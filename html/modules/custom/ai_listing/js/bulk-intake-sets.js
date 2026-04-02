@@ -4,15 +4,7 @@
   Drupal.behaviors.aiListingBulkIntakeSets = {
     attach(context) {
       once('ai-listing-bulk-intake-sets', '#ai-bulk-intake-sets-root', context).forEach((root) => {
-        const addButton = root.querySelector('[data-ai-bulk-intake-add-set]');
-        if (!addButton) {
-          return;
-        }
-
-        addButton.addEventListener('click', function () {
-          const rows = root.querySelectorAll('[data-ai-bulk-intake-set-row]');
-          const nextIndex = rows.length + 1;
-
+        const createSetRow = function (nextIndex) {
           const row = document.createElement('div');
           row.setAttribute('data-ai-bulk-intake-set-row', String(nextIndex));
           row.style.marginBottom = '14px';
@@ -29,11 +21,42 @@
           input.multiple = true;
           input.accept = 'image/*';
           input.style.display = 'block';
+          input.classList.add('ai-bulk-intake-file-input');
 
           row.appendChild(label);
           row.appendChild(input);
-          addButton.parentElement.insertBefore(row, addButton);
+          root.appendChild(row);
+          return row;
+        };
+
+        const ensureNextRow = function () {
+          const rows = Array.from(root.querySelectorAll('[data-ai-bulk-intake-set-row]'));
+          if (rows.length === 0) {
+            createSetRow(1);
+            return;
+          }
+          const lastRow = rows[rows.length - 1];
+          const lastInput = lastRow.querySelector('input[type="file"]');
+          if (!lastInput) {
+            createSetRow(rows.length + 1);
+            return;
+          }
+          if (lastInput.files && lastInput.files.length > 0) {
+            createSetRow(rows.length + 1);
+          }
+        };
+
+        root.addEventListener('change', function (event) {
+          const target = event.target;
+          if (!target || target.tagName !== 'INPUT' || target.type !== 'file') {
+            return;
+          }
+          if (target.files && target.files.length > 0) {
+            ensureNextRow();
+          }
         });
+
+        ensureNextRow();
       });
     },
   };

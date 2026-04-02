@@ -13,6 +13,7 @@ use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\file\FileInterface;
+use Drupal\media\MediaInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
@@ -59,12 +60,15 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
 
     $form['intro'] = [
       '#type' => 'markup',
-      '#markup' => '<p>Upload backlog photos once, then attach them to listings later without waiting on per-listing uploads.</p>',
+      '#markup' => '<p>Stage many image sets first, then process staged sets in one controlled run.</p>',
     ];
 
     $form['sets'] = [
       '#type' => 'container',
-      '#attributes' => ['id' => 'ai-bulk-intake-sets-root'],
+      '#attributes' => [
+        'id' => 'ai-bulk-intake-sets-root',
+        'class' => ['ai-bulk-intake-sets-root'],
+      ],
     ];
     $form['sets']['set_1'] = [
       '#type' => 'container',
@@ -88,27 +92,40 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       '#multiple' => TRUE,
       '#attributes' => [
         'accept' => 'image/*',
+        'class' => ['ai-bulk-intake-file-input'],
       ],
       '#name' => 'intake_sets[set_1][]',
     ];
-    $form['sets']['add_set'] = [
-      '#type' => 'html_tag',
-      '#tag' => 'button',
-      '#value' => $this->t('Start new set'),
-      '#attributes' => [
-        'type' => 'button',
-        'data-ai-bulk-intake-add-set' => '1',
-        'class' => ['button'],
-      ],
-    ];
-
     $form['actions'] = [
       '#type' => 'actions',
     ];
     $form['actions']['submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Intake images'),
+      '#name' => 'stage_uploaded_sets',
+      '#value' => $this->t('Stage uploaded sets'),
       '#button_type' => 'primary',
+    ];
+    $form['actions']['process_staged'] = [
+      '#type' => 'submit',
+      '#name' => 'process_staged_sets',
+      '#value' => $this->t('Process staged sets into listings'),
+    ];
+
+    $stagedRows = $this->buildStagedSetRows();
+    $form['staged'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Staged intake sets'),
+      '#open' => TRUE,
+    ];
+    $form['staged']['table'] = [
+      '#type' => 'table',
+      '#header' => [
+        $this->t('Set'),
+        $this->t('Images'),
+        $this->t('Status'),
+      ],
+      '#rows' => $stagedRows,
+      '#empty' => $this->t('No staged intake sets found.'),
     ];
 
     $recentRows = $this->buildRecentRows();
@@ -134,6 +151,16 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
   }
 
   public function submitForm(array &$form, FormStateInterface $form_state): void {
+    $trigger = (string) ($form_state->getTriggeringElement()['#name'] ?? 'stage_uploaded_sets');
+    if ($trigger === 'process_staged_sets') {
+      $this->processStagedSets($form_state);
+      return;
+    }
+
+    $this->stageUploadedSets($form_state);
+  }
+
+  private function stageUploadedSets(FormStateInterface $form_state): void {
     $mediaStorage = $this->entityTypeManager->getStorage('media');
     $uploadedSets = $this->extractUploadedSets();
     if ($uploadedSets === []) {
@@ -157,8 +184,6 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
 
     $created = 0;
     $setCount = 0;
-    $listingCount = 0;
-
     foreach ($uploadedSets as $uploads) {
       if ($uploads === []) {
         continue;
@@ -176,8 +201,6 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       if (!$realSetDirectory) {
         continue;
       }
-
-      $setFileIds = [];
 
       foreach ($uploads as $upload) {
         if (!$upload instanceof UploadedFile || $upload->getError() !== UPLOAD_ERR_OK) {
@@ -212,19 +235,61 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
         ]);
         $media->save();
         $created++;
-        $setFileIds[] = (int) $file->id();
-      }
-
-      if ($setFileIds !== []) {
-        $this->intakeSetListingMaterializer->materializeNewBookListing($setFileIds);
-        $listingCount++;
       }
     }
 
-    $this->messenger()->addStatus($this->t('Ingested @count image(s) across @sets set(s) and created @listings new listing(s).', [
+    $this->messenger()->addStatus($this->t('Staged @count image(s) across @sets set(s). Run "Process staged sets into listings" to materialize listings.', [
       '@count' => (string) $created,
       '@sets' => (string) $setCount,
-      '@listings' => (string) $listingCount,
+    ]));
+    $form_state->setRebuild(TRUE);
+  }
+
+  private function processStagedSets(FormStateInterface $form_state): void {
+    $setStates = $this->loadIntakeSetStates();
+    if ($setStates === []) {
+      $this->messenger()->addWarning($this->t('No intake sets were found.'));
+      $form_state->setRebuild(TRUE);
+      return;
+    }
+
+    $readySetCount = 0;
+    $processedSetCount = 0;
+    $skippedSetCount = 0;
+    $deletedMediaCount = 0;
+    $mediaStorage = $this->entityTypeManager->getStorage('media');
+
+    foreach ($setStates as $setState) {
+      if ($setState['status'] === 'ready') {
+        $readySetCount++;
+        /** @var int[] $fileIds */
+        $fileIds = $setState['file_ids'];
+        $this->intakeSetListingMaterializer->materializeNewBookListing($fileIds);
+        /** @var int[] $mediaIds */
+        $mediaIds = $setState['media_ids'];
+        if ($mediaIds !== []) {
+          $mediaToDelete = $mediaStorage->loadMultiple($mediaIds);
+          if ($mediaToDelete !== []) {
+            $mediaStorage->delete($mediaToDelete);
+            $deletedMediaCount += count($mediaToDelete);
+          }
+        }
+        $processedSetCount++;
+        continue;
+      }
+      $skippedSetCount++;
+    }
+
+    if ($readySetCount === 0) {
+      $this->messenger()->addWarning($this->t('No ready staged sets were found. Ready sets require all intake images to be unlinked.'));
+      $form_state->setRebuild(TRUE);
+      return;
+    }
+
+    $this->messenger()->addStatus($this->t('Processed @processed staged set(s) into listings, removed @media intake media record(s), and skipped @skipped set(s) that were already done or partially linked.', [
+      '@processed' => (string) $processedSetCount,
+      '@media' => (string) $deletedMediaCount,
+      '@skipped' => (string) $skippedSetCount,
     ]));
     $form_state->setRebuild(TRUE);
   }
@@ -242,6 +307,7 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       ->getQuery()
       ->accessCheck(FALSE)
       ->condition('bundle', self::INTAKE_MEDIA_BUNDLE)
+      ->condition('uid', (int) $this->currentUser->id())
       ->sort('created', 'DESC')
       ->range(0, 25)
       ->execute();
@@ -266,7 +332,7 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       }
 
       $rows[] = [
-        $setLabel ?? $this->t('Ungrouped')->render(),
+        $setLabel !== '' ? $setLabel : (string) $this->t('Ungrouped'),
         (string) $media->id(),
         (string) $media->label(),
         $fileName,
@@ -275,6 +341,145 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
     }
 
     return $rows;
+  }
+
+  /**
+   * @return array<int,array<int,string>>
+   */
+  private function buildStagedSetRows(): array {
+    $rows = [];
+    foreach ($this->loadIntakeSetStates() as $setState) {
+      $rows[] = [
+        (string) $setState['set_id'],
+        (string) count($setState['file_ids']),
+        (string) $setState['status_label'],
+      ];
+    }
+
+    return $rows;
+  }
+
+  /**
+   * @return array<int,array{set_id:string,file_ids:int[],media_ids:int[],status:string,status_label:string}>
+   */
+  private function loadIntakeSetStates(): array {
+    if (!$this->imageBundleExists()) {
+      return [];
+    }
+
+    $mediaIds = $this->entityTypeManager
+      ->getStorage('media')
+      ->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('bundle', self::INTAKE_MEDIA_BUNDLE)
+      ->condition('uid', (int) $this->currentUser->id())
+      ->sort('created', 'DESC')
+      ->range(0, 1000)
+      ->execute();
+    if ($mediaIds === []) {
+      return [];
+    }
+
+    /** @var \Drupal\media\MediaInterface[] $mediaEntities */
+    $mediaEntities = $this->entityTypeManager->getStorage('media')->loadMultiple($mediaIds);
+
+    $setFileIds = [];
+    $setMediaIds = [];
+    foreach ($mediaEntities as $media) {
+      if (!$media instanceof MediaInterface) {
+        continue;
+      }
+
+      $imageField = $media->get('field_media_image');
+      if ($imageField->isEmpty()) {
+        continue;
+      }
+
+      $file = $imageField->entity;
+      if (!$file instanceof FileInterface) {
+        continue;
+      }
+
+      $setId = $this->extractSetLabelFromFileUri((string) $file->getFileUri());
+      if ($setId === '') {
+        continue;
+      }
+      $setFileIds[$setId] ??= [];
+      $setFileIds[$setId][] = (int) $file->id();
+      $setMediaIds[$setId] ??= [];
+      $setMediaIds[$setId][] = (int) $media->id();
+    }
+    if ($setFileIds === []) {
+      return [];
+    }
+
+    $allFileIds = [];
+    foreach ($setFileIds as $fileIds) {
+      foreach ($fileIds as $fileId) {
+        $allFileIds[$fileId] = $fileId;
+      }
+    }
+    if ($allFileIds === []) {
+      return [];
+    }
+
+    if (!$this->entityTypeManager->hasDefinition('listing_image')) {
+      return [];
+    }
+
+    $linkedFileIds = [];
+    $listingImageIds = $this->entityTypeManager
+      ->getStorage('listing_image')
+      ->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('file', array_values($allFileIds), 'IN')
+      ->execute();
+    if ($listingImageIds !== []) {
+      $listingImages = $this->entityTypeManager->getStorage('listing_image')->loadMultiple($listingImageIds);
+      foreach ($listingImages as $listingImage) {
+        $fileId = (int) ($listingImage->get('file')->target_id ?? 0);
+        if ($fileId > 0) {
+          $linkedFileIds[$fileId] = $fileId;
+        }
+      }
+    }
+
+    $states = [];
+    ksort($setFileIds);
+    foreach ($setFileIds as $setId => $fileIds) {
+      $fileIds = array_values(array_unique(array_map('intval', $fileIds)));
+      if ($fileIds === []) {
+        continue;
+      }
+
+      $linkedCount = 0;
+      foreach ($fileIds as $fileId) {
+        if (isset($linkedFileIds[$fileId])) {
+          $linkedCount++;
+        }
+      }
+
+      $status = 'ready';
+      $statusLabel = (string) $this->t('Ready');
+      if ($linkedCount === count($fileIds)) {
+        $status = 'done';
+        $statusLabel = (string) $this->t('Already processed');
+      }
+      elseif ($linkedCount > 0) {
+        $status = 'partial';
+        $statusLabel = (string) $this->t('Partially processed');
+      }
+
+      $states[] = [
+        'set_id' => $setId,
+        'file_ids' => $fileIds,
+        'media_ids' => array_values(array_unique(array_map('intval', $setMediaIds[$setId] ?? []))),
+        'status' => $status,
+        'status_label' => $statusLabel,
+      ];
+    }
+
+    return $states;
   }
 
   private function imageBundleExists(): bool {

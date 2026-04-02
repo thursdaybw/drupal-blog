@@ -163,6 +163,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     if (!is_array($statusOptions) || $statusOptions === []) {
       $statusOptions = [
         'new' => $this->t('New'),
+        'ready_for_image_selection' => $this->t('Ready for image selection'),
         'ready_for_inference' => $this->t('Ready for inference'),
         'processing' => $this->t('Processing'),
         'ready_for_review' => $this->t('Ready for review'),
@@ -373,7 +374,7 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     ];
 
     $currentStatus = (string) ($listing->get('status')->value ?? '');
-    if ($currentStatus === 'new') {
+    if (in_array($currentStatus, ['new', 'ready_for_image_selection'], TRUE)) {
       $form['actions']['mark_ready_for_inference'] = [
         '#type' => 'submit',
         '#value' => $this->t('Mark ready for inference and continue'),
@@ -436,6 +437,9 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
       ],
     ];
 
+    $form['actions_top'] = $this->buildTopActionBar($form['actions']);
+    $form['actions_top']['#weight'] = -200;
+
     $form['#attached']['library'][] = 'ai_listing/review_ui';
     $form['#attached']['library'][] = 'ai_listing/bargain_preset';
     $form['#attached']['library'][] = 'ai_listing/photo_viewer';
@@ -450,12 +454,12 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
 
   public function validateForm(array &$form, FormStateInterface $form_state): void {
     $triggerName = (string) (($form_state->getTriggeringElement()['#name'] ?? ''));
-    if (in_array($triggerName, ['ai_delete_listing', 'ai_cull_listing', 'ai_mark_listing_lost'], TRUE)) {
+    if (in_array($triggerName, ['ai_delete_listing', 'ai_delete_listing_top', 'ai_cull_listing', 'ai_cull_listing_top', 'ai_mark_listing_lost', 'ai_mark_listing_lost_top'], TRUE)) {
       return;
     }
 
     $statusValue = (string) ($form_state->getValue(['basic', 'status']) ?? '');
-    if ($triggerName === 'ai_save_listing' && $statusValue === 'new') {
+    if (in_array($triggerName, ['ai_save_listing', 'ai_save_listing_top'], TRUE) && in_array($statusValue, ['new', 'ready_for_image_selection'], TRUE)) {
       return;
     }
 
@@ -526,12 +530,33 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
 
     $trigger = $form_state->getTriggeringElement() ?: [];
     $nextStatusValue = (string) ($form_state->getValue(['basic', 'status']) ?? '');
-    if (($trigger['#name'] ?? '') === 'ai_save_listing') {
+    if (in_array((string) ($trigger['#name'] ?? ''), ['ai_save_listing', 'ai_save_listing_top'], TRUE)) {
       if ($nextStatusValue === 'ready_to_shelve') {
         $this->redirectAfterReadyToShelve($form_state);
         return;
       }
     }
+  }
+
+  /**
+   * @param array<string,mixed> $actions
+   *
+   * @return array<string,mixed>
+   */
+  private function buildTopActionBar(array $actions): array {
+    $topActions = ['#type' => 'actions'];
+    foreach ($actions as $key => $action) {
+      if ($key === '#type' || !is_array($action)) {
+        continue;
+      }
+      $cloned = $action;
+      if (isset($cloned['#name']) && is_string($cloned['#name']) && $cloned['#name'] !== '') {
+        $cloned['#name'] .= '_top';
+      }
+      $topActions[$key . '_top'] = $cloned;
+    }
+
+    return $topActions;
   }
 
   public function submitAndSetReadyForInference(array &$form, FormStateInterface $form_state): void {
@@ -649,14 +674,14 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
   }
 
   protected function redirectAfterReadyForInference(FormStateInterface $form_state): void {
-    $nextId = $this->getNextNewId();
+    $nextId = $this->getNextReadyForImageSelectionId();
     if ($nextId !== null) {
       $form_state->setRedirect('entity.bb_ai_listing.canonical', ['bb_ai_listing' => $nextId]);
       return;
     }
 
     $form_state->setRedirect('ai_listing.workbench', [], [
-      'query' => ['status_filter' => 'new'],
+      'query' => ['status_filter' => 'ready_for_image_selection'],
     ]);
   }
 
@@ -856,8 +881,21 @@ abstract class AiListingReviewFormBase extends FormBase implements ContainerInje
     return $this->getListingIdsByStatus('new');
   }
 
-  protected function getNextNewId(): ?int {
-    $ids = $this->getNewIds();
+  /**
+   * @return int[]
+   */
+  protected function getReadyForImageSelectionIds(): array {
+    $ids = $this->entityTypeManager->getStorage('bb_ai_listing')->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('status', ['ready_for_image_selection', 'new'], 'IN')
+      ->sort('id', 'ASC')
+      ->execute();
+
+    return array_values($ids);
+  }
+
+  protected function getNextReadyForImageSelectionId(): ?int {
+    $ids = $this->getReadyForImageSelectionIds();
     if ($ids === []) {
       return null;
     }

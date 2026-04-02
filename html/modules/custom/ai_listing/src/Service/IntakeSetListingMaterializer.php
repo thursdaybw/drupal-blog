@@ -19,7 +19,7 @@ final class IntakeSetListingMaterializer {
   public function materializeNewBookListing(array $fileIds): BbAiListing {
     $listing = BbAiListing::create([
       'listing_type' => 'book',
-      'status' => 'new',
+      'status' => 'ready_for_image_selection',
     ]);
     $listing->save();
 

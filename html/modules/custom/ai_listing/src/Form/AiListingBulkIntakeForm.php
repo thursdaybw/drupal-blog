@@ -12,6 +12,7 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountProxyInterface;
+use Drupal\Core\Url;
 use Drupal\file\FileInterface;
 use Drupal\media\MediaInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -57,6 +58,18 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $form['#attached']['library'][] = 'ai_listing/bulk_intake_sets';
     $form['#attributes']['enctype'] = 'multipart/form-data';
+    $form['#attached']['drupalSettings']['aiListingBulkIntake'] = [
+      'chunkUploadUrl' => Url::fromRoute('ai_listing.bulk_intake_upload_chunk')->toString(),
+      'chunkSizeBytes' => 512 * 1024,
+      'maxParallelSets' => 1,
+      'maxChunkAttempts' => 20,
+      'chunkRequestTimeoutMs' => 45000,
+      'maxChunkRetryWindowMs' => 30 * 60 * 1000,
+      // Non-production test hooks for deterministic recovery validation.
+      'debugSimulateFailureSetKey' => '',
+      'debugSimulateFailureChunkIndex' => -1,
+      'debugSimulateFailureOnce' => TRUE,
+    ];
 
     $form['intro'] = [
       '#type' => 'markup',
@@ -104,11 +117,22 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       '#name' => 'stage_uploaded_sets',
       '#value' => $this->t('Stage uploaded sets'),
       '#button_type' => 'primary',
+      '#attributes' => [
+        'id' => 'ai-bulk-intake-stage-submit',
+      ],
     ];
     $form['actions']['process_staged'] = [
       '#type' => 'submit',
       '#name' => 'process_staged_sets',
       '#value' => $this->t('Process staged sets into listings'),
+    ];
+    $form['upload_progress'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'ai-bulk-intake-upload-progress',
+        'class' => ['ai-bulk-intake-upload-progress'],
+        'aria-live' => 'polite',
+      ],
     ];
 
     $stagedRows = $this->buildStagedSetRows();

@@ -210,6 +210,61 @@ final class AiBookListingReviewFormWorkflowTest extends KernelTestBase {
     $this->assertSame((int) $nextListing->id(), (int) $redirect->getRouteParameters()['bb_ai_listing']);
   }
 
+  public function testReadyForInferenceActionPreservesExistingImageWeights(): void {
+    $listing = BbAiListing::create([
+      'listing_type' => 'book',
+      'status' => 'ready_for_image_selection',
+      'price' => '9.99',
+    ]);
+    $listing->save();
+
+    $fileOne = $this->createPermanentFile('public://ai-review/weight-1.jpg');
+    $fileTwo = $this->createPermanentFile('public://ai-review/weight-2.jpg');
+
+    $listingImageStorage = $this->container->get('entity_type.manager')->getStorage('listing_image');
+    $listingImageOne = $listingImageStorage->create([
+      'owner' => [
+        'target_type' => 'bb_ai_listing',
+        'target_id' => (int) $listing->id(),
+      ],
+      'file' => (int) $fileOne->id(),
+      'weight' => 3,
+      'is_metadata_source' => FALSE,
+    ]);
+    $listingImageOne->save();
+
+    $listingImageTwo = $listingImageStorage->create([
+      'owner' => [
+        'target_type' => 'bb_ai_listing',
+        'target_id' => (int) $listing->id(),
+      ],
+      'file' => (int) $fileTwo->id(),
+      'weight' => 7,
+      'is_metadata_source' => FALSE,
+    ]);
+    $listingImageTwo->save();
+
+    $form = $this->buildReviewForm();
+    $formState = new FormState();
+    $formState->set('listing', $listing);
+    $formState->setValue(['basic', 'status'], 'ready_for_image_selection');
+    $formState->setValue(['basic', 'price'], '9.99');
+    $formState->setValue(['ebay', 'description'], ['value' => '', 'format' => 'basic_html']);
+    $formState->setValue(['condition', 'condition_grade'], 'good');
+    $formState->setValue(['condition', 'condition_issues'], []);
+    $formState->setValue(['condition', 'condition_note'], '');
+    $formState->setValue(['photos', 'items', 'listing_image_items', 'listing_image_' . (int) $listingImageOne->id(), 'is_metadata_source'], 1);
+
+    $built = [];
+    $form->submitAndSetReadyForInference($built, $formState);
+
+    $reloadedOne = $listingImageStorage->load((int) $listingImageOne->id());
+    $reloadedTwo = $listingImageStorage->load((int) $listingImageTwo->id());
+
+    $this->assertSame('3', (string) $reloadedOne?->get('weight')->value);
+    $this->assertSame('7', (string) $reloadedTwo?->get('weight')->value);
+  }
+
   private function buildReviewForm(): AiBookListingReviewForm {
     return new AiBookListingReviewForm(
       $this->container->get('entity_type.manager'),

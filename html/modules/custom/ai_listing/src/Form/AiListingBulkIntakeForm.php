@@ -431,6 +431,7 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       $setFiles[$setId] ??= [];
       $setFiles[$setId][] = [
         'file_id' => (int) $file->id(),
+        'filename' => mb_strtolower((string) $file->getFilename()),
         'created' => (int) ($media->get('created')->value ?? 0),
       ];
       $setMediaIds[$setId] ??= [];
@@ -478,8 +479,13 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
     $states = [];
     ksort($setFiles);
     foreach ($setFiles as $setId => $files) {
-      // Preserve intake order inside a set by sorting on media creation time.
+      // Preserve operator-visible capture order by filename (natural sort),
+      // with stable fallbacks for mixed naming.
       usort($files, static function (array $a, array $b): int {
+        $nameCompare = strnatcasecmp((string) ($a['filename'] ?? ''), (string) ($b['filename'] ?? ''));
+        if ($nameCompare !== 0) {
+          return $nameCompare;
+        }
         $aCreated = (int) ($a['created'] ?? 0);
         $bCreated = (int) ($b['created'] ?? 0);
         if ($aCreated === $bCreated) {

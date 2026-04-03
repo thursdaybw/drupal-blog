@@ -23,3 +23,54 @@
   outline: 2px solid #4f46e5;
   outline-offset: 1px;
 }
+
+.ai-bulk-intake-upload-progress {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ai-bulk-intake-progress-row {
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.ai-bulk-intake-progress-row-total {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.ai-bulk-intake-progress-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.ai-bulk-intake-progress-status {
+  font-size: 0.92rem;
+  margin-bottom: 6px;
+}
+
+.ai-bulk-intake-progress-status.is-error {
+  color: #b91c1c;
+}
+
+.ai-bulk-intake-progress-bar-wrap {
+  width: 100%;
+  height: 10px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ai-bulk-intake-progress-bar {
+  height: 100%;
+  width: 0;
+  background: #2563eb;
+  transition: width 120ms linear;
+}
+
+.ai-bulk-intake-progress-bar.is-error {
+  background: #dc2626;
+}

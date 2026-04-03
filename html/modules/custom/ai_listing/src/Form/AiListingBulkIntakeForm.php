@@ -407,7 +407,7 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
     /** @var \Drupal\media\MediaInterface[] $mediaEntities */
     $mediaEntities = $this->entityTypeManager->getStorage('media')->loadMultiple($mediaIds);
 
-    $setFileIds = [];
+    $setFiles = [];
     $setMediaIds = [];
     foreach ($mediaEntities as $media) {
       if (!$media instanceof MediaInterface) {
@@ -428,18 +428,25 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       if ($setId === '') {
         continue;
       }
-      $setFileIds[$setId] ??= [];
-      $setFileIds[$setId][] = (int) $file->id();
+      $setFiles[$setId] ??= [];
+      $setFiles[$setId][] = [
+        'file_id' => (int) $file->id(),
+        'created' => (int) ($media->get('created')->value ?? 0),
+      ];
       $setMediaIds[$setId] ??= [];
       $setMediaIds[$setId][] = (int) $media->id();
     }
-    if ($setFileIds === []) {
+    if ($setFiles === []) {
       return [];
     }
 
     $allFileIds = [];
-    foreach ($setFileIds as $fileIds) {
-      foreach ($fileIds as $fileId) {
+    foreach ($setFiles as $files) {
+      foreach ($files as $fileInfo) {
+        $fileId = (int) ($fileInfo['file_id'] ?? 0);
+        if ($fileId <= 0) {
+          continue;
+        }
         $allFileIds[$fileId] = $fileId;
       }
     }
@@ -469,9 +476,22 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
     }
 
     $states = [];
-    ksort($setFileIds);
-    foreach ($setFileIds as $setId => $fileIds) {
-      $fileIds = array_values(array_unique(array_map('intval', $fileIds)));
+    ksort($setFiles);
+    foreach ($setFiles as $setId => $files) {
+      // Preserve intake order inside a set by sorting on media creation time.
+      usort($files, static function (array $a, array $b): int {
+        $aCreated = (int) ($a['created'] ?? 0);
+        $bCreated = (int) ($b['created'] ?? 0);
+        if ($aCreated === $bCreated) {
+          return ((int) ($a['file_id'] ?? 0)) <=> ((int) ($b['file_id'] ?? 0));
+        }
+        return $aCreated <=> $bCreated;
+      });
+      $fileIds = array_values(array_unique(array_map(
+        static fn (array $item): int => (int) ($item['file_id'] ?? 0),
+        $files
+      )));
+      $fileIds = array_values(array_filter($fileIds, static fn (int $id): bool => $id > 0));
       if ($fileIds === []) {
         continue;
       }

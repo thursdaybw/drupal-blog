@@ -22,6 +22,14 @@ ai_listing.bulk_intake:
   requirements:
     _permission: 'administer ai listings'
 
+ai_listing.bulk_intake_upload_chunk:
+  path: '/admin/ai-listing/bulk-intake/upload-chunk'
+  defaults:
+    _controller: '\Drupal\ai_listing\Controller\AiListingBulkIntakeUploadController::uploadChunk'
+  requirements:
+    _permission: 'administer ai listings'
+  methods: [POST]
+
 ai_listing.workbench:
   path: '/admin/ai-listings/workbench'
   defaults:

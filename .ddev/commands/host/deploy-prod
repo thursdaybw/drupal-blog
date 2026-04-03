@@ -12,6 +12,18 @@ DRY_RUN=false
 IMAGE_TAG_ARG=""
 FORCE_REBUILD=false
 
+run_low_priority() {
+  if command -v ionice >/dev/null 2>&1 && command -v nice >/dev/null 2>&1; then
+    ionice -c2 -n7 nice -n19 "$@"
+    return
+  fi
+  if command -v nice >/dev/null 2>&1; then
+    nice -n19 "$@"
+    return
+  fi
+  "$@"
+}
+
 for arg in "$@"; do
   case "$arg" in
     --dry-run)
@@ -94,9 +106,10 @@ if [ "${DRY_RUN}" = true ]; then
 fi
 
 resolve_git_context
-"$(dirname "$0")/deploy-verify" "${COMMON_ARGS[@]}"
-"$(dirname "$0")/deploy-build" "${BUILD_ARGS[@]}"
-"$(dirname "$0")/deploy-upload" "${COMMON_ARGS[@]}"
-"$(dirname "$0")/deploy-prod-activate" "${COMMON_ARGS[@]}"
+echo "Running deploy phases with low host scheduling priority (ionice/nice when available)."
+run_low_priority "$(dirname "$0")/deploy-verify" "${COMMON_ARGS[@]}"
+run_low_priority "$(dirname "$0")/deploy-build" "${BUILD_ARGS[@]}"
+run_low_priority "$(dirname "$0")/deploy-upload" "${COMMON_ARGS[@]}"
+run_low_priority "$(dirname "$0")/deploy-prod-activate" "${COMMON_ARGS[@]}"
 
 echo "Production deployment pipeline complete."

@@ -28,3 +28,12 @@ services:
       - '@compute_orchestrator.vast_rest_client'
     tags:
       - { name: drush.command }
+
+  compute_orchestrator.vllm_generic_provision_command:
+    class: Drupal\compute_orchestrator\Command\VllmGenericProvisionCommand
+    arguments:
+      - '@compute_orchestrator.vast_rest_client'
+      - '@compute_orchestrator.ssh_probe_executor'
+      - '@state'
+    tags:
+      - { name: drush.command }

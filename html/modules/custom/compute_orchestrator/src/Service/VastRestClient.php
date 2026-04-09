@@ -419,6 +419,90 @@ final class VastRestClient implements VastRestClientInterface {
     }
   }
 
+  public function waitForRunningAndSshBootstrap(string $instanceId, int $timeoutSeconds = 180): array {
+    $start = time();
+    $lastProgressAt = $start;
+    $lastCurState = null;
+    $lastActualStatus = null;
+    $lastStatusMsg = null;
+    $lastSshHost = null;
+    $lastSshPort = null;
+    $stallThresholdSeconds = 600;
+
+    while (true) {
+      if ((time() - $start) > max(60, $timeoutSeconds)) {
+        throw new \RuntimeException('Instance exceeded SSH bootstrap timeout.');
+      }
+
+      $info = $this->showInstance($instanceId);
+
+      $curState = (string) ($info['cur_state'] ?? '');
+      $actualStatus = (string) ($info['actual_status'] ?? '');
+      $statusMsg = (string) ($info['status_msg'] ?? '');
+      $sshHost = (string) ($info['ssh_host'] ?? '');
+      $sshPort = (string) ($info['ssh_port'] ?? '');
+
+      $changed =
+        $curState !== $lastCurState ||
+        $actualStatus !== $lastActualStatus ||
+        $statusMsg !== $lastStatusMsg ||
+        $sshHost !== $lastSshHost ||
+        $sshPort !== $lastSshPort;
+
+      if ($changed) {
+        $this->logWithTime(sprintf(
+          'BOOTSTRAP %s cur_state=%s actual_status=%s ssh=%s:%s msg=%s',
+          $instanceId,
+          $curState !== '' ? $curState : '(null)',
+          $actualStatus !== '' ? $actualStatus : '(null)',
+          $sshHost !== '' ? $sshHost : '(null)',
+          $sshPort !== '' ? $sshPort : '(null)',
+          $statusMsg !== '' ? $statusMsg : '(null)'
+        ));
+        $lastCurState = $curState;
+        $lastActualStatus = $actualStatus;
+        $lastStatusMsg = $statusMsg;
+        $lastSshHost = $sshHost;
+        $lastSshPort = $sshPort;
+        $lastProgressAt = time();
+      }
+
+      if ($statusMsg !== '' && (
+        stripos($statusMsg, 'OCI runtime create failed') !== false ||
+        stripos($statusMsg, 'failed to create task for container') !== false ||
+        stripos($statusMsg, 'Error response from daemon') !== false ||
+        stripos($statusMsg, 'no such container') !== false
+      )) {
+        throw new \RuntimeException('Container start failed: ' . $statusMsg);
+      }
+
+      if (in_array($actualStatus, ['error', 'exited', 'failed'], true)) {
+        throw new \RuntimeException(
+          'Instance entered failure state: ' . $actualStatus . ' — ' . $statusMsg
+        );
+      }
+
+      if ($actualStatus === 'created' && $statusMsg !== '' && $this->isCreationFailureMessage($statusMsg)) {
+        throw new \RuntimeException('Container failed during creation: ' . $statusMsg);
+      }
+
+      if ($curState === 'running' && $actualStatus === 'running' && $sshHost !== '' && $sshPort !== '') {
+        $user = (string) ($info['ssh_user'] ?? 'root');
+        $sshCheck = $this->sshLoginCheck($sshHost, (int) $sshPort, $user);
+        if ($sshCheck['ok'] ?? false) {
+          return $info;
+        }
+      }
+
+      $stalledFor = time() - $lastProgressAt;
+      if ($stalledFor >= $stallThresholdSeconds) {
+        throw new \RuntimeException('Instance stalled before SSH bootstrap for ' . $stalledFor . ' seconds.');
+      }
+
+      sleep(10);
+    }
+  }
+
   private function containsFatalLogLine(array $lines): ?string {
     foreach ($lines as $line) {
       $normalized = strtolower($line);
@@ -675,11 +759,9 @@ final class VastRestClient implements VastRestClientInterface {
 
         $this->logWithTime('Waiting for running + SSH for contract ' . $contractId);
 
-        $info = $this->waitForRunningAndSsh(
-          $contractId,
-          $workload,
-          $bootTimeoutSeconds
-        );
+        $info = $workload === 'ssh-bootstrap'
+          ? $this->waitForRunningAndSshBootstrap($contractId, $bootTimeoutSeconds)
+          : $this->waitForRunningAndSsh($contractId, $workload, $bootTimeoutSeconds);
 
         $this->recordHostSuccess($hostId);
 

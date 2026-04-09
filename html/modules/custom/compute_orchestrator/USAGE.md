@@ -12,10 +12,12 @@ export VAST_SSH_KEY_PATH=/home/bevan/.ssh/id_rsa_vastai
 drush compute:test-vast
 drush compute:test-vast --workload=qwen-vl
 drush compute:test-vast --workload=qwen-vl --image=thursdaybw/vllm-qwen-stable:dev
+drush compute:provision-vllm-generic --workload=qwen-vl --image=thursdaybw/vllm-generic:2026-04-generic-node --preserve
 ```
 - This command provision a temporary instance, waits for SSH/vLLM readiness, then destroys the instance on success.
 - `qwen-vl` now defaults to `thursdaybw/vllm-qwen-stable:dev`.
 - `--image` can override the workload default without changing code.
+- `compute:provision-vllm-generic` is the separate operator path for the generic pooled-node image. It boots the node idle, starts the selected runtime over SSH, then waits for vLLM readiness.
 
 ## Strictness levels
 The command reads `compute_orchestrator.strictness` (default `strict`) from Drupal state.

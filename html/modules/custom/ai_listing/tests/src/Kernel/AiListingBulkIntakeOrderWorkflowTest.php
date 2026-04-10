@@ -75,6 +75,22 @@ final class AiListingBulkIntakeOrderWorkflowTest extends KernelTestBase {
     $built = [];
     $form->submitForm($built, $formState);
 
+    $batch = batch_get();
+    $this->assertIsArray($batch);
+    $this->assertArrayHasKey('sets', $batch);
+    $set = reset($batch['sets']);
+    $this->assertIsArray($set);
+    $this->assertSame('Processing staged intake sets', (string) $set['title']);
+    $this->assertCount(1, $set['operations']);
+
+    $operation = $set['operations'][0];
+    $this->assertSame([AiListingBulkIntakeForm::class, 'processStagedSetBatchOperation'], $operation[0]);
+
+    $context = [];
+    AiListingBulkIntakeForm::processStagedSetBatchOperation(...array_merge($operation[1], [&$context]));
+
+    $this->assertSame(1, $context['results']['processed'] ?? 0);
+
     $listingIds = $this->container->get('entity_type.manager')
       ->getStorage('bb_ai_listing')
       ->getQuery()

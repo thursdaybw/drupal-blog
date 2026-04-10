@@ -278,27 +278,20 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
     }
 
     $readySetCount = 0;
-    $processedSetCount = 0;
     $skippedSetCount = 0;
-    $deletedMediaCount = 0;
-    $mediaStorage = $this->entityTypeManager->getStorage('media');
+    $operations = [];
 
     foreach ($setStates as $setState) {
       if ($setState['status'] === 'ready') {
         $readySetCount++;
         /** @var int[] $fileIds */
         $fileIds = $setState['file_ids'];
-        $this->intakeSetListingMaterializer->materializeNewBookListing($fileIds);
         /** @var int[] $mediaIds */
         $mediaIds = $setState['media_ids'];
-        if ($mediaIds !== []) {
-          $mediaToDelete = $mediaStorage->loadMultiple($mediaIds);
-          if ($mediaToDelete !== []) {
-            $mediaStorage->delete($mediaToDelete);
-            $deletedMediaCount += count($mediaToDelete);
-          }
-        }
-        $processedSetCount++;
+        $operations[] = [
+          [self::class, 'processStagedSetBatchOperation'],
+          [(string) $setState['set_id'], $fileIds, $mediaIds],
+        ];
         continue;
       }
       $skippedSetCount++;
@@ -310,12 +303,111 @@ final class AiListingBulkIntakeForm extends FormBase implements ContainerInjecti
       return;
     }
 
-    $this->messenger()->addStatus($this->t('Processed @processed staged set(s) into listings, removed @media intake media record(s), and skipped @skipped set(s) that were already done or partially linked.', [
-      '@processed' => (string) $processedSetCount,
-      '@media' => (string) $deletedMediaCount,
-      '@skipped' => (string) $skippedSetCount,
-    ]));
-    $form_state->setRebuild(TRUE);
+    if ($skippedSetCount > 0) {
+      $this->messenger()->addWarning($this->formatPlural(
+        $skippedSetCount,
+        'Skipped one staged set that was already done or partially linked.',
+        'Skipped @count staged sets that were already done or partially linked.',
+      ));
+    }
+
+    $translation = $this->getStringTranslation();
+    batch_set([
+      'title' => $translation->translate('Processing staged intake sets'),
+      'operations' => $operations,
+      'finished' => [self::class, 'finishStagedSetBatchOperation'],
+      'init_message' => $translation->translate('Starting staged set processing...'),
+      'progress_message' => $translation->translate('Processed @current of @total staged sets.'),
+      'error_message' => $translation->translate('The staged set processing batch finished with an unexpected error.'),
+    ]);
+  }
+
+  /**
+   * Materializes one staged intake set into one listing.
+   *
+   * @param int[] $fileIds
+   *   File IDs in capture order.
+   * @param int[] $mediaIds
+   *   Intake media IDs to delete after successful materialization.
+   * @param array<string,mixed> $context
+   *   Drupal batch context.
+   */
+  public static function processStagedSetBatchOperation(string $setId, array $fileIds, array $mediaIds, array &$context): void {
+    $translation = \Drupal::translation();
+    $context['results']['processed'] = (int) ($context['results']['processed'] ?? 0);
+    $context['results']['deleted_media'] = (int) ($context['results']['deleted_media'] ?? 0);
+    $context['results']['errors'] = (array) ($context['results']['errors'] ?? []);
+
+    $fileIds = array_values(array_filter(array_map('intval', $fileIds), static fn (int $id): bool => $id > 0));
+    if ($fileIds === []) {
+      $context['results']['errors'][] = (string) $translation->translate('Skipped staged set @set because it no longer has valid files.', [
+        '@set' => $setId,
+      ]);
+      return;
+    }
+
+    try {
+      /** @var \Drupal\ai_listing\Service\IntakeSetListingMaterializer $materializer */
+      $materializer = \Drupal::service('ai_listing.intake_set_listing_materializer');
+      $materializer->materializeNewBookListing($fileIds);
+
+      $mediaIds = array_values(array_filter(array_map('intval', $mediaIds), static fn (int $id): bool => $id > 0));
+      if ($mediaIds !== []) {
+        $mediaStorage = \Drupal::entityTypeManager()->getStorage('media');
+        $mediaToDelete = $mediaStorage->loadMultiple($mediaIds);
+        if ($mediaToDelete !== []) {
+          $mediaStorage->delete($mediaToDelete);
+          $context['results']['deleted_media'] += count($mediaToDelete);
+        }
+      }
+
+      $context['results']['processed']++;
+      $context['message'] = (string) $translation->translate('Processed staged set @set.', [
+        '@set' => $setId,
+      ]);
+    }
+    catch (\Throwable $exception) {
+      $context['results']['errors'][] = (string) $translation->translate('Staged set @set failed: @reason', [
+        '@set' => $setId,
+        '@reason' => $exception->getMessage(),
+      ]);
+      $context['message'] = (string) $translation->translate('Failed staged set @set.', [
+        '@set' => $setId,
+      ]);
+    }
+  }
+
+  /**
+   * Reports the staged set processing batch result.
+   *
+   * @param array<string,mixed> $results
+   *   Batch results.
+   */
+  public static function finishStagedSetBatchOperation(bool $success, array $results, array $operations): void {
+    $messenger = \Drupal::messenger();
+    $translation = \Drupal::translation();
+
+    if (!$success) {
+      $messenger->addError($translation->translate('Staged set processing did not finish.'));
+      return;
+    }
+
+    $processed = (int) ($results['processed'] ?? 0);
+    $deletedMedia = (int) ($results['deleted_media'] ?? 0);
+    $errors = (array) ($results['errors'] ?? []);
+
+    if ($processed > 0) {
+      $messenger->addStatus($translation->formatPlural(
+        $processed,
+        'Processed one staged set into a listing and removed @media intake media record(s).',
+        'Processed @count staged sets into listings and removed @media intake media record(s).',
+        ['@media' => (string) $deletedMedia]
+      ));
+    }
+
+    foreach ($errors as $message) {
+      $messenger->addError((string) $message);
+    }
   }
 
   /**

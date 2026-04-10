@@ -26,3 +26,15 @@ Framesmith (`video_forge`) still provisions Vast instances directly via legacy C
 - keep current direct-provision path behind a temporary fallback flag only during migration window
 - avoid introducing new production-only shell behavior in queue workers
 - dependency gate: do not begin active Framesmith cutover until product card `13` and `bb-ai-listing` card `16` complete pooled-node generic runtime milestones (Qwen drop-in, Whisper runtime, runtime switching contract)
+- blocked on host-site card [`29-finish-compute-orchestrator-pooled-instance-lease-and-switch-api.md`](/home/bevan/workspace/bevansbench.com/docs/kanban/backlog/29-finish-compute-orchestrator-pooled-instance-lease-and-switch-api.md), which must define and implement the lease/fallback policy for sleeping pooled instances before Framesmith adopts the pool
+
+## Status update - 2026-04-10
+
+- Do not start active Framesmith cutover yet.
+- Generic image can run Qwen and Whisper, and Whisper transcription has been proven on a live Vast instance.
+- Pool API work is underway in `bb-ai-listing`; one real Vast branch has been validated (`34414828` asleep/rented elsewhere), but reusable-running and runtime-switch live scenarios still need completion.
+
+## Next action
+
+- Wait for card `29` to be ported and live-validated in this repo.
+- Then add a Framesmith adapter that requests `whisper` from `compute_orchestrator` instead of calling the legacy `video_forge` Vast provisioning path directly.

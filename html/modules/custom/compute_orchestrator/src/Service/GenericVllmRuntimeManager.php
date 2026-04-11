@@ -88,11 +88,8 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
     $lastSnapshot = [];
     $stallThresholdSeconds = 600;
 
-    $hardTimeoutSeconds = max(10, $timeoutSeconds);
-    $pollIntervalSeconds = 5;
-
     while (TRUE) {
-      if ((time() - $start) > $hardTimeoutSeconds) {
+      if ((time() - $start) > max(60, $timeoutSeconds)) {
         throw new \RuntimeException('Instance exceeded SSH bootstrap timeout.');
       }
 
@@ -213,7 +210,7 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
         throw new \RuntimeException('Instance stalled before SSH bootstrap for ' . $stalledFor . ' seconds.');
       }
 
-      sleep($pollIntervalSeconds);
+      sleep(10);
     }
   }
 

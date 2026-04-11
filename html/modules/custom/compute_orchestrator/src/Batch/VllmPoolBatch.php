@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Batch;
 
-use Drupal\compute_orchestrator\Exception\AcquirePendingException;
-
 /**
  * Batch callbacks for vLLM pool actions.
  *
@@ -16,8 +14,6 @@ use Drupal\compute_orchestrator\Exception\AcquirePendingException;
  * The core pool logic remains in services with dependency injection.
  */
 final class VllmPoolBatch {
-
-  private const BATCH_SLICE_TIMEOUT_SECONDS = 12;
 
   /**
    * Batch operation: run the acquire call.
@@ -35,13 +31,7 @@ final class VllmPoolBatch {
     try {
       /** @var \Drupal\compute_orchestrator\Service\VllmPoolManager $pool */
       $pool = \Drupal::service('compute_orchestrator.vllm_pool_manager');
-      $record = $pool->acquire(
-        $workload,
-        NULL,
-        TRUE,
-        self::BATCH_SLICE_TIMEOUT_SECONDS,
-        self::BATCH_SLICE_TIMEOUT_SECONDS,
-      );
+      $record = $pool->acquire($workload, NULL, TRUE, 25, 25);
       $context['results']['record'] = $record;
       $context['message'] = t('Workload ready on contract @id.', [
         '@id' => (string) ($record['contract_id'] ?? ''),
@@ -49,7 +39,7 @@ final class VllmPoolBatch {
       $context['finished'] = 1;
       return;
     }
-    catch (AcquirePendingException $exception) {
+    catch (\Drupal\compute_orchestrator\Exception\AcquirePendingException $exception) {
       $context['sandbox']['attempts']++;
       $context['message'] = t('Still warming runtime (attempt @attempt): @message', [
         '@attempt' => (string) $context['sandbox']['attempts'],

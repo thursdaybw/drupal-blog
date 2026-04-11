@@ -8,14 +8,23 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Process\Process;
 
+/**
+ * Executes probe commands over SSH.
+ */
 final class SshProbeExecutor {
 
+  /**
+   * Module logger channel.
+   */
   private LoggerInterface $logger;
 
   public function __construct(LoggerChannelFactoryInterface $loggerFactory) {
     $this->logger = $loggerFactory->get('compute_orchestrator');
   }
 
+  /**
+   * Runs a probe request over SSH and returns a normalized result structure.
+   */
   public function run(SshConnectionContext $context, SshProbeRequest $request): array {
     $wrappedCommand = 'set -euo pipefail; ' . $request->command;
     $remoteCommand = "bash -lc '" . str_replace("'", "'\"'\"'", $wrappedCommand) . "'";
@@ -33,6 +42,7 @@ final class SshProbeExecutor {
 
     $process = new Process([
       'ssh',
+      '-F', '/dev/null',
       '-o', 'BatchMode=yes',
       '-o', 'StrictHostKeyChecking=no',
       '-o', 'UserKnownHostsFile=/dev/null',
@@ -48,12 +58,13 @@ final class SshProbeExecutor {
 
     try {
       $process->run();
-    } catch (\Throwable $e) {
+    }
+    catch (\Throwable $e) {
       return [
-        'ok' => false,
-        'transport_ok' => false,
+        'ok' => FALSE,
+        'transport_ok' => FALSE,
         'failure_kind' => 'transport',
-        'exit_code' => null,
+        'exit_code' => NULL,
         'stdout' => '',
         'stderr' => '',
         'exception' => $e->getMessage(),
@@ -62,12 +73,12 @@ final class SshProbeExecutor {
 
     return [
       'ok' => $process->isSuccessful(),
-      'transport_ok' => true,
+      'transport_ok' => TRUE,
       'failure_kind' => $process->isSuccessful() ? 'none' : 'command',
       'exit_code' => $process->getExitCode(),
       'stdout' => trim($process->getOutput()),
       'stderr' => trim($process->getErrorOutput()),
-      'exception' => null,
+      'exception' => NULL,
     ];
   }
 

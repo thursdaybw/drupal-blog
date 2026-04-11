@@ -4,289 +4,184 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Command;
 
-use Drupal\Core\State\StateInterface;
-use Drupal\compute_orchestrator\Service\VastRestClientInterface;
+use Drupal\compute_orchestrator\Service\VllmPoolManager;
 use Drush\Commands\DrushCommands;
 
+/**
+ * Provides operator commands for the generic vLLM instance pool.
+ */
 final class VllmInstancePoolCommand extends DrushCommands {
 
-  private const DEFAULT_POOL_FILE = '/var/www/html/vllm-pool.json';
-
   public function __construct(
-    private readonly StateInterface $state,
-    private readonly VastRestClientInterface $vastClient,
+    private readonly VllmPoolManager $poolManager,
   ) {
     parent::__construct();
   }
 
   /**
-   * Export current vLLM instance state to a keyed JSON file.
+   * Registers an arbitrary leased Vast contract as a pooled instance.
    *
-   * @command compute:vllm-pool-export
-   * @param string|null $instanceId
-   *   Vast instance ID to store under. Defaults to the current contract_id.
-   * @param string|null $file
-   *   JSON file path. Defaults to /var/www/html/vllm-pool.json.
-   */
-  public function export(?string $instanceId = NULL, ?string $file = NULL): void {
-    $instance = $this->loadCurrentInstanceState();
-    if ($instance === NULL) {
-      $this->output()->writeln('<error>No current vLLM instance state found.</error>');
-      return;
-    }
-
-    $file = $this->resolvePoolFile($file);
-    $document = $this->readPoolDocument($file);
-    $instanceId = $this->resolveInstanceId($instanceId, $instance);
-    if ($instanceId === '') {
-      $this->output()->writeln('<error>No instance ID provided and current state has no contract_id.</error>');
-      return;
-    }
-
-    $document['instances'][$instanceId] = [
-      'host' => $instance['host'],
-      'port' => $instance['port'],
-      'url' => $instance['url'],
-      'contract_id' => $instance['contract_id'],
-      'image' => $instance['image'],
-      'model' => $instance['model'],
-      'set_at' => $instance['set_at'],
-      'exported_at' => time(),
-    ];
-
-    $this->writePoolDocument($file, $document);
-    $this->output()->writeln(sprintf('Exported current vLLM instance to %s as %s.', $file, $instanceId));
-  }
-
-  /**
-   * Import one named vLLM instance from a JSON file into Drupal state.
-   *
-   * @command compute:vllm-pool-import
    * @param string $instanceId
-   *   Vast instance ID to load.
-   * @param string|null $file
-   *   JSON file path. Defaults to /var/www/html/vllm-pool.json.
+   *   Vast contract ID to track in the pool inventory.
+   * @param array<string,mixed> $options
+   *   Command options keyed by image, workload, model, and source.
+   *
+   * @command compute:vllm-pool-register
+   * @option image
+   *   Generic runtime image reference.
+   * @option workload
+   *   Optional current workload mode already loaded on the instance.
+   * @option model
+   *   Optional current model already loaded on the instance.
+   * @option source
+   *   Free-form source tag for operator visibility.
    */
-  public function import(string $instanceId, ?string $file = NULL): void {
-    $file = $this->resolvePoolFile($file);
-    $document = $this->readPoolDocument($file);
-    $instances = $document['instances'] ?? [];
-
-    if (!is_array($instances) || !isset($instances[$instanceId]) || !is_array($instances[$instanceId])) {
-      $this->output()->writeln(sprintf('<error>Instance ID %s not found in %s.</error>', $instanceId, $file));
-      return;
-    }
-
-    $instance = $instances[$instanceId];
-    $host = trim((string) ($instance['host'] ?? ''));
-    $port = trim((string) ($instance['port'] ?? ''));
-    $url = trim((string) ($instance['url'] ?? ''));
-    $contractId = trim((string) ($instance['contract_id'] ?? ''));
-    $image = trim((string) ($instance['image'] ?? ''));
-    $model = trim((string) ($instance['model'] ?? ''));
-    $setAt = (int) ($instance['set_at'] ?? time());
-
-    $liveEndpoint = $this->loadLiveEndpoint($contractId);
-    if ($liveEndpoint !== NULL) {
-      $host = $liveEndpoint['host'];
-      $port = $liveEndpoint['port'];
-      $url = $liveEndpoint['url'];
-    }
-
-    if ($host === '' || $port === '' || $url === '') {
-      $this->output()->writeln(sprintf('<error>Instance ID %s in %s is missing host, port, or url.</error>', $instanceId, $file));
-      return;
-    }
-
-    $this->state->set('compute.vllm_host', $host);
-    $this->state->set('compute.vllm_port', $port);
-    $this->state->set('compute.vllm_url', $url);
-    $this->state->set('compute.vllm_contract_id', $contractId);
-    $this->state->set('compute.vllm_image', $image);
-    $this->state->set('compute.vllm_model', $model);
-    $this->state->set('compute.vllm_set_at', $setAt);
-
-    $this->output()->writeln(sprintf('Loaded vLLM instance %s from %s into Drupal state.', $instanceId, $file));
+  public function register(
+    string $instanceId,
+    array $options = [
+      'image' => '',
+      'workload' => '',
+      'model' => '',
+      'source' => 'manual',
+    ],
+  ): void {
+    $record = $this->poolManager->registerInstance(
+      $instanceId,
+      (string) ($options['image'] ?? ''),
+      (string) ($options['workload'] ?? ''),
+      (string) ($options['model'] ?? ''),
+      (string) ($options['source'] ?? 'manual'),
+    );
+    $this->output()->writeln('Registered pooled instance ' . (string) $record['contract_id'] . '.');
   }
 
   /**
-   * List saved instance keys from a JSON file.
+   * Lists the current state-backed pool inventory.
    *
    * @command compute:vllm-pool-list
-   * @param string|null $file
-   *   JSON file path. Defaults to /var/www/html/vllm-pool.json.
    */
-  public function list(?string $file = NULL): void {
-    $file = $this->resolvePoolFile($file);
-    $document = $this->readPoolDocument($file);
-    $instances = $document['instances'] ?? [];
-
-    if (!is_array($instances) || $instances === []) {
-      $this->output()->writeln(sprintf('No saved instances in %s.', $file));
+  public function list(): void {
+    $instances = $this->poolManager->listInstances();
+    if ($instances === []) {
+      $this->output()->writeln('No pooled instances are registered.');
       return;
     }
 
-    foreach ($instances as $name => $instance) {
-      if (!is_array($instance)) {
+    foreach ($instances as $contractId => $record) {
+      if (!is_array($record)) {
         continue;
       }
 
-      $host = (string) ($instance['host'] ?? '');
-      $port = (string) ($instance['port'] ?? '');
-      $contractId = (string) ($instance['contract_id'] ?? '');
-      $model = (string) ($instance['model'] ?? '');
-      $this->output()->writeln(sprintf('%s: %s:%s contract=%s model=%s', $name, $host, $port, $contractId, $model));
-    }
-  }
-
-  /**
-   * @return array{host:string,port:string,url:string,contract_id:string,image:string,model:string,set_at:int}|null
-   */
-  private function loadCurrentInstanceState(): ?array {
-    $host = trim((string) $this->state->get('compute.vllm_host', ''));
-    $port = trim((string) $this->state->get('compute.vllm_port', ''));
-    $url = trim((string) $this->state->get('compute.vllm_url', ''));
-    $contractId = trim((string) $this->state->get('compute.vllm_contract_id', ''));
-    $image = trim((string) $this->state->get('compute.vllm_image', ''));
-    $model = trim((string) $this->state->get('compute.vllm_model', ''));
-    $setAt = (int) $this->state->get('compute.vllm_set_at', 0);
-
-    if ($host === '' || $port === '' || $url === '') {
-      return NULL;
-    }
-
-    return [
-      'host' => $host,
-      'port' => $port,
-      'url' => $url,
-      'contract_id' => $contractId,
-      'image' => $image,
-      'model' => $model,
-      'set_at' => $setAt,
-    ];
-  }
-
-  /**
-   * @return array{instances:array<string,mixed>}
-   */
-  private function readPoolDocument(string $file): array {
-    if (!is_file($file)) {
-      return ['instances' => []];
-    }
-
-    $contents = file_get_contents($file);
-    if ($contents === FALSE || trim($contents) === '') {
-      return ['instances' => []];
-    }
-
-    $decoded = json_decode($contents, TRUE);
-    if (!is_array($decoded)) {
-      throw new \RuntimeException(sprintf('Pool file %s does not contain valid JSON.', $file));
-    }
-
-    if (!isset($decoded['instances']) || !is_array($decoded['instances'])) {
-      $decoded['instances'] = [];
-    }
-
-    return $decoded;
-  }
-
-  private function resolvePoolFile(?string $file): string {
-    $resolvedFile = trim((string) $file);
-    if ($resolvedFile !== '') {
-      return $resolvedFile;
-    }
-
-    return self::DEFAULT_POOL_FILE;
-  }
-
-  /**
-   * @return array{host:string,port:string,url:string}|null
-   */
-  private function loadLiveEndpoint(string $contractId): ?array {
-    if ($contractId === '') {
-      return NULL;
-    }
-
-    try {
-      $info = $this->vastClient->showInstance($contractId);
-    }
-    catch (\Throwable $exception) {
       $this->output()->writeln(sprintf(
-        '<comment>Unable to refresh live endpoint for contract %s: %s</comment>',
+        '%s status=%s workload=%s model=%s url=%s source=%s',
         $contractId,
-        $exception->getMessage()
+        (string) ($record['lease_status'] ?? ''),
+        (string) ($record['current_workload_mode'] ?? ''),
+        (string) ($record['current_model'] ?? ''),
+        (string) ($record['url'] ?? ''),
+        (string) ($record['source'] ?? '')
       ));
-      return NULL;
+    }
+  }
+
+  /**
+   * Acquires a pooled instance for the requested workload.
+   *
+   * @param array<string,mixed> $options
+   *   Command options keyed by workload, model, and no-fresh.
+   *
+   * @command compute:vllm-pool-acquire
+   * @option workload
+   *   Workload to acquire (qwen-vl | whisper).
+   * @option model
+   *   Optional model override.
+   * @option no-fresh
+   *   Refuse to provision a fresh instance when the pool has no usable member.
+   */
+  public function acquire(array $options = ['workload' => 'qwen-vl', 'model' => NULL, 'no-fresh' => FALSE]): void {
+    $record = $this->poolManager->acquire(
+      (string) ($options['workload'] ?? 'qwen-vl'),
+      isset($options['model']) && (string) $options['model'] !== '' ? (string) $options['model'] : NULL,
+      !((bool) ($options['no-fresh'] ?? FALSE)),
+    );
+
+    $this->output()->writeln(sprintf(
+      'Acquired %s status=%s workload=%s model=%s url=%s',
+      (string) ($record['contract_id'] ?? ''),
+      (string) ($record['lease_status'] ?? ''),
+      (string) ($record['current_workload_mode'] ?? ''),
+      (string) ($record['current_model'] ?? ''),
+      (string) ($record['url'] ?? '')
+    ));
+  }
+
+  /**
+   * Releases a pooled instance back to the available pool.
+   *
+   * @param string $instanceId
+   *   Contract ID to release.
+   *
+   * @command compute:vllm-pool-release
+   */
+  public function release(string $instanceId): void {
+    $record = $this->poolManager->release($instanceId);
+    $this->output()->writeln('Released pooled instance ' . (string) $record['contract_id'] . '.');
+  }
+
+  /**
+   * Stops available pooled instances after the post-lease grace period.
+   *
+   * @param array<string,mixed> $options
+   *   Command options keyed by idle-seconds and dry-run.
+   *
+   * @command compute:vllm-pool-reap-idle
+   * @option idle-seconds
+   *   Override the configured post-lease grace period. Defaults to state
+   *   compute_orchestrator.vllm_pool.idle_shutdown_seconds, or 600 seconds.
+   * @option dry-run
+   *   Report matching instances without stopping them.
+   */
+  public function reapIdle(array $options = ['idle-seconds' => NULL, 'dry-run' => FALSE]): void {
+    $idleSeconds = isset($options['idle-seconds']) && (string) $options['idle-seconds'] !== ''
+      ? (int) $options['idle-seconds']
+      : $this->poolManager->getIdleShutdownSeconds();
+    $results = $this->poolManager->reapIdleAvailableInstances($idleSeconds, (bool) ($options['dry-run'] ?? FALSE));
+    if ($results === []) {
+      $this->output()->writeln(sprintf('No available pooled instances exceeded the %d second post-lease grace period.', $idleSeconds));
+      return;
     }
 
-    $host = trim((string) ($info['public_ipaddr'] ?? ''));
-    $port = $this->extractPublicPort($info);
-    if ($host === '' || $port === '') {
+    foreach ($results as $result) {
       $this->output()->writeln(sprintf(
-        '<comment>Contract %s has no current public vLLM endpoint. Using saved pool values.</comment>',
-        $contractId
+        '%s action=%s message=%s',
+        $result['contract_id'] ?? '',
+        $result['action'] ?? '',
+        $result['message'] ?? '',
       ));
-      return NULL;
     }
-
-    return [
-      'host' => $host,
-      'port' => $port,
-      'url' => 'http://' . $host . ':' . $port,
-    ];
-  }
-
-  private function extractPublicPort(array $instanceInfo): string {
-    $ports = $instanceInfo['ports'] ?? [];
-    if (!is_array($ports)) {
-      return '';
-    }
-
-    foreach ($ports as $key => $value) {
-      if (!str_contains((string) $key, '8000')) {
-        continue;
-      }
-
-      if (!is_array($value) || !isset($value[0]['HostPort'])) {
-        continue;
-      }
-
-      return trim((string) $value[0]['HostPort']);
-    }
-
-    return '';
   }
 
   /**
-   * @param array{host:string,port:string,url:string,contract_id:string,image:string,model:string,set_at:int} $instance
+   * Removes one instance from the pool inventory.
+   *
+   * @param string $instanceId
+   *   Contract ID to remove.
+   *
+   * @command compute:vllm-pool-remove
    */
-  private function resolveInstanceId(?string $instanceId, array $instance): string {
-    $normalizedInstanceId = trim((string) $instanceId);
-    if ($normalizedInstanceId !== '') {
-      return $normalizedInstanceId;
-    }
-
-    return trim((string) ($instance['contract_id'] ?? ''));
+  public function remove(string $instanceId): void {
+    $this->poolManager->remove($instanceId);
+    $this->output()->writeln('Removed pooled instance ' . $instanceId . '.');
   }
 
   /**
-   * @param array<string,mixed> $document
+   * Clears the entire state-backed pool inventory.
+   *
+   * @command compute:vllm-pool-clear
    */
-  private function writePoolDocument(string $file, array $document): void {
-    $directory = dirname($file);
-    if (!is_dir($directory) && !mkdir($directory, 0775, TRUE) && !is_dir($directory)) {
-      throw new \RuntimeException(sprintf('Unable to create directory %s.', $directory));
-    }
-
-    $json = json_encode($document, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    if ($json === FALSE) {
-      throw new \RuntimeException('Unable to encode pool document as JSON.');
-    }
-
-    if (file_put_contents($file, $json . PHP_EOL) === FALSE) {
-      throw new \RuntimeException(sprintf('Unable to write pool file %s.', $file));
-    }
+  public function clear(): void {
+    $this->poolManager->clear();
+    $this->output()->writeln('Cleared pooled instance inventory.');
   }
 
 }

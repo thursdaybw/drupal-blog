@@ -10,4 +10,3 @@ namespace Drupal\compute_orchestrator\Exception;
 final class AcquirePendingException extends \RuntimeException {
 
 }
-

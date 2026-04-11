@@ -505,6 +505,10 @@ final class VllmPoolManager {
    *   Candidate pool record.
    * @param array<string,int|string> $definition
    *   Requested workload definition.
+   * @param int $bootstrapTimeoutSeconds
+   *   SSH bootstrap timeout used for this acquire attempt.
+   * @param int $workloadTimeoutSeconds
+   *   Workload readiness timeout used for this acquire attempt.
    *
    * @return array<string,mixed>|null
    *   Updated record or NULL when the candidate should be skipped.
@@ -611,6 +615,10 @@ final class VllmPoolManager {
    *
    * @param array<string,int|string> $definition
    *   Requested workload definition.
+   * @param int $bootstrapTimeoutSeconds
+   *   SSH bootstrap timeout used for this acquire attempt.
+   * @param int $workloadTimeoutSeconds
+   *   Workload readiness timeout used for this acquire attempt.
    *
    * @return array<string,mixed>
    *   Fresh leased pool record.

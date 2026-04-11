@@ -13,6 +13,8 @@ services:
       - ./html/sites/default/settings.php:/var/www/html/sites/default/settings.php
       # Persist Drupal files across container/image updates.
       - ./html/sites/default/files:/var/www/html/sites/default/files
+      # Mount Vast SSH private key for pooled runtime lifecycle operations.
+      - ${VAST_SSH_KEY_HOST_PATH:-./secrets/id_rsa_vastai}:/home/http/.ssh/id_rsa_vastai:ro
       # Stage content-sync payloads once on the host and expose them directly
       # to Drupal for import, avoiding a second copied container-local payload.
       - ./content/sync:/var/www/content/sync

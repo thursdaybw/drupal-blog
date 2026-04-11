@@ -52,3 +52,4 @@ known_hosts
 gpt-oauth.yml
 ops/compose/staging/.env
 ops/compose/prod/.env
+ops/compose/prod/secrets/id_rsa_vastai

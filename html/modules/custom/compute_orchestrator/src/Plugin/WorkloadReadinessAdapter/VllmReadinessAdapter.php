@@ -117,7 +117,10 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
     }
 
     if (!$anyApiUp && !$hasProcess) {
-      return FailureClass::WORKLOAD_FATAL;
+      // Cold starts can transiently report no API and no matched process while
+      // the runtime is still initializing. Treat this as warmup unless an
+      // explicit fatal marker was already detected above.
+      return FailureClass::WARMUP;
     }
 
     if (trim($processes) !== '') {

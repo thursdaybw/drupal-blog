@@ -4,19 +4,35 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+use GuzzleHttp\Exception\ClientException;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
 use Drupal\compute_orchestrator\Plugin\WorkloadReadinessAdapterManager;
 use Drupal\compute_orchestrator\Service\Workload\FailureClass;
+use Drupal\Core\State\StateInterface;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Process\Process;
 
+/**
+ * Vast API client for offer discovery and instance lifecycle operations.
+ */
 final class VastRestClient implements VastRestClientInterface {
 
+  /**
+   * Guzzle client for Vast API requests.
+   */
   private ClientInterface $httpClient;
+
+  /**
+   * Vast API bearer token.
+   */
   private ?string $apiKey = NULL;
+
+  /**
+   * Module logger channel.
+   */
   private LoggerInterface $logger;
 
   public function __construct(
@@ -25,23 +41,31 @@ final class VastRestClient implements VastRestClientInterface {
     private readonly WorkloadReadinessAdapterManager $workloadAdapterManager,
     private readonly SshProbeExecutor $sshProbeExecutor,
     LoggerChannelFactoryInterface $loggerFactory,
+    private readonly VastCredentialProviderInterface $credentials,
+    private readonly StateInterface $state,
   ) {
     $this->httpClient = $http_client;
     $this->logger = $loggerFactory->get('compute_orchestrator');
 
-    $apiKey = getenv('VAST_API_KEY');
-    if (!is_string($apiKey) || $apiKey === '') {
-      $this->logger->warning('VAST_API_KEY environment variable is not set. Vast API calls are disabled.');
+    $apiKey = $this->credentials->getApiKey();
+    if ($apiKey === NULL || $apiKey === '') {
+      $this->logger->warning('Vast API key is not configured. Vast API calls are disabled.');
       return;
     }
 
     $this->apiKey = $apiKey;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function searchOffers(string $query, int $limit = 20): array {
     throw new \LogicException('Use structured searchOffersStructured() instead.');
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function searchOffersStructured(array $filters, int $limit = 20): array {
     $response = $this->request('POST', 'bundles/', [
       'json' => array_merge(
@@ -59,8 +83,10 @@ final class VastRestClient implements VastRestClientInterface {
     return $response['offers'];
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function createInstance(string $offerId, string $image, array $options = []): array {
-
     $payload = array_merge(
       [
         'image' => $image,
@@ -68,19 +94,21 @@ final class VastRestClient implements VastRestClientInterface {
       $options
     );
 
-  //error_log('CREATE PAYLOAD DEBUG: ' . json_encode($payload, JSON_PRETTY_PRINT));
-
-  // TEMPORARY: abort before provisioning to inspect payload.
-  //throw new \RuntimeException('DEBUG EXIT AFTER CREATE PAYLOAD');
-  return $this->request('PUT', 'asks/' . (int) $offerId . '/', [
-    'json' => $payload,
-  ]);
-
+    return $this->request('PUT', 'asks/' . (int) $offerId . '/', [
+      'json' => $payload,
+    ]);
   }
+
+  /**
+   * {@inheritdoc}
+   */
   public function startInstance(string $instanceId): array {
     throw new \LogicException('Not implemented yet.');
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function showInstance(string $instanceId): array {
     $response = $this->request('GET', 'instances/' . (int) $instanceId . '/');
     if (!isset($response['instances']) || !is_array($response['instances'])) {
@@ -92,10 +120,16 @@ final class VastRestClient implements VastRestClientInterface {
     return $response['instances'];
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function destroyInstance(string $instanceId): array {
     return $this->request('DELETE', 'instances/' . (int) $instanceId . '/');
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function getInstanceLogs(string $instanceId, bool $extra = FALSE): array {
     $uri = 'instances/' . (int) $instanceId . '/log';
     if ($extra) {
@@ -104,13 +138,15 @@ final class VastRestClient implements VastRestClientInterface {
     return $this->request('GET', $uri);
   }
 
+  /**
+   * Executes an authenticated Vast REST request.
+   */
   private function request(string $method, string $uri, array $options = []): array {
     if ($this->apiKey === NULL || $this->apiKey === '') {
-      throw new \RuntimeException('VAST_API_KEY environment variable is not set.');
+      throw new \RuntimeException('Vast API key is not configured.');
     }
 
     try {
-
       $response = $this->httpClient->request(
         $method,
         'https://console.vast.ai/api/v0/' . ltrim($uri, '/'),
@@ -125,30 +161,31 @@ final class VastRestClient implements VastRestClientInterface {
       );
 
       $body = (string) $response->getBody();
-      $decoded = json_decode($body, true);
+      $decoded = json_decode($body, TRUE);
 
       if (!is_array($decoded)) {
         throw new \RuntimeException('Invalid JSON response from Vast API.');
       }
 
       return $decoded;
-
-    } catch (GuzzleException $e) {
-
-      if ($e instanceof \GuzzleHttp\Exception\ClientException) {
-        $response = $e->getResponse();
-        if ($response) {
+    }
+    catch (GuzzleException $exception) {
+      if ($exception instanceof ClientException) {
+        $response = $exception->getResponse();
+        if ($response !== NULL) {
           $body = (string) $response->getBody();
-          throw new \RuntimeException('Vast API error response: ' . $body, 0, $e);
+          throw new \RuntimeException('Vast API error response: ' . $body, 0, $exception);
         }
       }
 
-      throw new \RuntimeException('Vast API request failed: ' . $e->getMessage(), 0, $e);
+      throw new \RuntimeException('Vast API request failed: ' . $exception->getMessage(), 0, $exception);
     }
-
   }
 
-  public function selectBestOffer( array $filters, array $excludeHosts = [], array $excludeRegions = [], int $limit = 5, ?float $maxPrice = null): ?array {
+  /**
+   * {@inheritdoc}
+   */
+  public function selectBestOffer(array $filters, array $excludeHosts = [], array $excludeRegions = [], int $limit = 5, ?float $maxPrice = NULL): ?array {
 
     $offers = $this->searchOffersStructured($filters, $limit);
     $excludedHostIds = $this->normalizeHostIds($excludeHosts);
@@ -158,9 +195,9 @@ final class VastRestClient implements VastRestClientInterface {
 
     foreach ($offers as $offer) {
 
-      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? NULL);
 
-      if ($hostId !== '' && in_array($hostId, $excludedHostIds, true)) {
+      if ($hostId !== '' && in_array($hostId, $excludedHostIds, TRUE)) {
         continue;
       }
 
@@ -168,14 +205,14 @@ final class VastRestClient implements VastRestClientInterface {
 
       if (preg_match('/,\s*([A-Z]{2})$/', $geo, $m)) {
         $country = $m[1];
-        if (in_array($country, $excludeRegions, true)) {
+        if (in_array($country, $excludeRegions, TRUE)) {
           continue;
         }
       }
 
       $price = (float) ($offer['dph_total'] ?? 0);
 
-      if ($maxPrice !== null && $price > $maxPrice) {
+      if ($maxPrice !== NULL && $price > $maxPrice) {
         continue;
       }
 
@@ -183,7 +220,7 @@ final class VastRestClient implements VastRestClientInterface {
     }
 
     if (empty($valid)) {
-      return null;
+      return NULL;
     }
 
     $valid = $this->preferKnownGoodOffersWhenAvailable($valid, $hostStats);
@@ -195,36 +232,39 @@ final class VastRestClient implements VastRestClientInterface {
     return $valid[0];
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function waitForRunningAndSsh(string $instanceId, string $workload = 'vllm', int $timeoutSeconds = 180): array {
 
     $start = time();
     $adapter = $this->workloadAdapterManager->createInstance($workload);
-    // Caller timeout is the hard cap; adapter startup timeout remains guidance for
-    // workload-specific warmup classification, not an override of the caller cap.
+    // Caller timeout is the hard cap; adapter startup timeout remains guidance
+    // for workload-specific warmup classification.
     $absoluteSafetyTimeout = max(60, $timeoutSeconds);
     $stallThresholdSeconds = 600;
     $sshLossThresholdSeconds = 300;
     $sshNeverReadyThresholdSeconds = 180;
     $sshFailureGraceSeconds = 180;
     $lastProgressAt = $start;
-    $sshLostSince = null;
-    $sshWasReachable = false;
-    $sshFailureStartedAt = null;
-    $sshFailureReason = null;
+    $sshLostSince = NULL;
+    $sshWasReachable = FALSE;
+    $sshFailureStartedAt = NULL;
+    $sshFailureReason = NULL;
     $previousProbeResults = [];
     $lastLogCheckAt = $start;
     $logCheckInterval = 60;
 
-    $lastCurState = null;
-    $lastActualStatus = null;
-    $lastStatusMsg = null;
-    $lastSshHost = null;
-    $lastSshPort = null;
+    $lastCurState = NULL;
+    $lastActualStatus = NULL;
+    $lastStatusMsg = NULL;
+    $lastSshHost = NULL;
+    $lastSshPort = NULL;
 
-    $lastProbeWhy = null;
-    $lastProbeKind = null;
+    $lastProbeWhy = NULL;
+    $lastProbeKind = NULL;
 
-    while (true) {
+    while (TRUE) {
 
       $this->logWithTime('Polling instance ' . $instanceId);
 
@@ -273,16 +313,16 @@ final class VastRestClient implements VastRestClientInterface {
 
       // Hard fail: Docker/container runtime error reported by Vast.
       if ($statusMsg !== '' && (
-        stripos($statusMsg, 'OCI runtime create failed') !== false ||
-        stripos($statusMsg, 'failed to create task for container') !== false ||
-        stripos($statusMsg, 'Error response from daemon') !== false ||
-        stripos($statusMsg, 'no such container') !== false
+        stripos($statusMsg, 'OCI runtime create failed') !== FALSE ||
+        stripos($statusMsg, 'failed to create task for container') !== FALSE ||
+        stripos($statusMsg, 'Error response from daemon') !== FALSE ||
+        stripos($statusMsg, 'no such container') !== FALSE
       )) {
         throw new \RuntimeException('Container start failed: ' . $statusMsg);
       }
 
       // Hard fail: explicit failure states.
-      if (in_array($actualStatus, ['error', 'exited', 'failed'], true)) {
+      if (in_array($actualStatus, ['error', 'exited', 'failed'], TRUE)) {
         throw new \RuntimeException(
           'Instance entered failure state: ' . $actualStatus . ' — ' . $statusMsg
         );
@@ -295,8 +335,9 @@ final class VastRestClient implements VastRestClientInterface {
         }
       }
 
-      // Only probe after Vast reports actual_status=running. Vast can expose SSH
-      // host/port while still "creating", which causes pointless probe churn.
+      // Only probe after Vast reports actual_status=running.
+      // Vast can expose SSH host/port while still "creating", which causes
+      // pointless probe churn.
       if ($curState === 'running' && $actualStatus === 'running' && $sshHost !== '' && $sshPort !== '') {
 
         $user = (string) ($info['ssh_user'] ?? 'root');
@@ -308,14 +349,14 @@ final class VastRestClient implements VastRestClientInterface {
           if (!$sshWasReachable) {
             $sshUnavailableFor = time() - $lastProgressAt;
           }
-          if ($sshWasReachable && $sshLostSince === null) {
+          if ($sshWasReachable && $sshLostSince === NULL) {
             $sshLostSince = time();
           }
-          $sshLossSeconds = $sshLostSince !== null ? (time() - $sshLostSince) : 0;
-        if ($sshFailureReason !== $why) {
-          $sshFailureReason = $why;
-          $sshFailureStartedAt = time();
-        }
+          $sshLossSeconds = $sshLostSince !== NULL ? (time() - $sshLostSince) : 0;
+          if ($sshFailureReason !== $why) {
+            $sshFailureReason = $why;
+            $sshFailureStartedAt = time();
+          }
           if ($lastProbeKind !== 'ssh' || $lastProbeWhy !== $why) {
             $this->logWithTime('PROBE ssh not ready: ' . $why);
             $this->logger->notice('WORKLOAD ssh not ready: {why}', ['why' => $why]);
@@ -328,7 +369,7 @@ final class VastRestClient implements VastRestClientInterface {
           }
           if (
             $this->isSshPortForwardingFailure($why) &&
-            $sshFailureStartedAt !== null &&
+            $sshFailureStartedAt !== NULL &&
             (time() - $sshFailureStartedAt) >= $sshFailureGraceSeconds
           ) {
             throw new \RuntimeException('SSH port forwarding stuck: ' . $why);
@@ -342,10 +383,10 @@ final class VastRestClient implements VastRestClientInterface {
           sleep(30);
           continue;
         }
-        $sshLostSince = null;
-        $sshWasReachable = true;
-        $sshFailureReason = null;
-        $sshFailureStartedAt = null;
+        $sshLostSince = NULL;
+        $sshWasReachable = TRUE;
+        $sshFailureReason = NULL;
+        $sshFailureStartedAt = NULL;
 
         $probeResults = $this->executeWorkloadProbesViaSsh($adapter->getReadinessProbeCommands(), $sshHost, (int) $sshPort, $user);
         if ($adapter->isReadyFromProbeResults($probeResults)) {
@@ -364,7 +405,7 @@ final class VastRestClient implements VastRestClientInterface {
           FailureClass::WORKLOAD_FATAL,
           FailureClass::WORKLOAD_INCOMPATIBLE,
         ];
-        if (in_array($classification, $classifications, true)) {
+        if (in_array($classification, $classifications, TRUE)) {
 
           throw new WorkloadReadinessException(
             $classification,
@@ -381,7 +422,8 @@ final class VastRestClient implements VastRestClientInterface {
             'class' => $classification,
             'instance' => $instanceId,
           ]);
-        } else {
+        }
+        else {
           $stalledFor = time() - $lastProgressAt;
           $this->logger->warning('WORKLOAD warmup - stalled {stalled}/{threshold} seconds (class={class}) instance={instance}', [
             'stalled' => (string) $stalledFor,
@@ -419,90 +461,9 @@ final class VastRestClient implements VastRestClientInterface {
     }
   }
 
-  public function waitForRunningAndSshBootstrap(string $instanceId, int $timeoutSeconds = 180): array {
-    $start = time();
-    $lastProgressAt = $start;
-    $lastCurState = null;
-    $lastActualStatus = null;
-    $lastStatusMsg = null;
-    $lastSshHost = null;
-    $lastSshPort = null;
-    $stallThresholdSeconds = 600;
-
-    while (true) {
-      if ((time() - $start) > max(60, $timeoutSeconds)) {
-        throw new \RuntimeException('Instance exceeded SSH bootstrap timeout.');
-      }
-
-      $info = $this->showInstance($instanceId);
-
-      $curState = (string) ($info['cur_state'] ?? '');
-      $actualStatus = (string) ($info['actual_status'] ?? '');
-      $statusMsg = (string) ($info['status_msg'] ?? '');
-      $sshHost = (string) ($info['ssh_host'] ?? '');
-      $sshPort = (string) ($info['ssh_port'] ?? '');
-
-      $changed =
-        $curState !== $lastCurState ||
-        $actualStatus !== $lastActualStatus ||
-        $statusMsg !== $lastStatusMsg ||
-        $sshHost !== $lastSshHost ||
-        $sshPort !== $lastSshPort;
-
-      if ($changed) {
-        $this->logWithTime(sprintf(
-          'BOOTSTRAP %s cur_state=%s actual_status=%s ssh=%s:%s msg=%s',
-          $instanceId,
-          $curState !== '' ? $curState : '(null)',
-          $actualStatus !== '' ? $actualStatus : '(null)',
-          $sshHost !== '' ? $sshHost : '(null)',
-          $sshPort !== '' ? $sshPort : '(null)',
-          $statusMsg !== '' ? $statusMsg : '(null)'
-        ));
-        $lastCurState = $curState;
-        $lastActualStatus = $actualStatus;
-        $lastStatusMsg = $statusMsg;
-        $lastSshHost = $sshHost;
-        $lastSshPort = $sshPort;
-        $lastProgressAt = time();
-      }
-
-      if ($statusMsg !== '' && (
-        stripos($statusMsg, 'OCI runtime create failed') !== false ||
-        stripos($statusMsg, 'failed to create task for container') !== false ||
-        stripos($statusMsg, 'Error response from daemon') !== false ||
-        stripos($statusMsg, 'no such container') !== false
-      )) {
-        throw new \RuntimeException('Container start failed: ' . $statusMsg);
-      }
-
-      if (in_array($actualStatus, ['error', 'exited', 'failed'], true)) {
-        throw new \RuntimeException(
-          'Instance entered failure state: ' . $actualStatus . ' — ' . $statusMsg
-        );
-      }
-
-      if ($actualStatus === 'created' && $statusMsg !== '' && $this->isCreationFailureMessage($statusMsg)) {
-        throw new \RuntimeException('Container failed during creation: ' . $statusMsg);
-      }
-
-      if ($curState === 'running' && $actualStatus === 'running' && $sshHost !== '' && $sshPort !== '') {
-        $user = (string) ($info['ssh_user'] ?? 'root');
-        $sshCheck = $this->sshLoginCheck($sshHost, (int) $sshPort, $user);
-        if ($sshCheck['ok'] ?? false) {
-          return $info;
-        }
-      }
-
-      $stalledFor = time() - $lastProgressAt;
-      if ($stalledFor >= $stallThresholdSeconds) {
-        throw new \RuntimeException('Instance stalled before SSH bootstrap for ' . $stalledFor . ' seconds.');
-      }
-
-      sleep(10);
-    }
-  }
-
+  /**
+   * Returns the first log line that indicates a fatal container/runtime error.
+   */
   private function containsFatalLogLine(array $lines): ?string {
     foreach ($lines as $line) {
       $normalized = strtolower($line);
@@ -521,9 +482,17 @@ final class VastRestClient implements VastRestClientInterface {
         }
       }
     }
-    return null;
+    return NULL;
   }
 
+  /**
+   * Extracts log lines from a Vast log payload response.
+   *
+   * Vast can return different shapes depending on endpoint/type.
+   *
+   * @return string[]
+   *   Log lines.
+   */
   private function extractLogLinesFromPayload(array $payload): array {
     $lines = [];
     if (isset($payload['log']) && is_string($payload['log'])) {
@@ -535,7 +504,7 @@ final class VastRestClient implements VastRestClientInterface {
           $lines[] = trim($line);
         }
         elseif (is_array($line)) {
-          $text = $line['line'] ?? $line['log'] ?? null;
+          $text = $line['line'] ?? $line['log'] ?? NULL;
           if (is_string($text)) {
             $lines[] = trim($text);
           }
@@ -548,10 +517,19 @@ final class VastRestClient implements VastRestClientInterface {
     return array_values(array_filter($lines));
   }
 
+  /**
+   * Splits a newline chunk and trims each line.
+   *
+   * @return string[]
+   *   Non-empty trimmed lines.
+   */
   private function splitAndTrim(string $chunk): array {
     return array_filter(array_map('trim', explode("\n", $chunk)));
   }
 
+  /**
+   * Inspects instance logs and throws if a fatal container error is detected.
+   */
   private function inspectInstanceLogsForFailures(string $instanceId): void {
     foreach ([FALSE, TRUE] as $extra) {
       try {
@@ -563,12 +541,15 @@ final class VastRestClient implements VastRestClientInterface {
 
       $lines = $this->extractLogLinesFromPayload($logs);
       $fatal = $this->containsFatalLogLine($lines);
-      if ($fatal !== null) {
+      if ($fatal !== NULL) {
         throw new \RuntimeException('Container log fatality detected: ' . $fatal);
       }
     }
   }
 
+  /**
+   * Detects SSH tunnel failure messages in log lines.
+   */
   private function containsSshTunnelFatalLogLine(array $lines): ?string {
     foreach ($lines as $line) {
       $normalized = strtolower($line);
@@ -584,9 +565,12 @@ final class VastRestClient implements VastRestClientInterface {
         }
       }
     }
-    return null;
+    return NULL;
   }
 
+  /**
+   * Inspects instance logs and throws if SSH tunnelling failures are detected.
+   */
   private function inspectInstanceLogsForSshTunnelFailures(string $instanceId): void {
     foreach ([FALSE, TRUE] as $extra) {
       try {
@@ -598,50 +582,58 @@ final class VastRestClient implements VastRestClientInterface {
 
       $lines = $this->extractLogLinesFromPayload($logs);
       $fatal = $this->containsSshTunnelFatalLogLine($lines);
-      if ($fatal !== null) {
+      if ($fatal !== NULL) {
         throw new \RuntimeException('SSH tunnel fatality detected: ' . $fatal);
       }
     }
   }
 
+  /**
+   * Heuristic check for container creation failures reported via status_msg.
+   */
   private function isCreationFailureMessage(string $statusMsg): bool {
     $lower = strtolower($statusMsg);
     foreach (['failed', 'error', 'denied', 'cannot', 'timeout', 'unavailable'] as $term) {
       if (str_contains($lower, $term)) {
-        return true;
+        return TRUE;
       }
     }
-    return false;
+    return FALSE;
   }
 
+  /**
+   * Detects SSH port-forward failures in error messages.
+   */
   private function isSshPortForwardingFailure(string $message): bool {
     $lower = strtolower($message);
     foreach (['remote port forwarding failed', 'port forwarding failed for'] as $term) {
       if (str_contains($lower, $term)) {
-        return true;
+        return TRUE;
       }
     }
-    return false;
+    return FALSE;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function provisionInstanceFromOffers(
     array $filters,
     array $excludeRegions = [],
     int $limit = 5,
-    ?float $maxPrice = null,
-    ?float $minPrice = null,
+    ?float $maxPrice = NULL,
+    ?float $minPrice = NULL,
     array $createOptions = [],
     int $maxAttempts = 5,
-    int $bootTimeoutSeconds = 600
+    int $bootTimeoutSeconds = 600,
   ): array {
 
-    $preserveOnFailure = (bool) ($createOptions['preserve_on_failure'] ?? false);
+    $preserveOnFailure = (bool) ($createOptions['preserve_on_failure'] ?? FALSE);
     $workload = (string) ($createOptions['workload'] ?? 'vllm');
 
     $globalBlacklist = $this->getGlobalBlacklist();
     $globallyBlockedHosts = $this->normalizeHostIds(array_keys($globalBlacklist));
     $registryBlockedHosts = $this->badHosts->all();
-
 
     if (!empty($globallyBlockedHosts)) {
       $this->logWithTime(
@@ -655,7 +647,7 @@ final class VastRestClient implements VastRestClientInterface {
       );
     }
 
-    $workloadBlacklist = \Drupal::state()->get('compute_orchestrator.workload_bad_hosts', []);
+    $workloadBlacklist = $this->state->get('compute_orchestrator.workload_bad_hosts', []);
     $workloadBlockedHosts = $this->normalizeHostIds($workloadBlacklist[$workload] ?? []);
 
     $excludedHostIds = array_values(array_unique(array_merge(
@@ -676,29 +668,29 @@ final class VastRestClient implements VastRestClientInterface {
 
     $this->logMatchedBadHostsForOfferSelection($workload, $matchedGlobalBadHosts, $matchedWorkloadBadHosts);
 
-    // Filter + sort same logic as selectBestOffer
+    // Filter + sort same logic as selectBestOffer.
     $valid = [];
 
     foreach ($offers as $offer) {
 
-      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
-      if ($hostId !== '' && in_array($hostId, $excludedHostIds, true)) {
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? NULL);
+      if ($hostId !== '' && in_array($hostId, $excludedHostIds, TRUE)) {
         continue;
       }
 
       $geo = (string) ($offer['geolocation'] ?? '');
       if (preg_match('/,\s*([A-Z]{2})$/', $geo, $m)) {
         $country = $m[1];
-        if (in_array($country, $excludeRegions, true)) {
+        if (in_array($country, $excludeRegions, TRUE)) {
           continue;
         }
       }
 
       $price = (float) ($offer['dph_total'] ?? 0);
-      if ($maxPrice !== null && $price > $maxPrice) {
+      if ($maxPrice !== NULL && $price > $maxPrice) {
         continue;
       }
-      if ($minPrice !== null && $price < $minPrice) {
+      if ($minPrice !== NULL && $price < $minPrice) {
         continue;
       }
 
@@ -713,8 +705,8 @@ final class VastRestClient implements VastRestClientInterface {
     $valid = $this->preferKnownGoodOffersWhenAvailable($valid, $hostStats);
 
     usort($valid, function ($a, $b) use ($hostStats) {
-      $hostA = $this->normalizeHostId($a['host_id'] ?? null);
-      $hostB = $this->normalizeHostId($b['host_id'] ?? null);
+      $hostA = $this->normalizeHostId($a['host_id'] ?? NULL);
+      $hostB = $this->normalizeHostId($b['host_id'] ?? NULL);
       $successA = (int) ($hostStats[$hostA]['success'] ?? 0);
       $successB = (int) ($hostStats[$hostB]['success'] ?? 0);
 
@@ -726,7 +718,7 @@ final class VastRestClient implements VastRestClientInterface {
     });
 
     $attempts = 0;
-    $lastFailureMessage = null;
+    $lastFailureMessage = NULL;
 
     foreach ($valid as $offer) {
 
@@ -734,8 +726,8 @@ final class VastRestClient implements VastRestClientInterface {
         break;
       }
 
-      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
-      if ($hostId !== '' && in_array($hostId, $excludedHostIds, true)) {
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? NULL);
+      if ($hostId !== '' && in_array($hostId, $excludedHostIds, TRUE)) {
         continue;
       }
 
@@ -745,7 +737,7 @@ final class VastRestClient implements VastRestClientInterface {
 
       $attempts++;
 
-      $contractId = null;
+      $contractId = NULL;
 
       try {
 
@@ -759,9 +751,11 @@ final class VastRestClient implements VastRestClientInterface {
 
         $this->logWithTime('Waiting for running + SSH for contract ' . $contractId);
 
-        $info = $workload === 'ssh-bootstrap'
-          ? $this->waitForRunningAndSshBootstrap($contractId, $bootTimeoutSeconds)
-          : $this->waitForRunningAndSsh($contractId, $workload, $bootTimeoutSeconds);
+        $info = $this->waitForRunningAndSsh(
+          $contractId,
+          $workload,
+          $bootTimeoutSeconds
+        );
 
         $this->recordHostSuccess($hostId);
 
@@ -771,8 +765,8 @@ final class VastRestClient implements VastRestClientInterface {
           'offer' => $offer,
         ];
 
-
-      } catch (\Throwable $e) {
+      }
+      catch (\Throwable $e) {
 
         $lastFailureMessage = $e->getMessage();
         $isInfraFatal = $this->isInfrastructureFatalFailure($lastFailureMessage);
@@ -781,13 +775,13 @@ final class VastRestClient implements VastRestClientInterface {
         }
 
         if ($hostId !== '') {
-          $shouldRecordWorkloadBadHost = false;
+          $shouldRecordWorkloadBadHost = FALSE;
           $workloadBadHostReason = '';
 
           if ($e instanceof WorkloadReadinessException) {
             $failureClass = $e->getFailureClass();
             if ($failureClass === FailureClass::WORKLOAD_INCOMPATIBLE) {
-              $shouldRecordWorkloadBadHost = true;
+              $shouldRecordWorkloadBadHost = TRUE;
               $workloadBadHostReason = 'workload_incompatible';
             }
           }
@@ -796,7 +790,7 @@ final class VastRestClient implements VastRestClientInterface {
             !$shouldRecordWorkloadBadHost &&
             $this->isAbsoluteSafetyTimeoutForWorkload($lastFailureMessage, $workload)
           ) {
-            $shouldRecordWorkloadBadHost = true;
+            $shouldRecordWorkloadBadHost = TRUE;
             $workloadBadHostReason = 'absolute_safety_timeout';
           }
 
@@ -809,7 +803,6 @@ final class VastRestClient implements VastRestClientInterface {
             );
           }
         }
-
 
         if ($isInfraFatal && $hostId !== '') {
           $this->incrementInfraFailureStats($hostId);
@@ -831,7 +824,7 @@ final class VastRestClient implements VastRestClientInterface {
         $this->logWithTime('Message: ' . $e->getMessage());
         $this->logWithTime('File: ' . $e->getFile());
         $this->logWithTime('Line: ' . $e->getLine());
-        $logProvisionTraces = (bool) \Drupal::state()->get('compute_orchestrator.log_provision_exception_traces', FALSE);
+        $logProvisionTraces = (bool) $this->state->get('compute_orchestrator.log_provision_exception_traces', FALSE);
         if ($logProvisionTraces) {
           $this->logWithTime('Trace: ' . $e->getTraceAsString());
         }
@@ -840,14 +833,16 @@ final class VastRestClient implements VastRestClientInterface {
         if (!$preserveOnFailure && !empty($contractId)) {
           try {
             $this->destroyInstance($contractId);
-          } catch (\Throwable $destroyError) {
+          }
+          catch (\Throwable $destroyError) {
             $this->logWithTime(sprintf(
               'Destroy failed: contract=%s error=%s',
               (string) $contractId,
               $destroyError->getMessage()
             ));
           }
-        } else {
+        }
+        else {
           $this->logWithTime('Preserving failed instance for investigation: contract=' . $contractId);
         }
 
@@ -874,18 +869,25 @@ final class VastRestClient implements VastRestClientInterface {
     );
   }
 
+  /**
+   * Quick SSH connectivity check for a newly provisioned instance.
+   *
+   * @return array{ok:bool, why:string}
+   *   Result payload.
+   */
   private function sshLoginCheck(string $sshHost, int $sshPort, string $sshUser): array {
 
     $keyPath = $this->resolveSshKeyPath();
     if (!$keyPath) {
       return [
-        'ok' => false,
+        'ok' => FALSE,
         'why' => 'SSH key not found at: ' . ($this->getSshKeyCandidate() ?: '(empty)'),
       ];
     }
 
     $process = new Process([
       'ssh',
+      '-F', '/dev/null',
       '-o', 'BatchMode=yes',
       '-o', 'StrictHostKeyChecking=no',
       '-o', 'UserKnownHostsFile=/dev/null',
@@ -901,22 +903,23 @@ final class VastRestClient implements VastRestClientInterface {
 
     try {
       $process->run();
-    } catch (\Throwable $e) {
+    }
+    catch (\Throwable $e) {
       return [
-        'ok' => false,
+        'ok' => FALSE,
         'why' => 'ssh probe exception: ' . $e->getMessage(),
       ];
     }
 
     if ($process->isSuccessful()) {
-      return ['ok' => true, 'why' => ''];
+      return ['ok' => TRUE, 'why' => ''];
     }
 
     $stderr = trim($process->getErrorOutput());
     $stdout = trim($process->getOutput());
 
     return [
-      'ok' => false,
+      'ok' => FALSE,
       'why' => sprintf(
         'ssh probe failed: exit=%s stderr=%s stdout=%s',
         (string) $process->getExitCode(),
@@ -926,15 +929,30 @@ final class VastRestClient implements VastRestClientInterface {
     ];
   }
 
+  /**
+   * Executes workload readiness probes through SSH.
+   *
+   * @param array<string, array{command:string, timeout:int}> $commands
+   *   Probe commands keyed by name.
+   * @param string $sshHost
+   *   SSH host.
+   * @param int $sshPort
+   *   SSH port.
+   * @param string $sshUser
+   *   SSH username.
+   *
+   * @return array<string, mixed>
+   *   Probe results keyed by name.
+   */
   private function executeWorkloadProbesViaSsh(array $commands, string $sshHost, int $sshPort, string $sshUser): array {
     $keyPath = $this->resolveSshKeyPath();
     if (!$keyPath) {
       return [
         'ssh_key' => [
-          'ok' => false,
-          'transport_ok' => false,
+          'ok' => FALSE,
+          'transport_ok' => FALSE,
           'failure_kind' => 'transport',
-          'exit_code' => null,
+          'exit_code' => NULL,
           'stdout' => '',
           'stderr' => 'SSH key not found at: ' . ($this->getSshKeyCandidate() ?: '(empty)'),
           'exception' => 'missing_ssh_key',
@@ -964,14 +982,17 @@ final class VastRestClient implements VastRestClientInterface {
     return $results;
   }
 
+  /**
+   * Formats probe results for operator logs/errors.
+   */
   private function formatProbeFailure(string $classification, array $probeResults): string {
     $parts = ['class=' . $classification];
     foreach ($probeResults as $name => $result) {
       $parts[] = sprintf(
         '%s(ok=%s transport_ok=%s kind=%s exit=%s stderr=%s exception=%s)',
         (string) $name,
-        ($result['ok'] ?? false) ? '1' : '0',
-        ($result['transport_ok'] ?? false) ? '1' : '0',
+        ($result['ok'] ?? FALSE) ? '1' : '0',
+        ($result['transport_ok'] ?? FALSE) ? '1' : '0',
         (string) ($result['failure_kind'] ?? 'unknown'),
         isset($result['exit_code']) ? (string) $result['exit_code'] : 'null',
         trim((string) ($result['stderr'] ?? '')) !== '' ? trim((string) ($result['stderr'] ?? '')) : '(empty)',
@@ -987,15 +1008,24 @@ final class VastRestClient implements VastRestClientInterface {
     return implode(' | ', $parts);
   }
 
+  /**
+   * Loads host stats used for known-good preference and infra-failure tracking.
+   */
   private function getHostStats(): array {
-    $stats = \Drupal::state()->get('compute_orchestrator.host_stats', []);
+    $stats = $this->state->get('compute_orchestrator.host_stats', []);
     return is_array($stats) ? $stats : [];
   }
 
+  /**
+   * Persists host stats.
+   */
   private function saveHostStats(array $stats): void {
-    \Drupal::state()->set('compute_orchestrator.host_stats', $stats);
+    $this->state->set('compute_orchestrator.host_stats', $stats);
   }
 
+  /**
+   * Records a successful provision event for a host.
+   */
   private function recordHostSuccess(string $hostId): void {
     if ($hostId === '') {
       return;
@@ -1014,15 +1044,24 @@ final class VastRestClient implements VastRestClientInterface {
     $this->saveHostStats($stats);
   }
 
+  /**
+   * Loads the CDI failure history map.
+   */
   private function getHostCdiFailures(): array {
-    $value = \Drupal::state()->get('compute_orchestrator.host_cdi_failures', []);
+    $value = $this->state->get('compute_orchestrator.host_cdi_failures', []);
     return is_array($value) ? $value : [];
   }
 
+  /**
+   * Persists CDI failure history.
+   */
   private function saveHostCdiFailures(array $failures): void {
-    \Drupal::state()->set('compute_orchestrator.host_cdi_failures', $failures);
+    $this->state->set('compute_orchestrator.host_cdi_failures', $failures);
   }
 
+  /**
+   * Records a CDI failure for a host/device (last 5 entries retained).
+   */
   private function recordHostCdiFailure(string $hostId, string $deviceId): void {
     if ($hostId === '' || $deviceId === '') {
       return;
@@ -1050,6 +1089,9 @@ final class VastRestClient implements VastRestClientInterface {
     ));
   }
 
+  /**
+   * Increments infra-failure counters for a host.
+   */
   private function incrementInfraFailureStats(string $hostId): void {
     if ($hostId === '') {
       return;
@@ -1068,11 +1110,19 @@ final class VastRestClient implements VastRestClientInterface {
     $this->saveHostStats($stats);
   }
 
+  /**
+   * Loads the global "bad host" blacklist (all workloads).
+   *
+   * Values are timestamps/reasons depending on origin.
+   */
   private function getGlobalBlacklist(): array {
-    $value = \Drupal::state()->get('compute_orchestrator.global_bad_hosts', []);
+    $value = $this->state->get('compute_orchestrator.global_bad_hosts', []);
     return is_array($value) ? $value : [];
   }
 
+  /**
+   * Adds a host to the global blacklist with the current timestamp.
+   */
   private function addToGlobalBlacklist(string $hostId): void {
     if ($hostId === '') {
       return;
@@ -1080,9 +1130,12 @@ final class VastRestClient implements VastRestClientInterface {
 
     $bad = $this->getGlobalBlacklist();
     $bad[$hostId] = time();
-    \Drupal::state()->set('compute_orchestrator.global_bad_hosts', $bad);
+    $this->state->set('compute_orchestrator.global_bad_hosts', $bad);
   }
 
+  /**
+   * Heuristic check for infra-fatal failures from an exception/log message.
+   */
   private function isInfrastructureFatalFailure(string $message): bool {
     $lower = strtolower($message);
     foreach ([
@@ -1095,14 +1148,20 @@ final class VastRestClient implements VastRestClientInterface {
       'unsupported display driver / cuda driver combination',
       'cannot find -lcuda',
     ] as $marker) {
-    if (str_contains($lower, $marker)) {
-      return true;
-    }
+      if (str_contains($lower, $marker)) {
+        return TRUE;
+      }
     }
 
-    return false;
+    return FALSE;
   }
 
+  /**
+   * Extracts CDI device IDs from a failure message.
+   *
+   * @return string[]
+   *   Device identifiers.
+   */
   private function extractCdiDeviceIds(string $message): array {
     if ($message === '') {
       return [];
@@ -1120,8 +1179,15 @@ final class VastRestClient implements VastRestClientInterface {
   }
 
   /**
+   * Normalizes a list/map of host IDs into unique canonical strings.
+   *
+   * Supports lists (values) or associative maps keyed by host ID.
+   *
    * @param mixed $rawHostIds
+   *   Raw host IDs list/map.
+   *
    * @return string[]
+   *   Unique host ID strings.
    */
   private function normalizeHostIds(mixed $rawHostIds): array {
     if (!is_array($rawHostIds)) {
@@ -1139,7 +1205,8 @@ final class VastRestClient implements VastRestClientInterface {
         }
       }
 
-      // Support associative maps keyed by host ID (e.g. host => timestamp/reason).
+      // Support associative maps keyed by host ID
+      // (e.g. host => timestamp/reason).
       if (is_scalar($key)) {
         $normalizedKey = $this->normalizeHostId($key);
         if ($normalizedKey !== '') {
@@ -1152,6 +1219,9 @@ final class VastRestClient implements VastRestClientInterface {
     return array_values(array_unique($normalized));
   }
 
+  /**
+   * Normalizes a single host ID value to a canonical string.
+   */
   private function normalizeHostId(mixed $rawHostId): string {
     if (!is_scalar($rawHostId)) {
       return '';
@@ -1162,7 +1232,8 @@ final class VastRestClient implements VastRestClientInterface {
       return '';
     }
 
-    // Normalize numeric host IDs so integer and float-like string encodings match.
+    // Normalize numeric host IDs so integer and float-like string encodings
+    // match.
     if (preg_match('/^[0-9]+(?:\\.0+)?$/', $hostId) === 1) {
       $hostId = (string) ((int) (float) $hostId);
     }
@@ -1170,11 +1241,14 @@ final class VastRestClient implements VastRestClientInterface {
     return $hostId;
   }
 
+  /**
+   * Prefer known-good hosts when at least one candidate has prior success.
+   */
   private function preferKnownGoodOffersWhenAvailable(array $offers, array $hostStats): array {
     $knownGoodOffers = [];
 
     foreach ($offers as $offer) {
-      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? NULL);
       $hostSuccessCount = (int) ($hostStats[$hostId]['success'] ?? 0);
 
       if ($hostSuccessCount > 0) {
@@ -1196,6 +1270,9 @@ final class VastRestClient implements VastRestClientInterface {
     return $offers;
   }
 
+  /**
+   * Logs which excluded hosts were present in the current offer selection set.
+   */
   private function logMatchedBadHostsForOfferSelection(string $workload, array $matchedGlobalBadHosts, array $matchedWorkloadBadHosts): void {
     if (!empty($matchedGlobalBadHosts)) {
       $this->logWithTime(
@@ -1225,11 +1302,17 @@ final class VastRestClient implements VastRestClientInterface {
     }
   }
 
+  /**
+   * Extracts unique host IDs from a Vast offers list.
+   *
+   * @return string[]
+   *   Host IDs.
+   */
   private function extractOfferHostIds(array $offers): array {
     $hostIds = [];
 
     foreach ($offers as $offer) {
-      $hostId = $this->normalizeHostId($offer['host_id'] ?? null);
+      $hostId = $this->normalizeHostId($offer['host_id'] ?? NULL);
       if ($hostId === '') {
         continue;
       }
@@ -1240,6 +1323,12 @@ final class VastRestClient implements VastRestClientInterface {
     return array_values(array_unique($hostIds));
   }
 
+  /**
+   * Returns host IDs present in both lists (normalized).
+   *
+   * @return string[]
+   *   Matched host IDs.
+   */
   private function findMatchedHostIds(array $offerHostIds, array $blockedHostIds): array {
     if (empty($offerHostIds) || empty($blockedHostIds)) {
       return [];
@@ -1252,21 +1341,24 @@ final class VastRestClient implements VastRestClientInterface {
     return array_values(array_unique($matched));
   }
 
+  /**
+   * Adds a host to the per-workload blacklist (idempotent).
+   */
   private function addHostToWorkloadBlacklist(string $hostId, string $workload, ?string $contractId, string $reason): void {
     $key = 'compute_orchestrator.workload_bad_hosts';
-    $all = \Drupal::state()->get($key, []);
+    $all = $this->state->get($key, []);
 
     if (!isset($all[$workload]) || !is_array($all[$workload])) {
       $all[$workload] = [];
     }
 
     $normalizedWorkloadHosts = $this->normalizeHostIds($all[$workload]);
-    if (in_array($hostId, $normalizedWorkloadHosts, true)) {
+    if (in_array($hostId, $normalizedWorkloadHosts, TRUE)) {
       return;
     }
 
     $all[$workload][] = $hostId;
-    \Drupal::state()->set($key, $all);
+    $this->state->set($key, $all);
 
     $this->logWithTime(sprintf(
       'Recorded WORKLOAD bad host: instance=%s host=%s workload=%s reason=%s',
@@ -1277,33 +1369,42 @@ final class VastRestClient implements VastRestClientInterface {
     ));
   }
 
+  /**
+   * Detects whether an exception message was caused by the safety timeout.
+   */
   private function isAbsoluteSafetyTimeoutForWorkload(string $message, string $workload): bool {
     if ($message === '') {
-      return false;
+      return FALSE;
     }
 
     $lower = strtolower($message);
     $prefix = 'instance exceeded absolute safety timeout for workload ';
     if (!str_contains($lower, $prefix)) {
-      return false;
+      return FALSE;
     }
 
     if ($workload === '') {
-      return true;
+      return TRUE;
     }
 
     return str_contains($lower, strtolower($workload));
   }
 
+  /**
+   * Resolves SSH key path from environment or default location.
+   */
   private function resolveSshKeyPath(): ?string {
     $candidate = $this->getSshKeyCandidate();
     if ($candidate === '') {
-      return null;
+      return NULL;
     }
 
-    return file_exists($candidate) ? $candidate : null;
+    return file_exists($candidate) ? $candidate : NULL;
   }
 
+  /**
+   * Returns the candidate SSH private key path (may not exist).
+   */
   private function getSshKeyCandidate(): string {
     $keyPath = getenv('VAST_SSH_KEY_PATH') ?: '';
     if ($keyPath !== '') {
@@ -1318,6 +1419,9 @@ final class VastRestClient implements VastRestClientInterface {
     return rtrim($home, '/') . '/.ssh/id_rsa_vastai';
   }
 
+  /**
+   * Logs messages with a timestamp (stderr).
+   */
   private function logWithTime(string $message): void {
     error_log('[' . date('Y-m-d H:i:s') . '] ' . $message);
   }

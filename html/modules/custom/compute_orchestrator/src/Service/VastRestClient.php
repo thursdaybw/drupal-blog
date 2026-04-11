@@ -239,9 +239,10 @@ final class VastRestClient implements VastRestClientInterface {
 
     $start = time();
     $adapter = $this->workloadAdapterManager->createInstance($workload);
-    // Caller timeout is the hard cap; adapter startup timeout remains guidance
-    // for workload-specific warmup classification.
-    $absoluteSafetyTimeout = max(60, $timeoutSeconds);
+    // Caller timeout is the hard cap for this polling slice. We keep this
+    // low enough for Drupal batch resume cycles to avoid HTTP 504 timeouts.
+    $absoluteSafetyTimeout = max(10, $timeoutSeconds);
+    $pollIntervalSeconds = 5;
     $stallThresholdSeconds = 600;
     $sshLossThresholdSeconds = 300;
     $sshNeverReadyThresholdSeconds = 180;
@@ -253,7 +254,7 @@ final class VastRestClient implements VastRestClientInterface {
     $sshFailureReason = NULL;
     $previousProbeResults = [];
     $lastLogCheckAt = $start;
-    $logCheckInterval = 60;
+    $logCheckInterval = 30;
 
     $lastCurState = NULL;
     $lastActualStatus = NULL;
@@ -380,7 +381,7 @@ final class VastRestClient implements VastRestClientInterface {
           if ($sshWasReachable && $sshLossSeconds >= $sshLossThresholdSeconds) {
             throw new \RuntimeException('Connectivity loss: SSH probe unavailable for ' . $sshLossSeconds . ' seconds.');
           }
-          sleep(30);
+          sleep($pollIntervalSeconds);
           continue;
         }
         $sshLostSince = NULL;
@@ -442,7 +443,7 @@ final class VastRestClient implements VastRestClientInterface {
           $lastProbeWhy = $why;
         }
 
-        sleep(30);
+        sleep($pollIntervalSeconds);
         continue;
       }
 
@@ -457,7 +458,7 @@ final class VastRestClient implements VastRestClientInterface {
         );
       }
 
-      sleep(30);
+      sleep($pollIntervalSeconds);
     }
   }
 

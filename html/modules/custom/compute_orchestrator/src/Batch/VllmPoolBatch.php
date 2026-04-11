@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Batch;
 
+use Drupal\compute_orchestrator\Exception\AcquirePendingException;
+
 /**
  * Batch callbacks for vLLM pool actions.
  *
@@ -39,7 +41,7 @@ final class VllmPoolBatch {
       $context['finished'] = 1;
       return;
     }
-    catch (\Drupal\compute_orchestrator\Exception\AcquirePendingException $exception) {
+    catch (AcquirePendingException $exception) {
       $context['sandbox']['attempts']++;
       $context['message'] = t('Still warming runtime (attempt @attempt): @message', [
         '@attempt' => (string) $context['sandbox']['attempts'],

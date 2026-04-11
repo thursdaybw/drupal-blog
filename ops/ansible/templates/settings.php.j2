@@ -61,6 +61,13 @@ if ($ebaySandboxRuName !== '') {
   $config['ebay_connector.settings']['sandbox']['ru_name'] = $ebaySandboxRuName;
 }
 
+// Environment-driven compute_orchestrator secret override.
+// Keep this out of committed config and set per environment.
+$vastApiKey = (string) (getenv('VAST_API_KEY') ?: '');
+if ($vastApiKey !== '') {
+  $config['compute_orchestrator.settings']['vast_api_key'] = $vastApiKey;
+}
+
 if (getenv('IS_DDEV_PROJECT') == 'true' && file_exists(__DIR__ . '/settings.ddev.php')) {
   include __DIR__ . '/settings.ddev.php';
 }

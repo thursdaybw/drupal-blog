@@ -25,23 +25,35 @@ final class VllmPoolBatch {
    */
   public static function batchAcquireOperation(string $workload, array &$context): void {
     $context['results']['workload'] = $workload;
-    $context['message'] = t('Phase 1/4: checking pooled instances for @workload...', ['@workload' => $workload]);
+    $context['sandbox']['attempts'] = (int) ($context['sandbox']['attempts'] ?? 0);
+    $context['message'] = t('Checking pooled instances for @workload...', ['@workload' => $workload]);
 
     try {
       /** @var \Drupal\compute_orchestrator\Service\VllmPoolManager $pool */
       $pool = \Drupal::service('compute_orchestrator.vllm_pool_manager');
-      $record = $pool->acquire($workload);
+      $record = $pool->acquire($workload, NULL, TRUE, 25, 25);
       $context['results']['record'] = $record;
-      $context['message'] = t('Phase 4/4: workload ready on contract @id.', [
+      $context['message'] = t('Workload ready on contract @id.', [
         '@id' => (string) ($record['contract_id'] ?? ''),
       ]);
+      $context['finished'] = 1;
+      return;
+    }
+    catch (\Drupal\compute_orchestrator\Exception\AcquirePendingException $exception) {
+      $context['sandbox']['attempts']++;
+      $context['message'] = t('Still warming runtime (attempt @attempt): @message', [
+        '@attempt' => (string) $context['sandbox']['attempts'],
+        '@message' => $exception->getMessage(),
+      ]);
+      $context['finished'] = min(0.95, 0.02 * $context['sandbox']['attempts']);
+      return;
     }
     catch (\Throwable $exception) {
       $context['results']['error'] = $exception->getMessage();
       $context['message'] = t('Acquire failed while starting @workload runtime.', ['@workload' => $workload]);
+      $context['finished'] = 1;
+      return;
     }
-
-    $context['finished'] = 1;
   }
 
   /**

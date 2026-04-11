@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+/**
+ * Value object describing an SSH connection target and credentials.
+ */
 final class SshConnectionContext {
 
   public function __construct(
@@ -14,4 +17,3 @@ final class SshConnectionContext {
   ) {}
 
 }
-

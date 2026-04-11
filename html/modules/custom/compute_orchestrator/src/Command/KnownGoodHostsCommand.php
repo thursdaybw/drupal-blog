@@ -11,6 +11,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Drush command for inspecting compute orchestrator known-good hosts.
+ */
 #[AsCommand(
   name: 'compute:known-good-hosts',
   description: 'List known-good hosts recorded by compute orchestrator.',
@@ -23,15 +26,21 @@ final class KnownGoodHostsCommand extends Command {
     parent::__construct();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   protected function configure(): void {
     $this->addOption(
       'json',
-      null,
+      NULL,
       InputOption::VALUE_NONE,
       'Output known-good host data as JSON.'
     );
   }
 
+  /**
+   * {@inheritdoc}
+   */
   protected function execute(InputInterface $input, OutputInterface $output): int {
     $knownGoodHosts = $this->buildKnownGoodHosts();
 
@@ -43,7 +52,7 @@ final class KnownGoodHostsCommand extends Command {
       ];
       $json = json_encode($payload, JSON_PRETTY_PRINT);
 
-      if ($json === false) {
+      if ($json === FALSE) {
         $output->writeln('<error>Failed to encode known-good hosts as JSON.</error>');
         return self::FAILURE;
       }
@@ -75,6 +84,9 @@ final class KnownGoodHostsCommand extends Command {
     return self::SUCCESS;
   }
 
+  /**
+   * Builds an ordered list of known-good host stats (operator display).
+   */
   private function buildKnownGoodHosts(): array {
     $stats = $this->state->get('compute_orchestrator.host_stats', []);
     if (!is_array($stats)) {
@@ -121,6 +133,9 @@ final class KnownGoodHostsCommand extends Command {
     return $knownGoodHosts;
   }
 
+  /**
+   * Normalizes a host ID from state (string-ish values) to a canonical string.
+   */
   private function normalizeHostId(mixed $rawHostId): string {
     if (!is_scalar($rawHostId)) {
       return '';

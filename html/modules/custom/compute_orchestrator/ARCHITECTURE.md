@@ -26,7 +26,8 @@ The module orchestrates Vast.ai infrastructure through a REST workflow that mirr
      * `WorkloadReadinessException` indicates fatal boot failures from adapter classification and contains the `FailureClass` to inform blacklist logic.
 
 4. **Persistence and configuration**
-   - Environment variables: `VAST_API_KEY` (required), `VAST_SSH_KEY_PATH` (recommended for SSH probes); defaults to `~/.ssh/id_rsa_vastai`.
+   - Vast API credentials: services read `compute_orchestrator.settings:vast_api_key` from Drupal config. Runtime-specific secret loading belongs in `settings.php` by conditionally overriding from `VAST_API_KEY` only when it is present.
+   - SSH key: `VAST_SSH_KEY_PATH` is recommended for SSH probes and defaults to `~/.ssh/id_rsa_vastai`.
    - Strictness policy: stored in `compute_orchestrator.strictness`, controls reliability thresholds, port filters, and whether to prioritize hosts with recorded success.
    - Diagnostics/logging: readiness failures include SSH probe outputs (`curl`, `ps`, `nvidia-smi`, `/tmp/vllm.log`) along with timestamped messages to track warm-up delays versus fatal errors.
 
@@ -492,12 +493,9 @@ Design implications:
 For early-stage development:
 
 - vLLM is exposed publicly via `-p 8000:8000`
-- Host and port are stored in Drupal state:
-  - `compute.vllm_host`
-  - `compute.vllm_port`
-  - `compute.vllm_url`
-
-Controllers read from `compute.vllm_url` as single source of truth.
+- Runtime endpoint/model are sourced from the active pool lease record:
+  - `compute_orchestrator.vllm_pool.active_contract_id`
+  - `compute_orchestrator.vllm_pool.instances[<contract_id>]`
 
 Security Warning:
 This configuration is not production-safe.

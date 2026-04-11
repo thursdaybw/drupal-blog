@@ -21,7 +21,7 @@ final class FailureClass {
    * Examples:
    * - SSH key injection failure
    * - OCI runtime create failed
-   * - GPU not available at container level
+   * - GPU not available at container level.
    *
    * Reaction:
    * - Global blacklist (all workloads)
@@ -34,7 +34,7 @@ final class FailureClass {
    * Examples:
    * - Invalid model name
    * - Bad CLI arguments
-   * - Missing required env variables
+   * - Missing required env variables.
    *
    * Reaction:
    * - Do NOT blacklist host
@@ -47,7 +47,7 @@ final class FailureClass {
    *
    * Examples:
    * - Triton JIT fails due to driver/runtime mismatch
-   * - CUDA library link errors for this model stack
+   * - CUDA library link errors for this model stack.
    *
    * Host may work for other workloads.
    *
@@ -62,7 +62,7 @@ final class FailureClass {
    *
    * Examples:
    * - Model loading
-   * - CUDA graph capture
+   * - CUDA graph capture.
    *
    * Reaction:
    * - Continue polling within timeout window
@@ -73,7 +73,7 @@ final class FailureClass {
    * Unable to classify.
    *
    * Reaction:
-   * - Continue polling unless timeout exceeded
+   * - Continue polling unless timeout exceeded.
    */
   public const UNKNOWN = 'unknown';
 

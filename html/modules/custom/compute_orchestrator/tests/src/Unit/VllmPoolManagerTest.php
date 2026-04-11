@@ -1,0 +1,762 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Drupal\Tests\compute_orchestrator\Unit;
+
+use Drupal\compute_orchestrator\Service\GenericVllmRuntimeManagerInterface;
+use Drupal\compute_orchestrator\Service\VastInstanceLifecycleClientInterface;
+use Drupal\compute_orchestrator\Service\VastRestClientInterface;
+use Drupal\compute_orchestrator\Service\VllmPoolManager;
+use Drupal\compute_orchestrator\Service\VllmPoolRepositoryInterface;
+use Drupal\compute_orchestrator\Service\VllmWorkloadCatalogInterface;
+use Drupal\Core\State\StateInterface;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Tests the pooled acquire decision tree for generic vLLM instances.
+ */
+final class VllmPoolManagerTest extends TestCase {
+
+  public function testRegisterInstanceStoresArbitraryLeasedContractForPoolTesting(): void {
+    $repository = new InMemoryVllmPoolRepository([]);
+
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('34414828')
+      ->willReturn([
+        'id' => '34414828',
+        'cur_state' => 'stopped',
+        'actual_status' => 'stopped',
+        'public_ipaddr' => '194.14.47.19',
+        'ports' => [
+          '8000/tcp' => [
+            ['HostPort' => '22097'],
+          ],
+        ],
+      ]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $record = $manager->registerInstance(
+      '34414828',
+      'thursdaybw/vllm-generic:2026-04-generic-node',
+      '',
+      '',
+      'manual',
+    );
+
+    $this->assertSame('34414828', $record['contract_id']);
+    $this->assertSame('available', $record['lease_status']);
+    $this->assertSame('194.14.47.19', $record['host']);
+    $this->assertSame('22097', $record['port']);
+    $this->assertSame('http://194.14.47.19:22097', $record['url']);
+  }
+
+  public function testAcquireReusesRunningMatchingInstanceBeforeFreshProvision(): void {
+    $repository = new InMemoryVllmPoolRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'qwen-vl',
+        'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'lease_status' => 'available',
+        'host' => '',
+        'port' => '',
+        'url' => '',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => '',
+      ],
+    ]);
+
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('qwen-vl', NULL)
+      ->willReturn([
+        'mode' => 'qwen-vl',
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('waitForWorkloadReady')
+      ->with('123')
+      ->willReturn([
+        'id' => '123',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+        'public_ipaddr' => '1.2.3.4',
+        'ports' => [
+          '8000/tcp' => [
+            ['HostPort' => '22097'],
+          ],
+        ],
+      ]);
+    $runtimeManager->expects($this->once())
+      ->method('persistActiveRuntime');
+    $runtimeManager->expects($this->never())
+      ->method('provisionFresh');
+    $runtimeManager->expects($this->never())
+      ->method('startWorkload');
+    $runtimeManager->expects($this->never())
+      ->method('stopWorkload');
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->never())
+      ->method('startInstance');
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('123')
+      ->willReturn([
+        'id' => '123',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+        'public_ipaddr' => '1.2.3.4',
+        'ports' => [
+          '8000/tcp' => [
+            ['HostPort' => '22097'],
+          ],
+        ],
+      ]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $record = $manager->acquire('qwen-vl');
+
+    $this->assertSame('123', $record['contract_id']);
+    $this->assertSame('leased', $record['lease_status']);
+    $this->assertSame('qwen-vl', $record['current_workload_mode']);
+    $this->assertSame('Qwen/Qwen2-VL-7B-Instruct', $record['current_model']);
+    $this->assertSame('http://1.2.3.4:22097', $record['url']);
+  }
+
+  public function testAcquireSkipsExternallyRentedSleepingInstanceAndFallsBackToFreshProvision(): void {
+    $repository = new InMemoryVllmPoolRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'whisper',
+        'current_model' => 'openai/whisper-large-v3-turbo',
+        'lease_status' => 'available',
+        'host' => '',
+        'port' => '',
+        'url' => '',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => '',
+      ],
+    ]);
+
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('qwen-vl', NULL)
+      ->willReturn([
+        'mode' => 'qwen-vl',
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+    $catalog->expects($this->once())
+      ->method('getDefaultGenericImage')
+      ->willReturn('thursdaybw/vllm-generic:2026-04-generic-node');
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('provisionFresh')
+      ->willReturn([
+        'contract_id' => '999',
+        'instance_info' => [
+          'ssh_host' => 'ssh3.vast.ai',
+          'ssh_port' => 14999,
+          'ssh_user' => 'root',
+        ],
+      ]);
+    $runtimeManager->expects($this->once())
+      ->method('startWorkload');
+    $runtimeManager->expects($this->once())
+      ->method('waitForWorkloadReady')
+      ->with('999')
+      ->willReturn([
+        'id' => '999',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+        'public_ipaddr' => '5.6.7.8',
+        'ports' => [
+          '8000/tcp' => [
+            ['HostPort' => '23001'],
+          ],
+        ],
+      ]);
+    $runtimeManager->expects($this->once())
+      ->method('persistActiveRuntime');
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->once())
+      ->method('startInstance')
+      ->with('123');
+    $lifecycleClient->expects($this->once())
+      ->method('stopInstance')
+      ->with('123');
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->exactly(4))
+      ->method('showInstance')
+      ->with('123')
+      ->willReturnOnConsecutiveCalls(
+        [
+          'id' => '123',
+          'cur_state' => 'stopped',
+          'actual_status' => 'stopped',
+        ],
+        [
+          'id' => '123',
+          'cur_state' => 'stopped',
+          'actual_status' => 'scheduling',
+        ],
+        [
+          'id' => '123',
+          'cur_state' => 'stopped',
+          'actual_status' => 'scheduling',
+        ],
+        [
+          'id' => '123',
+          'cur_state' => 'stopped',
+          'actual_status' => 'scheduling',
+        ],
+      );
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $record = $manager->acquire('qwen-vl');
+    $records = $repository->all();
+
+    $this->assertSame('999', $record['contract_id']);
+    $this->assertSame('leased', $record['lease_status']);
+    $this->assertSame('rented_elsewhere', $records['123']['lease_status']);
+    $this->assertSame('fresh_fallback', $records['999']['source']);
+  }
+
+  public function testAcquireMarksQueuedWakeAsRentedElsewhere(): void {
+    $repository = new InMemoryVllmPoolRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => '',
+        'current_model' => '',
+        'lease_status' => 'available',
+        'host' => '',
+        'port' => '',
+        'url' => '',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => '',
+      ],
+    ]);
+
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('qwen-vl', NULL)
+      ->willReturn([
+        'mode' => 'qwen-vl',
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->never())
+      ->method('waitForSshBootstrap');
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->once())
+      ->method('startInstance')
+      ->with('123')
+      ->willReturn([
+        'success' => FALSE,
+        'error' => 'resources_unavailable',
+        'msg' => 'Required resources are currently unavailable, state change queued.',
+      ]);
+    $lifecycleClient->expects($this->never())
+      ->method('stopInstance');
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('123')
+      ->willReturn([
+        'id' => '123',
+        'cur_state' => 'stopped',
+        'actual_status' => 'exited',
+      ]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $this->expectException(\RuntimeException::class);
+    $this->expectExceptionMessage('No pooled instance was available and fresh provisioning is disabled.');
+    try {
+      $manager->acquire('qwen-vl', NULL, FALSE);
+    }
+    finally {
+      $record = $repository->get('123');
+      $this->assertNotNull($record);
+      $this->assertSame('rented_elsewhere', $record['lease_status']);
+      $this->assertSame('Required resources are currently unavailable, state change queued.', $record['last_error']);
+    }
+  }
+
+  public function testAcquireSwitchesRunningInstanceToRequestedWorkload(): void {
+    $repository = new InMemoryVllmPoolRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'whisper',
+        'current_model' => 'openai/whisper-large-v3-turbo',
+        'lease_status' => 'available',
+        'host' => '',
+        'port' => '',
+        'url' => '',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => '',
+      ],
+    ]);
+
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('qwen-vl', NULL)
+      ->willReturn([
+        'mode' => 'qwen-vl',
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('stopWorkload');
+    $runtimeManager->expects($this->once())
+      ->method('startWorkload');
+    $runtimeManager->expects($this->once())
+      ->method('waitForWorkloadReady')
+      ->with('123')
+      ->willReturn([
+        'id' => '123',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+        'public_ipaddr' => '1.2.3.4',
+        'ports' => [
+          '8000/tcp' => [
+            ['HostPort' => '22097'],
+          ],
+        ],
+      ]);
+    $runtimeManager->expects($this->once())
+      ->method('persistActiveRuntime');
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->never())
+      ->method('startInstance');
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('123')
+      ->willReturn([
+        'id' => '123',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+        'public_ipaddr' => '1.2.3.4',
+        'ports' => [
+          '8000/tcp' => [
+            ['HostPort' => '22097'],
+          ],
+        ],
+      ]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $record = $manager->acquire('qwen-vl');
+
+    $this->assertSame('123', $record['contract_id']);
+    $this->assertSame('leased', $record['lease_status']);
+    $this->assertSame('qwen-vl', $record['current_workload_mode']);
+    $this->assertSame('Qwen/Qwen2-VL-7B-Instruct', $record['current_model']);
+  }
+
+  public function testAcquireWithoutFreshThrowsWhenPoolIsEmpty(): void {
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('qwen-vl', NULL)
+      ->willReturn([
+        'mode' => 'qwen-vl',
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+
+    $manager = new VllmPoolManager(
+      new InMemoryVllmPoolRepository([]),
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $this->expectException(\RuntimeException::class);
+    $this->expectExceptionMessage('No pooled instance was available and fresh provisioning is disabled.');
+    $manager->acquire('qwen-vl', NULL, FALSE);
+  }
+
+  public function testAcquireFreshFailureDestroysLeakedContract(): void {
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('qwen-vl', NULL)
+      ->willReturn([
+        'mode' => 'qwen-vl',
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+    $catalog->expects($this->once())
+      ->method('getDefaultGenericImage')
+      ->willReturn('thursdaybw/vllm-generic:2026-04-generic-node');
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('provisionFresh')
+      ->willReturn([
+        'contract_id' => '999',
+        'instance_info' => [
+          'ssh_host' => 'ssh3.vast.ai',
+          'ssh_port' => 14999,
+          'ssh_user' => 'root',
+        ],
+      ]);
+    $runtimeManager->expects($this->once())
+      ->method('startWorkload')
+      ->willThrowException(new \RuntimeException('simulated startup failure'));
+    $runtimeManager->expects($this->never())
+      ->method('waitForWorkloadReady');
+    $runtimeManager->expects($this->never())
+      ->method('persistActiveRuntime');
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('destroyInstance')
+      ->with('999')
+      ->willReturn(['success' => TRUE]);
+
+    $manager = new VllmPoolManager(
+      new InMemoryVllmPoolRepository([]),
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $this->expectException(\RuntimeException::class);
+    $this->expectExceptionMessage('failed workload startup and was destroyed');
+    $manager->acquire('qwen-vl');
+  }
+
+  public function testRemoveAndClearDeleteTrackedInventory(): void {
+    $repository = new InMemoryVllmPoolRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => '',
+        'current_model' => '',
+        'lease_status' => 'available',
+        'host' => '',
+        'port' => '',
+        'url' => '',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => '',
+      ],
+      '456' => [
+        'contract_id' => '456',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => '',
+        'current_model' => '',
+        'lease_status' => 'available',
+        'host' => '',
+        'port' => '',
+        'url' => '',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => '',
+      ],
+    ]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->createMock(VllmWorkloadCatalogInterface::class),
+      $this->createMock(GenericVllmRuntimeManagerInterface::class),
+      $this->createMock(VastInstanceLifecycleClientInterface::class),
+      $this->createMock(VastRestClientInterface::class),
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $manager->remove('123');
+    $this->assertNull($repository->get('123'));
+    $this->assertNotNull($repository->get('456'));
+
+    $manager->clear();
+    $this->assertSame([], $repository->all());
+  }
+
+  public function testReapIdleAvailableInstancesStopsRunningInstancePastThreshold(): void {
+    $repository = new InMemoryVllmPoolRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'qwen-vl',
+        'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'lease_status' => 'available',
+        'host' => '1.2.3.4',
+        'port' => '22097',
+        'url' => 'http://1.2.3.4:22097',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => time() - 601,
+        'last_error' => '',
+      ],
+      '456' => [
+        'contract_id' => '456',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'whisper',
+        'current_model' => 'openai/whisper-large-v3-turbo',
+        'lease_status' => 'leased',
+        'host' => '5.6.7.8',
+        'port' => '23001',
+        'url' => 'http://5.6.7.8:23001',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => time() - 601,
+        'last_error' => '',
+      ],
+    ]);
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->once())
+      ->method('stopInstance')
+      ->with('123')
+      ->willReturn(['success' => TRUE]);
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('123')
+      ->willReturn([
+        'id' => '123',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+      ]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->createMock(VllmWorkloadCatalogInterface::class),
+      $this->createMock(GenericVllmRuntimeManagerInterface::class),
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $results = $manager->reapIdleAvailableInstances(600);
+    $record = $repository->get('123');
+
+    $this->assertSame('stopped', $results[0]['action']);
+    $this->assertNotNull($record);
+    $this->assertSame('available', $record['lease_status']);
+    $this->assertArrayHasKey('last_stopped_at', $record);
+  }
+
+  public function testReapIdleAvailableInstancesHonoursDryRun(): void {
+    $repository = new InMemoryVllmPoolRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'qwen-vl',
+        'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'lease_status' => 'available',
+        'host' => '1.2.3.4',
+        'port' => '22097',
+        'url' => 'http://1.2.3.4:22097',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => time() - 601,
+        'last_error' => '',
+      ],
+    ]);
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->never())
+      ->method('stopInstance');
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('123')
+      ->willReturn([
+        'id' => '123',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+      ]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->createMock(VllmWorkloadCatalogInterface::class),
+      $this->createMock(GenericVllmRuntimeManagerInterface::class),
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $results = $manager->reapIdleAvailableInstances(600, TRUE);
+    $record = $repository->get('123');
+
+    $this->assertSame('would_stop', $results[0]['action']);
+    $this->assertNotNull($record);
+    $this->assertArrayNotHasKey('last_stopped_at', $record);
+  }
+
+}
+
+/**
+ * In-memory pool repository for unit tests.
+ */
+final class InMemoryVllmPoolRepository implements VllmPoolRepositoryInterface {
+
+  /**
+   * Constructs the fake repository.
+   *
+   * @param array<string, array<string,mixed>> $records
+   *   Initial in-memory records keyed by contract ID.
+   */
+  public function __construct(
+    private array $records,
+  ) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public function all(): array {
+    return $this->records;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function get(string $contractId): ?array {
+    $record = $this->records[$contractId] ?? NULL;
+    return is_array($record) ? $record : NULL;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function save(array $record): void {
+    $this->records[(string) $record['contract_id']] = $record;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function delete(string $contractId): void {
+    unset($this->records[$contractId]);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function clear(): void {
+    $this->records = [];
+  }
+
+}

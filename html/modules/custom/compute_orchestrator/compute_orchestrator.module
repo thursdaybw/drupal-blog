@@ -1,0 +1,27 @@
+<?php
+
+/**
+ * @file
+ * Compute orchestrator module.
+ */
+
+declare(strict_types=1);
+
+/**
+ * Implements hook_cron().
+ */
+function compute_orchestrator_cron(): void {
+  $state = \Drupal::state();
+  $enabled = (bool) $state->get('compute_orchestrator.vllm_pool.idle_reap_enabled', TRUE);
+  if (!$enabled) {
+    return;
+  }
+
+  if (trim((string) \Drupal::config('compute_orchestrator.settings')->get('vast_api_key')) === '') {
+    return;
+  }
+
+  /** @var \Drupal\compute_orchestrator\Service\VllmPoolManager $pool */
+  $pool = \Drupal::service('compute_orchestrator.vllm_pool_manager');
+  $pool->reapIdleAvailableInstances();
+}

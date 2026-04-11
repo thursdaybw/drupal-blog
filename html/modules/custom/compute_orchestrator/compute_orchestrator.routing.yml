@@ -1,0 +1,15 @@
+compute_orchestrator.vllm_pool_admin:
+  path: '/admin/compute-orchestrator/vllm-pool'
+  defaults:
+    _form: '\Drupal\compute_orchestrator\Form\VllmPoolAdminForm'
+    _title: 'vLLM pool'
+  requirements:
+    _permission: 'administer compute orchestrator'
+
+compute_orchestrator.settings:
+  path: '/admin/config/system/compute-orchestrator'
+  defaults:
+    _form: '\Drupal\compute_orchestrator\Form\ComputeOrchestratorSettingsForm'
+    _title: 'Compute Orchestrator settings'
+  requirements:
+    _permission: 'administer compute orchestrator'

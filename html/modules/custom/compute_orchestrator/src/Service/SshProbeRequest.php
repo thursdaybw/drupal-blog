@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+/**
+ * Value object describing a single SSH probe (name, command, timeout).
+ */
 final class SshProbeRequest {
 
   public function __construct(
@@ -13,4 +16,3 @@ final class SshProbeRequest {
   ) {}
 
 }
-

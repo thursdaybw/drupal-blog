@@ -8,6 +8,9 @@ use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Plugin\DefaultPluginManager;
 
+/**
+ * Plugin manager for workload readiness adapters.
+ */
 final class WorkloadReadinessAdapterManager extends DefaultPluginManager {
 
   public function __construct(\Traversable $namespaces, CacheBackendInterface $cache_backend, ModuleHandlerInterface $module_handler) {

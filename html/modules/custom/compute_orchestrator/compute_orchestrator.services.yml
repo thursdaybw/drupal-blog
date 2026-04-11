@@ -1,4 +1,9 @@
 services:
+  compute_orchestrator.vast_credential_provider:
+    class: Drupal\compute_orchestrator\Service\VastCredentialProvider
+    arguments:
+      - '@config.factory'
+
   plugin.manager.compute_orchestrator.workload_readiness_adapter:
     class: Drupal\compute_orchestrator\Plugin\WorkloadReadinessAdapterManager
     arguments:
@@ -19,6 +24,8 @@ services:
       - '@plugin.manager.compute_orchestrator.workload_readiness_adapter'
       - '@compute_orchestrator.ssh_probe_executor'
       - '@logger.factory'
+      - '@compute_orchestrator.vast_credential_provider'
+      - '@state'
 
   compute_orchestrator.bad_host_registry:
     class: Drupal\compute_orchestrator\Service\BadHostRegistry
@@ -30,3 +37,37 @@ services:
     arguments:
       - '@http_client'
       - '@file_system'
+      - '@compute_orchestrator.vllm_pool_repository'
+      - '@state'
+
+  compute_orchestrator.vllm_workload_catalog:
+    class: Drupal\compute_orchestrator\Service\VllmWorkloadCatalog
+
+  compute_orchestrator.vast_instance_lifecycle_client:
+    class: Drupal\compute_orchestrator\Service\VastInstanceLifecycleClient
+    arguments:
+      - '@http_client'
+      - '@logger.factory'
+      - '@compute_orchestrator.vast_credential_provider'
+
+  compute_orchestrator.generic_vllm_runtime_manager:
+    class: Drupal\compute_orchestrator\Service\GenericVllmRuntimeManager
+    arguments:
+      - '@compute_orchestrator.vast_rest_client'
+      - '@compute_orchestrator.ssh_probe_executor'
+      - '@logger.factory'
+
+  compute_orchestrator.vllm_pool_repository:
+    class: Drupal\compute_orchestrator\Service\VllmPoolRepository
+    arguments:
+      - '@state'
+
+  compute_orchestrator.vllm_pool_manager:
+    class: Drupal\compute_orchestrator\Service\VllmPoolManager
+    arguments:
+      - '@compute_orchestrator.vllm_pool_repository'
+      - '@compute_orchestrator.vllm_workload_catalog'
+      - '@compute_orchestrator.generic_vllm_runtime_manager'
+      - '@compute_orchestrator.vast_instance_lifecycle_client'
+      - '@compute_orchestrator.vast_rest_client'
+      - '@state'

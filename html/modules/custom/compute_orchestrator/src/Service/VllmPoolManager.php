@@ -115,7 +115,48 @@ final class VllmPoolManager {
       throw new \RuntimeException('No pooled instance was available and fresh provisioning is disabled.');
     }
 
+    $activeContract = $this->findActivePoolRuntimeContractId();
+    if ($activeContract !== NULL) {
+      throw new \RuntimeException(
+        'Refusing fresh provisioning: pooled contract '
+        . $activeContract
+        . ' is already running or bootstrapping. Refresh pool status, then reuse/release/reap that instance.'
+      );
+    }
+
     return $this->acquireFreshInstance($definition);
+  }
+
+  /**
+   * Finds an active pooled contract that should block fresh spin-up.
+   *
+   * @return string|null
+   *   Contract ID when any pooled runtime is active, NULL otherwise.
+   */
+  private function findActivePoolRuntimeContractId(): ?string {
+    foreach ($this->poolRepository->all() as $contractId => $record) {
+      if (!is_array($record)) {
+        continue;
+      }
+
+      $leaseStatus = (string) ($record['lease_status'] ?? '');
+      if ($leaseStatus === 'bootstrapping') {
+        return (string) $contractId;
+      }
+
+      try {
+        $info = $this->vastClient->showInstance((string) $contractId);
+        if ($this->isRunningState($info)) {
+          return (string) $contractId;
+        }
+      }
+      catch (\Throwable) {
+        // Ignore probe failures here; candidate probing is handled during
+        // the main acquisition loop.
+      }
+    }
+
+    return NULL;
   }
 
   /**
@@ -462,6 +503,7 @@ final class VllmPoolManager {
     if ($contractId === '') {
       return NULL;
     }
+    $wakeAttempted = FALSE;
 
     try {
       $info = $this->vastClient->showInstance($contractId);
@@ -485,6 +527,7 @@ final class VllmPoolManager {
     }
 
     try {
+      $wakeAttempted = TRUE;
       $startResponse = $this->instanceLifecycleClient->startInstance($contractId);
       if ($this->isQueuedExternalLeaseResponse($startResponse)) {
         $record['lease_status'] = 'rented_elsewhere';
@@ -509,10 +552,29 @@ final class VllmPoolManager {
       return $this->markLeased($record, $readyInfo, $definition);
     }
     catch (\Throwable $exception) {
+      if ($wakeAttempted) {
+        try {
+          $this->instanceLifecycleClient->stopInstance($contractId);
+          $record['last_stopped_at'] = time();
+        }
+        catch (\Throwable) {
+          // Preserve original startup failure below.
+        }
+      }
       $record['lease_status'] = $this->isExternalLeaseFailure($exception->getMessage()) ? 'rented_elsewhere' : 'unavailable';
       $record['last_error'] = $exception->getMessage();
       $record['last_seen_at'] = time();
       $this->poolRepository->save($record);
+      if ($wakeAttempted) {
+        throw new \RuntimeException(
+          'Wake/start failed for pooled instance '
+          . $contractId
+          . '; aborting acquire to avoid duplicate provisioning: '
+          . $exception->getMessage(),
+          0,
+          $exception
+        );
+      }
       return NULL;
     }
   }

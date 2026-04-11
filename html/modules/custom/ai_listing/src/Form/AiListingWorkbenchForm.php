@@ -296,6 +296,12 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       '#value' => $this->t('Delete selected'),
       '#submit' => ['::submitDeleteSelected'],
     ];
+    $form['actions']['run_ai_inference_ready'] = [
+      '#type' => 'submit',
+      '#name' => 'run_ai_inference_ready',
+      '#value' => $this->t('Run AI inference (ready)'),
+      '#submit' => ['::submitRunAiInferenceReady'],
+    ];
 
     $form['#attached']['library'][] = 'ai_listing/location_table';
 
@@ -311,7 +317,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   public function validateForm(array &$form, FormStateInterface $form_state): void {
-    if ($this->isApplyFiltersAction($form_state) || $this->isFilterDropdownAjaxAction($form_state)) {
+    if ($this->isApplyFiltersAction($form_state)
+      || $this->isFilterDropdownAjaxAction($form_state)
+      || $this->isRunAiInferenceReadyAction($form_state)) {
       return;
     }
 
@@ -347,6 +355,20 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
 
     batch_set(self::buildDeleteBatchDefinition($selection));
+  }
+
+  /**
+   * Starts a batch run for listings currently ready for inference.
+   */
+  public function submitRunAiInferenceReady(array &$form, FormStateInterface $form_state): void {
+    $preflightError = $this->validateInferenceRuntimePreflight();
+    if ($preflightError !== NULL) {
+      $this->messenger()->addError($preflightError);
+      $form_state->setRebuild();
+      return;
+    }
+
+    batch_set(self::buildInferenceBatchDefinition());
   }
 
   private function queueListingBatch(FormStateInterface $form_state, bool $setLocation, string $location, string $operationMode, int $locationTermId = 0): void {
@@ -630,6 +652,105 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
   }
 
+  /**
+   * Builds a batch definition for ready-for-inference processing.
+   *
+   * @return array<string,mixed>
+   *   Batch definition suitable for Drupal batch_set().
+   */
+  public static function buildInferenceBatchDefinition(): array {
+    $translation = \Drupal::translation();
+    return [
+      'title' => $translation->translate('Running AI inference'),
+      'operations' => [
+        [
+          [self::class, 'processInferenceBatchOperation'],
+          [],
+        ],
+      ],
+      'finished' => [self::class, 'finishInferenceBatchOperation'],
+      'init_message' => $translation->translate('Starting AI inference batch...'),
+      'progress_message' => $translation->translate('Processed @current of @total operations.'),
+      'error_message' => $translation->translate('AI inference batch finished with an unexpected error.'),
+    ];
+  }
+
+  /**
+   * Batch operation: acquire lease, process all ready listings, release lease.
+   */
+  public static function processInferenceBatchOperation(array &$context): void {
+    if (!isset($context['results']['processed'])) {
+      $context['results']['processed'] = 0;
+    }
+    if (!isset($context['results']['failed'])) {
+      $context['results']['failed'] = 0;
+    }
+    if (!isset($context['results']['errors'])) {
+      $context['results']['errors'] = [];
+    }
+
+    if (!\Drupal::hasService('ai_listing_inference.ready_inference_runner')) {
+      throw new \RuntimeException('ai_listing_inference.ready_inference_runner service is unavailable.');
+    }
+
+    /** @var \Drupal\ai_listing_inference\Service\ReadyInferenceRunService $runner */
+    $runner = \Drupal::service('ai_listing_inference.ready_inference_runner');
+    $result = $runner->runReadyListings(function (string $message) use (&$context): void {
+      $context['message'] = $message;
+    });
+
+    $context['results']['processed'] = (int) ($result['processed'] ?? 0);
+    $context['results']['failed'] = (int) ($result['failed'] ?? 0);
+    $context['results']['errors'] = (array) ($result['errors'] ?? []);
+    $context['results']['lease_contract_id'] = (string) ($result['lease_contract_id'] ?? '');
+    $context['results']['lease_released'] = (bool) ($result['lease_released'] ?? FALSE);
+  }
+
+  /**
+   * Batch finish callback for AI inference processing.
+   */
+  public static function finishInferenceBatchOperation(bool $success, array $results, array $operations): void {
+    $messenger = \Drupal::messenger();
+    $translation = \Drupal::translation();
+
+    if (!empty($results['lease_contract_id']) && empty($results['lease_released'])) {
+      $messenger->addWarning((string) $translation->translate(
+        'Inference lease @contract may still be held; please check pool state.',
+        ['@contract' => (string) $results['lease_contract_id']]
+      ));
+    }
+
+    if (!$success) {
+      $messenger->addError((string) $translation->translate('The AI inference batch did not complete successfully.'));
+    }
+
+    $processedCount = (int) ($results['processed'] ?? 0);
+    $failedCount = (int) ($results['failed'] ?? 0);
+    if ($processedCount > 0) {
+      $messenger->addStatus($translation->formatPlural(
+        $processedCount,
+        'Processed inference for one listing.',
+        'Processed inference for @count listings.'
+      ));
+    }
+    if ($failedCount > 0) {
+      $messenger->addError($translation->formatPlural(
+        $failedCount,
+        'One listing failed inference.',
+        '@count listings failed inference.'
+      ));
+    }
+    if (!empty($results['errors'])) {
+      $messenger->addWarning((string) $translation->translate(
+        'For infrastructure-level details, review /admin/compute-orchestrator/vllm-pool.'
+      ));
+    }
+
+    foreach (($results['errors'] ?? []) as $error) {
+      $messenger->addError($error);
+    }
+  }
+
   private static function listingHasInventoryAndMarketplaceData(int $listingId): bool {
     $entityTypeManager = \Drupal::entityTypeManager();
 
@@ -661,6 +782,15 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return $triggerName === 'update_location';
   }
 
+  /**
+   * Determines whether the current submit is the run-inference action.
+   */
+  private function isRunAiInferenceReadyAction(FormStateInterface $form_state): bool {
+    $trigger = $form_state->getTriggeringElement();
+    $triggerName = $trigger['#name'] ?? '';
+    return $triggerName === 'run_ai_inference_ready';
+  }
+
   private function isApplyFiltersAction(FormStateInterface $form_state): bool {
     $trigger = $form_state->getTriggeringElement();
     $triggerName = $trigger['#name'] ?? '';
@@ -684,6 +814,20 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
 
     return (string) $parents[0] === 'filters';
+  }
+
+  /**
+   * Validates runtime prerequisites before launching inference batch.
+   */
+  private function validateInferenceRuntimePreflight(): ?string {
+    $sshKeyPath = trim((string) (getenv('VAST_SSH_KEY_PATH') ?: ''));
+    if ($sshKeyPath === '' || !is_readable($sshKeyPath)) {
+      return (string) $this->t(
+        'Vast SSH key is not readable in app runtime. Set VAST_SSH_KEY_PATH to a readable private key inside the container.'
+      );
+    }
+
+    return NULL;
   }
 
   private function resolveFilterValue(FormStateInterface $form_state, string $key, string $default): string {

@@ -929,3 +929,10 @@ $ebaySandboxRuName = (string) (getenv('EBAY_CONNECTOR_SANDBOX_RU_NAME') ?: '');
 if ($ebaySandboxRuName !== '') {
   $config['ebay_connector.settings']['sandbox']['ru_name'] = $ebaySandboxRuName;
 }
+
+// Environment-driven compute_orchestrator secret override.
+// Keep this out of committed config and set per environment.
+$vastApiKey = (string) (getenv('VAST_API_KEY') ?: '');
+if ($vastApiKey !== '') {
+  $config['compute_orchestrator.settings']['vast_api_key'] = $vastApiKey;
+}

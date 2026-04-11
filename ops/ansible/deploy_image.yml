@@ -56,6 +56,8 @@
         compose_src: "{{ playbook_dir }}/../compose/shared/docker-compose.yml"
         compose_path: /home/bevan/workspace/bb-platform-prod/docker-compose.yml
         local_env_src: "{{ playbook_dir }}/../compose/prod/.env"
+        local_vast_ssh_key_src: "{{ playbook_dir }}/../compose/prod/secrets/id_rsa_vastai"
+        vast_ssh_key_host_path: "/home/bevan/workspace/bb-platform-prod/secrets/id_rsa_vastai"
         env_path: /home/bevan/workspace/bb-platform-prod/.env
         env_example: ops/compose/prod/.env.example
         domain: www.bevansbench.com
@@ -139,6 +141,7 @@
         - "{{ deploy_target.workspace }}/html"
         - "{{ deploy_target.workspace }}/html/sites"
         - "{{ deploy_target.workspace }}/html/sites/default"
+        - "{{ deploy_target.workspace }}/secrets"
 
     - name: Render Drupal settings.php into environment workspace
       ansible.builtin.template:
@@ -195,6 +198,34 @@
         dest: "{{ deploy_target.env_path }}"
         mode: "0600"
 
+    - name: Check local Vast SSH key exists on control machine for production
+      ansible.builtin.stat:
+        path: "{{ deploy_target.local_vast_ssh_key_src }}"
+      register: local_vast_ssh_key_stat
+      delegate_to: localhost
+      run_once: true
+      when: deploy_env_effective == 'prod'
+
+    - name: Fail when local Vast SSH key is missing for production
+      ansible.builtin.assert:
+        that:
+          - local_vast_ssh_key_stat.stat.exists
+        fail_msg: |
+          Missing local production Vast SSH key file.
+
+          Expected:
+          {{ deploy_target.local_vast_ssh_key_src }}
+
+          Copy your key to that path before deploy activation.
+      when: deploy_env_effective == 'prod'
+
+    - name: Copy local Vast SSH key to remote workspace for production
+      ansible.builtin.copy:
+        src: "{{ deploy_target.local_vast_ssh_key_src }}"
+        dest: "{{ deploy_target.vast_ssh_key_host_path }}"
+        mode: "0600"
+      when: deploy_env_effective == 'prod'
+
     - name: Ensure environment .env exists on remote host
       ansible.builtin.stat:
         path: "{{ deploy_target.env_path }}"
@@ -250,6 +281,15 @@
         create: true
         mode: "0600"
 
+    - name: Set VAST_SSH_KEY_HOST_PATH in environment .env for production
+      ansible.builtin.lineinfile:
+        path: "{{ deploy_target.env_path }}"
+        regexp: '^VAST_SSH_KEY_HOST_PATH='
+        line: "VAST_SSH_KEY_HOST_PATH=./secrets/id_rsa_vastai"
+        create: true
+        mode: "0600"
+      when: deploy_env_effective == 'prod'
+
     - name: Read environment .env content
       ansible.builtin.slurp:
         path: "{{ deploy_target.env_path }}"
@@ -293,6 +333,24 @@
           - EBAY_CONNECTOR_PRODUCTION_CLIENT_ID
           - EBAY_CONNECTOR_PRODUCTION_CLIENT_SECRET
           - EBAY_CONNECTOR_PRODUCTION_RU_NAME
+
+          File:
+          {{ deploy_target.env_path }}
+      when: deploy_env_effective == 'prod'
+
+    - name: Assert required Vast runtime variables exist for production deploy
+      ansible.builtin.assert:
+        that:
+          - "(env_content.content | b64decode) is regex('(?m)^VAST_API_KEY=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^VAST_SSH_KEY_HOST_PATH=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^VAST_SSH_KEY_PATH=.+$')"
+        fail_msg: |
+          {{ deploy_target.name | upper }} .env is present but missing required Vast runtime values.
+
+          Required non-empty keys:
+          - VAST_API_KEY
+          - VAST_SSH_KEY_HOST_PATH
+          - VAST_SSH_KEY_PATH
 
           File:
           {{ deploy_target.env_path }}

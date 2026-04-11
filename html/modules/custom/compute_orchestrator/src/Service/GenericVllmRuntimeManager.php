@@ -307,7 +307,7 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
    * Resolves the SSH private key used for Vast instance control.
    */
   private function resolveSshKeyPath(): string {
-    $candidate = getenv('VAST_SSH_KEY_PATH') ?: '';
+    $candidate = getenv('VAST_SSH_PRIVATE_KEY_CONTAINER_PATH') ?: '';
     if ($candidate === '') {
       $home = getenv('HOME') ?: '';
       if ($home !== '') {
@@ -316,7 +316,7 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
     }
 
     if ($candidate === '' || !file_exists($candidate)) {
-      throw new \RuntimeException('VAST_SSH_KEY_PATH is not set to a readable private key.');
+      throw new \RuntimeException('VAST_SSH_PRIVATE_KEY_CONTAINER_PATH is not set to a readable private key.');
     }
 
     return $candidate;

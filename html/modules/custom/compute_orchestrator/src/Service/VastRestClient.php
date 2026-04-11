@@ -1406,7 +1406,7 @@ final class VastRestClient implements VastRestClientInterface {
    * Returns the candidate SSH private key path (may not exist).
    */
   private function getSshKeyCandidate(): string {
-    $keyPath = getenv('VAST_SSH_KEY_PATH') ?: '';
+    $keyPath = getenv('VAST_SSH_PRIVATE_KEY_CONTAINER_PATH') ?: '';
     if ($keyPath !== '') {
       return $keyPath;
     }

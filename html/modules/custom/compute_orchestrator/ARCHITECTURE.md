@@ -27,7 +27,7 @@ The module orchestrates Vast.ai infrastructure through a REST workflow that mirr
 
 4. **Persistence and configuration**
    - Vast API credentials: services read `compute_orchestrator.settings:vast_api_key` from Drupal config. Runtime-specific secret loading belongs in `settings.php` by conditionally overriding from `VAST_API_KEY` only when it is present.
-   - SSH key: `VAST_SSH_KEY_PATH` is recommended for SSH probes and defaults to `~/.ssh/id_rsa_vastai`.
+   - SSH key: `VAST_SSH_PRIVATE_KEY_CONTAINER_PATH` is recommended for SSH probes and defaults to `~/.ssh/id_rsa_vastai`.
    - Strictness policy: stored in `compute_orchestrator.strictness`, controls reliability thresholds, port filters, and whether to prioritize hosts with recorded success.
    - Diagnostics/logging: readiness failures include SSH probe outputs (`curl`, `ps`, `nvidia-smi`, `/tmp/vllm.log`) along with timestamped messages to track warm-up delays versus fatal errors.
 

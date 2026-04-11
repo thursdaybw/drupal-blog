@@ -10,13 +10,13 @@
   }
   ```
 - `VAST_API_KEY` must still be present in the runtime environment if `settings.php` uses that override.
-- `VAST_SSH_KEY_PATH` should point to the private key registered with Vast (default `~/.ssh/id_rsa_vastai`). Export it inside `ddev ssh` or configure `.ddev/.env` so the key is available to both the REST probes and your manual SSH attempts.
+- `VAST_SSH_PRIVATE_KEY_CONTAINER_PATH` should point to the private key registered with Vast (default `~/.ssh/id_rsa_vastai`). Export it inside `ddev ssh` or configure `.ddev/.env` so the key is available to both the REST probes and your manual SSH attempts.
 
 ## Running the validation command
 ```
 ddev drush cr
 # inside ddev ssh or direct drush run if env vars are set:
-export VAST_SSH_KEY_PATH=/home/bevan/.ssh/id_rsa_vastai
+export VAST_SSH_PRIVATE_KEY_CONTAINER_PATH=/home/bevan/.ssh/id_rsa_vastai
 drush compute:test-vast
 drush compute:test-vast --workload=qwen-vl
 drush compute:test-vast --workload=qwen-vl --image=thursdaybw/vllm-qwen-stable:dev

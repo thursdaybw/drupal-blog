@@ -15,7 +15,7 @@ services:
       - ./html/sites/default/files:/var/www/html/sites/default/files
       # Mount Vast SSH private key as a read-only source file. The entrypoint
       # copies it into /home/http/.ssh with runtime-safe ownership/permissions.
-      - ${VAST_SSH_KEY_HOST_PATH:-./secrets/id_rsa_vastai}:/run/secrets/id_rsa_vastai:ro
+      - ${VAST_SSH_PRIVATE_KEY_HOST_PATH}:/run/secrets/id_rsa_vastai:ro
       # Stage content-sync payloads once on the host and expose them directly
       # to Drupal for import, avoiding a second copied container-local payload.
       - ./content/sync:/var/www/content/sync

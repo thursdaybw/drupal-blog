@@ -170,7 +170,7 @@ final class VllmPoolAdminForm extends FormBase {
       '#submit' => ['::submitAcquireQwen'],
       '#disabled' => !$hasReadableSshKey || !$hasApiKey,
       '#description' => !$hasReadableSshKey
-        ? $this->t('Set VAST_SSH_KEY_PATH to a readable private key to enable acquire (SSH is used to start the model server).')
+        ? $this->t('Set VAST_SSH_PRIVATE_KEY_CONTAINER_PATH to a readable private key to enable acquire (SSH is used to start the model server).')
         : '',
     ];
 
@@ -561,7 +561,7 @@ final class VllmPoolAdminForm extends FormBase {
     $sshKeyPath = $this->resolveSshKeyPath();
     $rows[] = ['Vast API key configured', $this->resolveHasVastApiKey() ? 'yes' : 'no'];
     $rows[] = ['Vast API key source', 'Drupal config (settings.php may override config from VAST_API_KEY)'];
-    $rows[] = ['VAST_SSH_KEY_PATH', $sshKeyPath !== '' ? $sshKeyPath : '(unset)'];
+    $rows[] = ['VAST_SSH_PRIVATE_KEY_CONTAINER_PATH', $sshKeyPath !== '' ? $sshKeyPath : '(unset)'];
     $rows[] = ['SSH key readable', ($sshKeyPath !== '' && is_readable($sshKeyPath)) ? 'yes' : 'no'];
 
     $rows[] = ['Post-lease grace period seconds', (string) $this->poolManager->getIdleShutdownSeconds()];
@@ -585,7 +585,7 @@ final class VllmPoolAdminForm extends FormBase {
    * Resolves SSH key path from environment.
    */
   private function resolveSshKeyPath(): string {
-    $sshKeyPath = (string) ($_ENV['VAST_SSH_KEY_PATH'] ?? getenv('VAST_SSH_KEY_PATH') ?: '');
+    $sshKeyPath = (string) ($_ENV['VAST_SSH_PRIVATE_KEY_CONTAINER_PATH'] ?? getenv('VAST_SSH_PRIVATE_KEY_CONTAINER_PATH') ?: '');
     return trim($sshKeyPath);
   }
 

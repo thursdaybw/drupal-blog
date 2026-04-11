@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Drupal\compute_orchestrator\Service;
 
 use Drupal\Core\State\StateInterface;
+use Drupal\compute_orchestrator\Exception\AcquirePendingException;
+use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
+use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 
 /**
  * Provides pooled acquire/release semantics for generic vLLM instances.
@@ -93,7 +96,15 @@ final class VllmPoolManager {
    * @return array<string,mixed>
    *   Acquired pool record.
    */
-  public function acquire(string $workload, ?string $modelOverride = NULL, bool $allowFresh = TRUE): array {
+  public function acquire(
+    string $workload,
+    ?string $modelOverride = NULL,
+    bool $allowFresh = TRUE,
+    ?int $bootstrapTimeoutSeconds = NULL,
+    ?int $workloadTimeoutSeconds = NULL,
+  ): array {
+    $bootstrapTimeout = max(10, $bootstrapTimeoutSeconds ?? 600);
+    $workloadTimeout = max(10, $workloadTimeoutSeconds ?? $this->getWorkloadReadyTimeoutSeconds());
     $definition = $this->workloadCatalog->getDefinition($workload, $modelOverride);
 
     foreach ($this->sortCandidates($this->poolRepository->all(), $definition) as $record) {
@@ -105,7 +116,7 @@ final class VllmPoolManager {
         $record = $recovered;
       }
 
-      $updated = $this->tryAcquireExistingInstance($record, $definition);
+      $updated = $this->tryAcquireExistingInstance($record, $definition, $bootstrapTimeout, $workloadTimeout);
       if ($updated !== NULL) {
         return $updated;
       }
@@ -124,7 +135,7 @@ final class VllmPoolManager {
       );
     }
 
-    return $this->acquireFreshInstance($definition);
+    return $this->acquireFreshInstance($definition, $bootstrapTimeout, $workloadTimeout);
   }
 
   /**
@@ -498,7 +509,12 @@ final class VllmPoolManager {
    * @return array<string,mixed>|null
    *   Updated record or NULL when the candidate should be skipped.
    */
-  private function tryAcquireExistingInstance(array $record, array $definition): ?array {
+  private function tryAcquireExistingInstance(
+    array $record,
+    array $definition,
+    int $bootstrapTimeoutSeconds,
+    int $workloadTimeoutSeconds,
+  ): ?array {
     $contractId = trim((string) ($record['contract_id'] ?? ''));
     if ($contractId === '') {
       return NULL;
@@ -522,7 +538,7 @@ final class VllmPoolManager {
         $this->runtimeManager->startWorkload($info, $definition);
       }
 
-      $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $this->getWorkloadReadyTimeoutSeconds());
+      $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $workloadTimeoutSeconds);
       return $this->markLeased($record, $readyInfo, $definition);
     }
 
@@ -546,12 +562,23 @@ final class VllmPoolManager {
         return NULL;
       }
 
-      $bootInfo = $this->runtimeManager->waitForSshBootstrap($contractId, 600);
+      $bootInfo = $this->runtimeManager->waitForSshBootstrap($contractId, $bootstrapTimeoutSeconds);
       $this->runtimeManager->startWorkload($bootInfo, $definition);
-      $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $this->getWorkloadReadyTimeoutSeconds());
+      $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $workloadTimeoutSeconds);
       return $this->markLeased($record, $readyInfo, $definition);
     }
     catch (\Throwable $exception) {
+      if ($this->isPendingStartupFailure($exception)) {
+        $record['lease_status'] = 'bootstrapping';
+        $record['last_error'] = $exception->getMessage();
+        $record['last_seen_at'] = time();
+        $this->poolRepository->save($record);
+        throw new AcquirePendingException(
+          'Pooled instance ' . $contractId . ' is still bootstrapping.',
+          0,
+          $exception
+        );
+      }
       if ($wakeAttempted) {
         try {
           $this->instanceLifecycleClient->stopInstance($contractId);
@@ -588,7 +615,7 @@ final class VllmPoolManager {
    * @return array<string,mixed>
    *   Fresh leased pool record.
    */
-  private function acquireFreshInstance(array $definition): array {
+  private function acquireFreshInstance(array $definition, int $bootstrapTimeoutSeconds, int $workloadTimeoutSeconds): array {
     $image = $this->workloadCatalog->getDefaultGenericImage();
     $fresh = $this->runtimeManager->provisionFresh($definition, $image);
     $contractId = (string) ($fresh['contract_id'] ?? '');
@@ -614,11 +641,24 @@ final class VllmPoolManager {
     $this->poolRepository->save($record);
 
     try {
-      $this->runtimeManager->startWorkload($instanceInfo, $definition);
-      $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $this->getWorkloadReadyTimeoutSeconds());
+      $bootInfo = $this->runtimeManager->waitForSshBootstrap($contractId, $bootstrapTimeoutSeconds);
+      $this->runtimeManager->startWorkload($bootInfo, $definition);
+      $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $workloadTimeoutSeconds);
       return $this->markLeased($record, $readyInfo, $definition);
     }
     catch (\Throwable $exception) {
+      if ($this->isPendingStartupFailure($exception)) {
+        $record['lease_status'] = 'bootstrapping';
+        $record['last_error'] = $exception->getMessage();
+        $record['last_seen_at'] = time();
+        $this->poolRepository->save($record);
+        throw new AcquirePendingException(
+          'Fresh contract ' . $contractId . ' is still bootstrapping.',
+          0,
+          $exception
+        );
+      }
+
       $record['lease_status'] = 'unavailable';
       $record['last_error'] = $exception->getMessage();
       $record['last_seen_at'] = time();
@@ -641,6 +681,40 @@ final class VllmPoolManager {
         $exception
       );
     }
+  }
+
+  /**
+   * Detects "still warming/bootstrapping" failures that should be retried.
+   */
+  private function isPendingStartupFailure(\Throwable $exception): bool {
+    if ($exception instanceof AcquirePendingException) {
+      return TRUE;
+    }
+
+    if ($exception instanceof WorkloadReadinessException) {
+      $failureClass = $exception->getFailureClass();
+      if ($failureClass === FailureClass::WARMUP || $failureClass === FailureClass::UNKNOWN) {
+        return TRUE;
+      }
+    }
+
+    $message = strtolower($exception->getMessage());
+    foreach ([
+      'bootstrap timeout',
+      'stalled before ssh bootstrap',
+      'connection refused',
+      'failed to connect',
+      'workload not ready',
+      'warmup',
+      'timed out',
+      'operation timed out',
+    ] as $needle) {
+      if (str_contains($message, $needle)) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
   }
 
   /**

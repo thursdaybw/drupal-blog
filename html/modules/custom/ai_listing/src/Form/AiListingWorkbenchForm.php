@@ -676,34 +676,135 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
-   * Batch operation: acquire lease, process all ready listings, release lease.
+   * Batch operation: acquire lease, process listings incrementally, release.
    */
   public static function processInferenceBatchOperation(array &$context): void {
-    if (!isset($context['results']['processed'])) {
-      $context['results']['processed'] = 0;
-    }
-    if (!isset($context['results']['failed'])) {
-      $context['results']['failed'] = 0;
-    }
-    if (!isset($context['results']['errors'])) {
-      $context['results']['errors'] = [];
+    $context['results']['processed'] = (int) ($context['results']['processed'] ?? 0);
+    $context['results']['failed'] = (int) ($context['results']['failed'] ?? 0);
+    $context['results']['errors'] = (array) ($context['results']['errors'] ?? []);
+    $context['results']['lease_contract_id'] = (string) ($context['results']['lease_contract_id'] ?? '');
+    $context['results']['lease_released'] = (bool) ($context['results']['lease_released'] ?? FALSE);
+
+    $sandbox = &$context['sandbox'];
+    $sandbox['phase'] = (string) ($sandbox['phase'] ?? 'acquire');
+    $sandbox['acquire_attempts'] = (int) ($sandbox['acquire_attempts'] ?? 0);
+    $sandbox['index'] = (int) ($sandbox['index'] ?? 0);
+    $sandbox['renew_counter'] = (int) ($sandbox['renew_counter'] ?? 0);
+
+    if (!isset($sandbox['listing_ids'])) {
+      /** @var \Drupal\ai_listing_inference\Service\AiBookListingBatchDataExtractionProcessor $batchProcessor */
+      $batchProcessor = \Drupal::service('ai_listing_inference.batch_data_extraction_processor');
+      $ids = $batchProcessor->getReadyForInferenceListingIds();
+      $sandbox['listing_ids'] = array_values(array_map('intval', $ids));
+      $context['results']['total'] = count($sandbox['listing_ids']);
     }
 
-    if (!\Drupal::hasService('ai_listing_inference.ready_inference_runner')) {
-      throw new \RuntimeException('ai_listing_inference.ready_inference_runner service is unavailable.');
+    /** @var int[] $listingIds */
+    $listingIds = $sandbox['listing_ids'];
+    $total = count($listingIds);
+    if ($total === 0) {
+      $context['message'] = (string) t('No listings are currently ready for inference.');
+      $context['finished'] = 1;
+      return;
     }
 
-    /** @var \Drupal\ai_listing_inference\Service\ReadyInferenceRunService $runner */
-    $runner = \Drupal::service('ai_listing_inference.ready_inference_runner');
-    $result = $runner->runReadyListings(function (string $message) use (&$context): void {
-      $context['message'] = $message;
-    });
+    /** @var \Drupal\compute_orchestrator\Service\VllmPoolManager $poolManager */
+    $poolManager = \Drupal::service('compute_orchestrator.vllm_pool_manager');
+    /** @var \Drupal\ai_listing_inference\Service\AiBookListingBatchDataExtractionProcessor $batchProcessor */
+    $batchProcessor = \Drupal::service('ai_listing_inference.batch_data_extraction_processor');
 
-    $context['results']['processed'] = (int) ($result['processed'] ?? 0);
-    $context['results']['failed'] = (int) ($result['failed'] ?? 0);
-    $context['results']['errors'] = (array) ($result['errors'] ?? []);
-    $context['results']['lease_contract_id'] = (string) ($result['lease_contract_id'] ?? '');
-    $context['results']['lease_released'] = (bool) ($result['lease_released'] ?? FALSE);
+    if ($sandbox['phase'] === 'acquire') {
+      try {
+        $record = $poolManager->acquire('qwen-vl', NULL, TRUE, 25, 25);
+        $contractId = trim((string) ($record['contract_id'] ?? ''));
+        if ($contractId === '') {
+          throw new \RuntimeException('Pool acquire did not return a contract ID.');
+        }
+        $sandbox['lease_contract_id'] = $contractId;
+        $context['results']['lease_contract_id'] = $contractId;
+        $sandbox['phase'] = 'process';
+      }
+      catch (\Drupal\compute_orchestrator\Exception\AcquirePendingException $exception) {
+        $sandbox['acquire_attempts']++;
+        $context['message'] = (string) t(
+          'Waiting for pooled runtime warmup (attempt @attempt): @message',
+          [
+            '@attempt' => (string) $sandbox['acquire_attempts'],
+            '@message' => $exception->getMessage(),
+          ]
+        );
+        $context['finished'] = min(0.30, 0.02 * $sandbox['acquire_attempts']);
+        return;
+      }
+      catch (\Throwable $exception) {
+        $context['results']['failed'] = $total;
+        $context['results']['errors'][] = 'Could not acquire qwen-vl lease from pool: ' . $exception->getMessage();
+        $context['results']['errors'][] = 'Check /admin/compute-orchestrator/vllm-pool for last error details.';
+        $context['finished'] = 1;
+        return;
+      }
+    }
+
+    if ($sandbox['phase'] === 'process') {
+      $index = (int) $sandbox['index'];
+      if ($index >= $total) {
+        $sandbox['phase'] = 'release';
+      }
+      else {
+        $listingId = (int) $listingIds[$index];
+        $context['message'] = (string) t('Running inference for listing @current of @total...', [
+          '@current' => (string) ($index + 1),
+          '@total' => (string) $total,
+        ]);
+
+        $listing = $batchProcessor->loadListing($listingId);
+        if ($listing === NULL) {
+          $context['results']['failed']++;
+          $context['results']['errors'][] = 'Listing ' . $listingId . ' was not found.';
+        }
+        else {
+          try {
+            $batchProcessor->processListing($listing);
+            $context['results']['processed']++;
+          }
+          catch (\Throwable $exception) {
+            $context['results']['failed']++;
+            $context['results']['errors'][] = 'Listing ' . $listingId . ' inference failed: ' . $exception->getMessage();
+          }
+        }
+
+        $sandbox['index'] = $index + 1;
+        $sandbox['renew_counter'] = (int) $sandbox['renew_counter'] + 1;
+        if ($sandbox['renew_counter'] >= 5 && !empty($sandbox['lease_contract_id'])) {
+          try {
+            $poolManager->renewLease((string) $sandbox['lease_contract_id']);
+          }
+          catch (\Throwable $exception) {
+            $context['results']['errors'][] = 'Failed to renew lease ' . (string) $sandbox['lease_contract_id'] . ': ' . $exception->getMessage();
+          }
+          $sandbox['renew_counter'] = 0;
+        }
+
+        $context['finished'] = 0.30 + (0.60 * ((float) $sandbox['index'] / max(1, $total)));
+        return;
+      }
+    }
+
+    if ($sandbox['phase'] === 'release') {
+      $contractId = trim((string) ($sandbox['lease_contract_id'] ?? ''));
+      if ($contractId !== '') {
+        try {
+          $poolManager->release($contractId);
+          $context['results']['lease_released'] = TRUE;
+        }
+        catch (\Throwable $exception) {
+          $context['results']['errors'][] = 'Failed to release lease ' . $contractId . ': ' . $exception->getMessage();
+        }
+      }
+
+      $context['message'] = (string) t('Inference batch completed.');
+      $context['finished'] = 1;
+    }
   }
 
   /**

@@ -63,7 +63,11 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
     );
 
     $contractId = (string) ($create['new_contract'] ?? '');
-    $instanceInfo = $this->waitForSshBootstrap($contractId, 600);
+    if ($contractId === '') {
+      throw new \RuntimeException('Vast did not return a contract ID for fresh provisioning.');
+    }
+
+    $instanceInfo = $this->vastClient->showInstance($contractId);
 
     return [
       'contract_id' => $contractId,

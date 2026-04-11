@@ -1,0 +1,3 @@
+administer compute orchestrator:
+  title: 'Administer compute orchestrator'
+  description: 'View and run compute orchestrator pool and provisioning controls.'

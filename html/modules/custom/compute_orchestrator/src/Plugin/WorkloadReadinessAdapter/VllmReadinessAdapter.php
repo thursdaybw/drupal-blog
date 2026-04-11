@@ -7,6 +7,8 @@ namespace Drupal\compute_orchestrator\Plugin\WorkloadReadinessAdapter;
 use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 
 /**
+ * Readiness adapter for vLLM-based model servers.
+ *
  * @WorkloadReadinessAdapter(
  *   id = "vllm",
  *   label = @Translation("vLLM Readiness Adapter"),
@@ -15,6 +17,9 @@ use Drupal\compute_orchestrator\Service\Workload\FailureClass;
  */
 final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
 
+  /**
+   * {@inheritdoc}
+   */
   public function getReadinessProbeCommands(): array {
     return [
       'executor_echo' => [
@@ -44,23 +49,29 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
     ];
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function isReadyFromProbeResults(array $results): bool {
     return (bool) (
-      (($results['models_8000']['ok'] ?? false) === true) ||
-      (($results['models_8080']['ok'] ?? false) === true)
+      (($results['models_8000']['ok'] ?? FALSE) === TRUE) ||
+      (($results['models_8080']['ok'] ?? FALSE) === TRUE)
     );
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function classifyFailure(array $probeResults): string {
-    if (($probeResults['executor_echo']['ok'] ?? false) !== true) {
+    if (($probeResults['executor_echo']['ok'] ?? FALSE) !== TRUE) {
       return FailureClass::UNKNOWN;
     }
 
     $logs = strtolower((string) ($probeResults['logs']['stdout'] ?? ''));
     $processes = strtolower((string) ($probeResults['processes']['stdout'] ?? ''));
 
-    $models8000 = (bool) ($probeResults['models_8000']['ok'] ?? false);
-    $models8080 = (bool) ($probeResults['models_8080']['ok'] ?? false);
+    $models8000 = (bool) ($probeResults['models_8000']['ok'] ?? FALSE);
+    $models8080 = (bool) ($probeResults['models_8080']['ok'] ?? FALSE);
 
     $anyApiUp = $models8000 || $models8080;
     $hasProcess = trim($processes) !== '';
@@ -73,13 +84,13 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
       'failed to create task for container',
       'error response from daemon',
     ] as $marker) {
-    if (str_contains($logs, $marker)) {
-      return FailureClass::INFRA_FATAL;
-    }
+      if (str_contains($logs, $marker)) {
+        return FailureClass::INFRA_FATAL;
+      }
     }
 
     $driver_runtime_imcompatibility_indicators = [
-      // Driver/runtime incompatibility indicators
+      // Driver/runtime incompatibility indicators.
       'cannot find -lcuda',
       'engine core initialization failed',
       'runtimeerror: engine core initialization failed',
@@ -116,25 +127,28 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
     return FailureClass::UNKNOWN;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function detectForwardProgress(array $previousProbeResults, array $currentProbeResults): bool {
     if (empty($previousProbeResults)) {
-      return true;
+      return TRUE;
     }
 
-    $wasReady = (bool) (($previousProbeResults['models_8000']['ok'] ?? false) || ($previousProbeResults['models_8080']['ok'] ?? false));
-    $isReady = (bool) (($currentProbeResults['models_8000']['ok'] ?? false) || ($currentProbeResults['models_8080']['ok'] ?? false));
+    $wasReady = (bool) (($previousProbeResults['models_8000']['ok'] ?? FALSE) || ($previousProbeResults['models_8080']['ok'] ?? FALSE));
+    $isReady = (bool) (($currentProbeResults['models_8000']['ok'] ?? FALSE) || ($currentProbeResults['models_8080']['ok'] ?? FALSE));
     if (!$wasReady && $isReady) {
-      return true;
+      return TRUE;
     }
 
     $prevLogs = (string) ($previousProbeResults['logs']['stdout'] ?? '');
     $currLogs = (string) ($currentProbeResults['logs']['stdout'] ?? '');
 
     if (strlen($currLogs) > strlen($prevLogs)) {
-      return true;
+      return TRUE;
     }
 
-    return false;
+    return FALSE;
   }
 
 }

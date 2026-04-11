@@ -2,6 +2,6 @@ services:
   ai_listing_inference.process_command:
     class: Drupal\ai_listing_inference\Command\AiListingProcessCommand
     arguments:
-      - '@ai_listing_inference.batch_data_extraction_processor'
+      - '@ai_listing_inference.ready_inference_runner'
     tags:
       - { name: drush.command }

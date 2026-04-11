@@ -1,0 +1,7 @@
+compute_orchestrator.settings:
+  type: config_object
+  label: 'Compute Orchestrator settings'
+  mapping:
+    vast_api_key:
+      type: string
+      label: 'Vast API key'

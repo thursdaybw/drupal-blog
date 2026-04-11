@@ -12,6 +12,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
+/**
+ * Drush command for inspecting and managing the bad-host registries.
+ */
 #[AsCommand(
   name: 'compute:bad-hosts',
   description: 'List persisted bad hosts used by compute orchestrator.',
@@ -25,27 +28,33 @@ final class BadHostsCommand extends Command {
     parent::__construct();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   protected function configure(): void {
     $this->addOption(
       'clear',
-      null,
+      NULL,
       InputOption::VALUE_NONE,
       'Clear the persisted bad-host registry.'
     );
     $this->addOption(
       'export-path',
-      null,
+      NULL,
       InputOption::VALUE_REQUIRED,
       'Write the global/workload bad-host data plus CDI history as JSON.'
     );
     $this->addOption(
       'import-path',
-      null,
+      NULL,
       InputOption::VALUE_REQUIRED,
       'Read previously exported bad-host data (global/workload/CDI) and restore state.'
     );
   }
 
+  /**
+   * {@inheritdoc}
+   */
   protected function execute(InputInterface $input, OutputInterface $output): int {
     if ((bool) $input->getOption('clear')) {
       $count = count($this->badHostRegistry->all());
@@ -97,16 +106,19 @@ final class BadHostsCommand extends Command {
 
     $exportPath = (string) $input->getOption('export-path');
     if ($exportPath !== '') {
-      $data = $this->gatherBadHostData($globalHosts, $workloadHosts ?? [], $cdiFailures);
+      $data = $this->gatherBadHostData($globalHosts, $workloadHosts, $cdiFailures);
       $this->exportBadHosts($exportPath, $data, $output);
     }
 
     return self::SUCCESS;
   }
 
+  /**
+   * Writes the current bad-host payload to disk as JSON.
+   */
   private function exportBadHosts(string $path, array $data, OutputInterface $output): void {
     $json = json_encode($data, JSON_PRETTY_PRINT);
-    if ($json === false) {
+    if ($json === FALSE) {
       $output->writeln('<error>Failed to encode bad host data as JSON.</error>');
       return;
     }
@@ -120,6 +132,9 @@ final class BadHostsCommand extends Command {
     }
   }
 
+  /**
+   * Builds the export payload for global/workload registries and CDI failures.
+   */
   private function gatherBadHostData(array $globalHosts, array $workloadHosts, array $cdiFailures): array {
     return [
       'generated_at' => date('c'),
@@ -129,6 +144,9 @@ final class BadHostsCommand extends Command {
     ];
   }
 
+  /**
+   * Imports an exported bad-host payload and updates state/registries.
+   */
   private function importBadHostData(string $path, OutputInterface $output): void {
     if (!file_exists($path)) {
       $output->writeln('<error>Import path does not exist: ' . $path . '</error>');
@@ -136,12 +154,12 @@ final class BadHostsCommand extends Command {
     }
 
     $content = @file_get_contents($path);
-    if ($content === false) {
+    if ($content === FALSE) {
       $output->writeln('<error>Unable to read import path: ' . $path . '</error>');
       return;
     }
 
-    $payload = json_decode($content, true);
+    $payload = json_decode($content, TRUE);
     if (!is_array($payload)) {
       $output->writeln('<error>Invalid JSON in import file: ' . $path . '</error>');
       return;
@@ -170,6 +188,9 @@ final class BadHostsCommand extends Command {
     $output->writeln('Imported bad host data from ' . $path . ' (global ' . count($global) . ', workloads ' . count($workloads) . ').');
   }
 
+  /**
+   * Renders CDI failure records for a host (operator visibility).
+   */
   private function renderCdiFailures(OutputInterface $output, string $hostId, array $failures): void {
     if (empty($failures)) {
       return;

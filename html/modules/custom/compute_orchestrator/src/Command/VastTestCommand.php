@@ -11,6 +11,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
 
+/**
+ * Drush command for manually validating Vast offer selection and provisioning.
+ */
 #[AsCommand(
   name: 'compute:test-vast',
   description: 'Test Vast REST search',
@@ -21,24 +24,29 @@ final class VastTestCommand extends Command {
   private const DEFAULT_QWEN_VL_IMAGE = 'thursdaybw/vllm-qwen-stable:dev';
   private const DEFAULT_TINYLLAMA_IMAGE = 'vllm/vllm-openai:v0.12.0';
 
-  private VastRestClientInterface $vastClient;
-
-  public function __construct(VastRestClientInterface $vastClient) {
+  /**
+   * Constructs the command.
+   */
+  public function __construct(
+    private readonly VastRestClientInterface $vastClient,
+  ) {
     parent::__construct();
-    $this->vastClient = $vastClient;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   protected function configure(): void {
     $this->addOption(
       'preserve',
-      null,
+      NULL,
       InputOption::VALUE_NONE,
       'Preserve failed instances for investigation.'
     );
 
     $this->addOption(
       'workload',
-      null,
+      NULL,
       InputOption::VALUE_REQUIRED,
       'Workload to run (tinyllama | qwen-vl).',
       'tinyllama'
@@ -46,17 +54,20 @@ final class VastTestCommand extends Command {
 
     $this->addOption(
       'image',
-      null,
+      NULL,
       InputOption::VALUE_REQUIRED,
       'Docker image override. Defaults to the image mapped to the selected workload.'
     );
   }
 
+  /**
+   * {@inheritdoc}
+   */
   protected function execute(InputInterface $input, OutputInterface $output): int {
 
     $output->writeln('Starting compute:test-vast...');
 
-    $strictness = (string) \Drupal::state()->get('compute_orchestrator.strictness', 'strict');
+    $strictness = 'strict';
     $preserve = (bool) $input->getOption('preserve');
 
     $requestedWorkload = trim((string) $input->getOption('workload'));
@@ -74,10 +85,10 @@ final class VastTestCommand extends Command {
       'reliability' => ['gte' => $policy['reliability_gte']],
       'gpu_ram' => ['gte' => $gpuRamGte],
       'num_gpus' => ['eq' => 1],
-      'rentable' => ['eq' => true],
+      'rentable' => ['eq' => TRUE],
       'verification' => ['eq' => 'verified'],
     ];
-    if ($policy['direct_port_count_gte'] !== null) {
+    if ($policy['direct_port_count_gte'] !== NULL) {
       $filters['direct_port_count'] = ['gte' => $policy['direct_port_count_gte']];
     }
 
@@ -143,17 +154,7 @@ final class VastTestCommand extends Command {
       $output->writeln('SSH Host: ' . ($info['ssh_host'] ?? ''));
       $output->writeln('SSH Port: ' . (string) ($info['ssh_port'] ?? ''));
 
-      // Store public VLM endpoint in state for controller usage.
       if ($publicHost !== '' && $publicPort !== '') {
-        \Drupal::state()->set('compute.vllm_host', $publicHost);
-        \Drupal::state()->set('compute.vllm_port', $publicPort);
-        \Drupal::state()->set('compute.vllm_contract_id', $contractId);
-        \Drupal::state()->set('compute.vllm_image', $image);
-        \Drupal::state()->set('compute.vllm_model', $model);
-
-        \Drupal::state()->set('compute.vllm_url', 'http://' . $publicHost . ':' . $publicPort);
-        \Drupal::state()->set('compute.vllm_set_at', time());
-
         $output->writeln('Public VLM Host: ' . $publicHost);
         $output->writeln('Public VLM Port: ' . $publicPort);
       }
@@ -178,35 +179,41 @@ final class VastTestCommand extends Command {
     }
   }
 
+  /**
+   * Maps strictness levels to offer selection preferences.
+   */
   private function resolveStrictnessPolicy(string $strictness): array {
     switch ($strictness) {
-    case 'aggressive':
-      return [
-        'reliability_gte' => 0.95,
-        'direct_port_count_gte' => 4,
-        'prefer_success_hosts' => false,
-        'min_price' => 0.20,
-      ];
+      case 'aggressive':
+        return [
+          'reliability_gte' => 0.95,
+          'direct_port_count_gte' => 4,
+          'prefer_success_hosts' => FALSE,
+          'min_price' => 0.20,
+        ];
 
-    case 'balanced':
-      return [
-        'reliability_gte' => 0.98,
-        'direct_port_count_gte' => 8,
-        'prefer_success_hosts' => true,
-        'min_price' => 0.20,
-      ];
+      case 'balanced':
+        return [
+          'reliability_gte' => 0.98,
+          'direct_port_count_gte' => 8,
+          'prefer_success_hosts' => TRUE,
+          'min_price' => 0.20,
+        ];
 
-    case 'strict':
-    default:
-    return [
-      'reliability_gte' => 0.995,
-      'direct_port_count_gte' => 16,
-      'prefer_success_hosts' => true,
-      'min_price' => 0.20,
-    ];
+      case 'strict':
+      default:
+        return [
+          'reliability_gte' => 0.995,
+          'direct_port_count_gte' => 16,
+          'prefer_success_hosts' => TRUE,
+          'min_price' => 0.20,
+        ];
     }
   }
 
+  /**
+   * Resolves the workload definition used for provision + model selection.
+   */
   private function resolveWorkloadDefinition(string $requestedWorkload): array {
     $workloadMap = [
       'tinyllama' => [
@@ -232,6 +239,9 @@ final class VastTestCommand extends Command {
     return $workloadMap['tinyllama'];
   }
 
+  /**
+   * Resolves the Docker image to use for the selected workload.
+   */
   private function resolveImageOverride(string $requestedImage, array $selectedWorkload): string {
     $normalizedImage = trim($requestedImage);
     if ($normalizedImage !== '') {

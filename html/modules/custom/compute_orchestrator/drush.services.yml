@@ -24,16 +24,15 @@ services:
   compute_orchestrator.vllm_instance_pool_command:
     class: Drupal\compute_orchestrator\Command\VllmInstancePoolCommand
     arguments:
-      - '@state'
-      - '@compute_orchestrator.vast_rest_client'
+      - '@compute_orchestrator.vllm_pool_manager'
     tags:
       - { name: drush.command }
 
   compute_orchestrator.vllm_generic_provision_command:
     class: Drupal\compute_orchestrator\Command\VllmGenericProvisionCommand
     arguments:
+      - '@compute_orchestrator.vllm_workload_catalog'
+      - '@compute_orchestrator.generic_vllm_runtime_manager'
       - '@compute_orchestrator.vast_rest_client'
-      - '@compute_orchestrator.ssh_probe_executor'
-      - '@state'
     tags:
       - { name: drush.command }

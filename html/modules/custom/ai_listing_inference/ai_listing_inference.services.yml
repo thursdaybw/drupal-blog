@@ -17,3 +17,9 @@ services:
     arguments:
       - '@entity_type.manager'
       - '@ai_listing_inference.data_extraction_processor'
+
+  ai_listing_inference.ready_inference_runner:
+    class: Drupal\ai_listing_inference\Service\ReadyInferenceRunService
+    arguments:
+      - '@ai_listing_inference.batch_data_extraction_processor'
+      - '@compute_orchestrator.vllm_pool_manager'

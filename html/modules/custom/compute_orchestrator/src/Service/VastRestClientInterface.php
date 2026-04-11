@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+/**
+ * Defines the Vast REST client contract used by compute orchestration.
+ */
 interface VastRestClientInterface {
 
   /**
@@ -26,11 +29,13 @@ interface VastRestClientInterface {
    *   The offer ID.
    * @param string $image
    *   Docker image to run.
+   * @param array $options
+   *   Optional Vast create options payload.
    *
    * @return array
    *   Decoded JSON response.
    */
-  public function createInstance(string $offerId, string $image): array;
+  public function createInstance(string $offerId, string $image, array $options = []): array;
 
   /**
    * Start an existing instance.
@@ -73,26 +78,33 @@ interface VastRestClientInterface {
    */
   public function searchOffersStructured(array $filters, int $limit = 20): array;
 
+  /**
+   * Selects the best offer from the current candidate pool.
+   */
   public function selectBestOffer(
     array $filters,
     array $excludeHostIds = [],
     array $excludeRegions = [],
-    int $limit = 20
+    int $limit = 20,
   ): ?array;
 
+  /**
+   * Provisions and boots a workload-specific instance from the offers API.
+   */
   public function provisionInstanceFromOffers(
     array $filters,
     array $excludeRegions = [],
     int $limit = 5,
-    ?float $maxPrice = null,
-    ?float $minPrice = null,
+    ?float $maxPrice = NULL,
+    ?float $minPrice = NULL,
     array $createOptions = [],
     int $maxAttempts = 5,
-    int $bootTimeoutSeconds = 600
+    int $bootTimeoutSeconds = 600,
   ): array;
 
+  /**
+   * Waits for a workload-aware instance to reach SSH and service readiness.
+   */
   public function waitForRunningAndSsh(string $instanceId, string $workload = 'vllm', int $timeoutSeconds = 180): array;
-
-  public function waitForRunningAndSshBootstrap(string $instanceId, int $timeoutSeconds = 180): array;
 
 }

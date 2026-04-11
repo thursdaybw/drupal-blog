@@ -281,11 +281,20 @@
         create: true
         mode: "0600"
 
-    - name: Set VAST_SSH_KEY_HOST_PATH in environment .env for production
+    - name: Set VAST_SSH_PRIVATE_KEY_HOST_PATH in environment .env for production
       ansible.builtin.lineinfile:
         path: "{{ deploy_target.env_path }}"
-        regexp: '^VAST_SSH_KEY_HOST_PATH='
-        line: "VAST_SSH_KEY_HOST_PATH=./secrets/id_rsa_vastai"
+        regexp: '^VAST_SSH_PRIVATE_KEY_HOST_PATH='
+        line: "VAST_SSH_PRIVATE_KEY_HOST_PATH=./secrets/id_rsa_vastai"
+        create: true
+        mode: "0600"
+      when: deploy_env_effective == 'prod'
+
+    - name: Set VAST_SSH_PRIVATE_KEY_CONTAINER_PATH in environment .env for production
+      ansible.builtin.lineinfile:
+        path: "{{ deploy_target.env_path }}"
+        regexp: '^VAST_SSH_PRIVATE_KEY_CONTAINER_PATH='
+        line: "VAST_SSH_PRIVATE_KEY_CONTAINER_PATH=/home/http/.ssh/id_rsa_vastai"
         create: true
         mode: "0600"
       when: deploy_env_effective == 'prod'
@@ -342,15 +351,15 @@
       ansible.builtin.assert:
         that:
           - "(env_content.content | b64decode) is regex('(?m)^VAST_API_KEY=.+$')"
-          - "(env_content.content | b64decode) is regex('(?m)^VAST_SSH_KEY_HOST_PATH=.+$')"
-          - "(env_content.content | b64decode) is regex('(?m)^VAST_SSH_KEY_PATH=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^VAST_SSH_PRIVATE_KEY_HOST_PATH=.+$')"
+          - "(env_content.content | b64decode) is regex('(?m)^VAST_SSH_PRIVATE_KEY_CONTAINER_PATH=.+$')"
         fail_msg: |
           {{ deploy_target.name | upper }} .env is present but missing required Vast runtime values.
 
           Required non-empty keys:
           - VAST_API_KEY
-          - VAST_SSH_KEY_HOST_PATH
-          - VAST_SSH_KEY_PATH
+          - VAST_SSH_PRIVATE_KEY_HOST_PATH
+          - VAST_SSH_PRIVATE_KEY_CONTAINER_PATH
 
           File:
           {{ deploy_target.env_path }}

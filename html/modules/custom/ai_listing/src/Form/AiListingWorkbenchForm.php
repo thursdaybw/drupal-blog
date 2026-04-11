@@ -820,10 +820,10 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
    * Validates runtime prerequisites before launching inference batch.
    */
   private function validateInferenceRuntimePreflight(): ?string {
-    $sshKeyPath = trim((string) (getenv('VAST_SSH_KEY_PATH') ?: ''));
+    $sshKeyPath = trim((string) (getenv('VAST_SSH_PRIVATE_KEY_CONTAINER_PATH') ?: ''));
     if ($sshKeyPath === '' || !is_readable($sshKeyPath)) {
       return (string) $this->t(
-        'Vast SSH key is not readable in app runtime. Set VAST_SSH_KEY_PATH to a readable private key inside the container.'
+        'Vast SSH key is not readable in app runtime. Set VAST_SSH_PRIVATE_KEY_CONTAINER_PATH to a readable private key inside the container.'
       );
     }
 

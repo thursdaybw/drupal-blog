@@ -537,17 +537,42 @@ final class VllmPoolManager {
     }
 
     if ($this->isRunningState($info)) {
-      if (($record['current_workload_mode'] ?? '') !== ($definition['mode'] ?? '')) {
-        $this->runtimeManager->stopWorkload($info);
-        $this->runtimeManager->startWorkload($info, $definition);
-      }
+      $workloadStartIssued = FALSE;
+      try {
+        if (($record['current_workload_mode'] ?? '') !== ($definition['mode'] ?? '')) {
+          $this->runtimeManager->stopWorkload($info);
+          $this->runtimeManager->startWorkload($info, $definition);
+          $workloadStartIssued = TRUE;
+        }
 
-      $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $workloadTimeoutSeconds);
-      return $this->markLeased($record, $readyInfo, $definition);
+        $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $workloadTimeoutSeconds);
+        return $this->markLeased($record, $readyInfo, $definition);
+      }
+      catch (\Throwable $exception) {
+        if ($this->shouldKeepInstanceBootstrapping($exception, TRUE, $workloadStartIssued)) {
+          $record['lease_status'] = 'bootstrapping';
+          $record['last_error'] = $exception->getMessage();
+          $record['last_seen_at'] = time();
+          $this->poolRepository->save($record);
+          throw new AcquirePendingException(
+            'Pooled instance ' . $contractId . ' is still bootstrapping.',
+            0,
+            $exception
+          );
+        }
+
+        $record['lease_status'] = 'unavailable';
+        $record['last_error'] = $exception->getMessage();
+        $record['last_seen_at'] = time();
+        $this->poolRepository->save($record);
+        return NULL;
+      }
     }
 
     try {
       $wakeAttempted = TRUE;
+      $bootstrapCompleted = FALSE;
+      $workloadStartIssued = FALSE;
       $startResponse = $this->instanceLifecycleClient->startInstance($contractId);
       if ($this->isQueuedExternalLeaseResponse($startResponse)) {
         $record['lease_status'] = 'rented_elsewhere';
@@ -567,12 +592,14 @@ final class VllmPoolManager {
       }
 
       $bootInfo = $this->runtimeManager->waitForSshBootstrap($contractId, $bootstrapTimeoutSeconds);
+      $bootstrapCompleted = TRUE;
       $this->runtimeManager->startWorkload($bootInfo, $definition);
+      $workloadStartIssued = TRUE;
       $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $workloadTimeoutSeconds);
       return $this->markLeased($record, $readyInfo, $definition);
     }
     catch (\Throwable $exception) {
-      if ($this->isPendingStartupFailure($exception)) {
+      if ($this->shouldKeepInstanceBootstrapping($exception, $bootstrapCompleted, $workloadStartIssued)) {
         $record['lease_status'] = 'bootstrapping';
         $record['last_error'] = $exception->getMessage();
         $record['last_seen_at'] = time();
@@ -583,7 +610,7 @@ final class VllmPoolManager {
           $exception
         );
       }
-      if ($wakeAttempted) {
+      if ($wakeAttempted && !$bootstrapCompleted && !$workloadStartIssued) {
         try {
           $this->instanceLifecycleClient->stopInstance($contractId);
           $record['last_stopped_at'] = time();
@@ -596,7 +623,7 @@ final class VllmPoolManager {
       $record['last_error'] = $exception->getMessage();
       $record['last_seen_at'] = time();
       $this->poolRepository->save($record);
-      if ($wakeAttempted) {
+      if ($wakeAttempted && !$bootstrapCompleted && !$workloadStartIssued) {
         throw new \RuntimeException(
           'Wake/start failed for pooled instance '
           . $contractId
@@ -649,13 +676,17 @@ final class VllmPoolManager {
     $this->poolRepository->save($record);
 
     try {
+      $bootstrapCompleted = FALSE;
+      $workloadStartIssued = FALSE;
       $bootInfo = $this->runtimeManager->waitForSshBootstrap($contractId, $bootstrapTimeoutSeconds);
+      $bootstrapCompleted = TRUE;
       $this->runtimeManager->startWorkload($bootInfo, $definition);
+      $workloadStartIssued = TRUE;
       $readyInfo = $this->runtimeManager->waitForWorkloadReady($contractId, $workloadTimeoutSeconds);
       return $this->markLeased($record, $readyInfo, $definition);
     }
     catch (\Throwable $exception) {
-      if ($this->isPendingStartupFailure($exception)) {
+      if ($this->shouldKeepInstanceBootstrapping($exception, $bootstrapCompleted, $workloadStartIssued)) {
         $record['lease_status'] = 'bootstrapping';
         $record['last_error'] = $exception->getMessage();
         $record['last_seen_at'] = time();
@@ -673,22 +704,39 @@ final class VllmPoolManager {
       $this->poolRepository->save($record);
 
       try {
-        $this->vastClient->destroyInstance($contractId);
-        $record['lease_status'] = 'destroyed';
-        $record['last_error'] = 'Fresh fallback startup failed and contract was destroyed: ' . $exception->getMessage();
-        $record['last_seen_at'] = time();
-        $this->poolRepository->save($record);
+        if (!$workloadStartIssued) {
+          $this->vastClient->destroyInstance($contractId);
+          $record['lease_status'] = 'destroyed';
+          $record['last_error'] = 'Fresh fallback startup failed and contract was destroyed: ' . $exception->getMessage();
+          $record['last_seen_at'] = time();
+          $this->poolRepository->save($record);
+        }
       }
       catch (\Throwable) {
-        // Ignore cleanup failures and preserve the original startup exception.
+        // Ignore cleanup failures. Preserve the original startup exception.
       }
 
       throw new \RuntimeException(
-        'Fresh fallback contract ' . $contractId . ' failed workload startup and was destroyed: ' . $exception->getMessage(),
+        'Fresh fallback contract ' . $contractId . ' failed workload startup'
+        . (!$workloadStartIssued ? ' and was destroyed' : '')
+        . ': '
+        . $exception->getMessage(),
         0,
         $exception
       );
     }
+  }
+
+  /**
+   * Keeps bootstrapping instances alive when failure is still pending warmup.
+   */
+  private function shouldKeepInstanceBootstrapping(
+    \Throwable $exception,
+    bool $bootstrapCompleted,
+    bool $workloadStartIssued,
+  ): bool {
+    return $this->isPendingStartupFailure($exception)
+      || (($bootstrapCompleted || $workloadStartIssued) && $this->isWarmupLikeFailure($exception));
   }
 
   /**
@@ -711,6 +759,29 @@ final class VllmPoolManager {
       'bootstrap timeout',
       'absolute safety timeout',
       'stalled before ssh bootstrap',
+      'connection refused',
+      'failed to connect',
+      'workload not ready',
+      'warmup',
+      'timed out',
+      'operation timed out',
+    ] as $needle) {
+      if (str_contains($message, $needle)) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Detects startup failures that are still warmup-like.
+   */
+  private function isWarmupLikeFailure(\Throwable $exception): bool {
+    $message = strtolower($exception->getMessage());
+    foreach ([
+      'actual_status=exited',
+      'success, running',
       'connection refused',
       'failed to connect',
       'workload not ready',

@@ -599,6 +599,9 @@ final class VllmPoolManager {
       return $this->markLeased($record, $readyInfo, $definition);
     }
     catch (\Throwable $exception) {
+      if ($wakeAttempted && !$bootstrapCompleted && !$workloadStartIssued && $this->isWakeRateLimitFailure($exception)) {
+        return $this->handleWakeRateLimitFallback($record, $contractId, $exception);
+      }
       if ($this->shouldKeepInstanceBootstrapping($exception, $bootstrapCompleted, $workloadStartIssued)) {
         $record['lease_status'] = 'bootstrapping';
         $record['last_error'] = $exception->getMessage();
@@ -772,6 +775,50 @@ final class VllmPoolManager {
     }
 
     return FALSE;
+  }
+
+  /**
+   * Detects Vast control-plane rate limiting on wake calls.
+   */
+  private function isWakeRateLimitFailure(\Throwable $exception): bool {
+    $message = strtolower($exception->getMessage());
+    return str_contains($message, 'too many requests')
+      || str_contains($message, 'api requests too frequent');
+  }
+
+  /**
+   * Falls through to the next acquire candidate after a wake rate limit.
+   */
+  private function handleWakeRateLimitFallback(
+    array $record,
+    string $contractId,
+    \Throwable $exception,
+  ): ?array {
+    try {
+      $info = $this->vastClient->showInstance($contractId);
+      $actualStatus = (string) ($info['actual_status'] ?? '');
+      if ($actualStatus === 'scheduling') {
+        try {
+          $this->instanceLifecycleClient->stopInstance($contractId);
+          $record['last_stopped_at'] = time();
+        }
+        catch (\Throwable) {
+          // Preserve the original wake-rate-limit observation below.
+        }
+        $record['lease_status'] = 'rented_elsewhere';
+      }
+      else {
+        $record['lease_status'] = 'unavailable';
+      }
+    }
+    catch (\Throwable) {
+      $record['lease_status'] = 'unavailable';
+    }
+
+    $record['last_error'] = $exception->getMessage();
+    $record['last_seen_at'] = time();
+    $this->poolRepository->save($record);
+    return NULL;
   }
 
   /**

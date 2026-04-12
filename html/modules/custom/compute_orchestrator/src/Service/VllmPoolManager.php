@@ -709,6 +709,7 @@ final class VllmPoolManager {
     $message = strtolower($exception->getMessage());
     foreach ([
       'bootstrap timeout',
+      'absolute safety timeout',
       'stalled before ssh bootstrap',
       'connection refused',
       'failed to connect',

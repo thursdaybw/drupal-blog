@@ -49,6 +49,9 @@
         min_upload_max_filesize_bytes: 1342177280
         min_post_max_size_bytes: 1342177280
         min_max_file_uploads: 250
+        proxy_connect_timeout: 60s
+        proxy_send_timeout: 600s
+        proxy_read_timeout: 600s
         proxy_tasks: tasks/reverse_proxy_staging.yml
       prod:
         name: prod
@@ -79,6 +82,9 @@
         min_upload_max_filesize_bytes: 1342177280
         min_post_max_size_bytes: 1342177280
         min_max_file_uploads: 250
+        proxy_connect_timeout: 60s
+        proxy_send_timeout: 600s
+        proxy_read_timeout: 600s
         proxy_tasks: tasks/reverse_proxy_prod.yml
 
   tasks:

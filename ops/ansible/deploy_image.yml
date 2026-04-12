@@ -549,6 +549,9 @@
         staging_tls_email: "{{ deploy_target.tls_email }}"
         nginx_staging_site_filename: "{{ deploy_target.nginx_site_filename }}"
         staging_client_max_body_size: "{{ deploy_target.client_max_body_size }}"
+        staging_proxy_connect_timeout: "{{ deploy_target.proxy_connect_timeout }}"
+        staging_proxy_send_timeout: "{{ deploy_target.proxy_send_timeout }}"
+        staging_proxy_read_timeout: "{{ deploy_target.proxy_read_timeout }}"
         prod_domain: "{{ deploy_target.domain }}"
         prod_apex_domain: "{{ deploy_target.apex_domain | default('') }}"
         prod_upstream_host: "{{ deploy_target.upstream_host }}"
@@ -556,6 +559,9 @@
         prod_tls_email: "{{ deploy_target.tls_email }}"
         nginx_prod_site_filename: "{{ deploy_target.nginx_site_filename }}"
         prod_client_max_body_size: "{{ deploy_target.client_max_body_size }}"
+        prod_proxy_connect_timeout: "{{ deploy_target.proxy_connect_timeout }}"
+        prod_proxy_send_timeout: "{{ deploy_target.proxy_send_timeout }}"
+        prod_proxy_read_timeout: "{{ deploy_target.proxy_read_timeout }}"
 
     - name: Run environment reverse proxy tasks
       ansible.builtin.include_tasks: "{{ deploy_target.proxy_tasks }}"

@@ -179,6 +179,21 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
         );
       }
 
+      if ($isFailureState && $this->isBootstrapStatusMismatch($snapshot)) {
+        $this->logger->warning(
+          'BOOTSTRAP mismatch contract={contract} actual_status={actual_status} ssh={ssh_host}:{ssh_port} msg={status_msg}. Waiting for Vast status to converge.',
+          [
+            'contract' => $contractId,
+            'actual_status' => $snapshot['actual_status'] !== '' ? $snapshot['actual_status'] : '(null)',
+            'ssh_host' => $snapshot['ssh_host'] !== '' ? $snapshot['ssh_host'] : '(null)',
+            'ssh_port' => $snapshot['ssh_port'] !== '' ? $snapshot['ssh_port'] : '(null)',
+            'status_msg' => $snapshot['status_msg'] !== '' ? $snapshot['status_msg'] : '(null)',
+          ],
+        );
+        sleep(10);
+        continue;
+      }
+
       if ($isFailureState) {
         $this->logger->error(
           'BOOTSTRAP terminal state contract={contract} cur_state={cur_state} actual_status={actual_status} ssh={ssh_host}:{ssh_port} msg={status_msg}',
@@ -305,6 +320,33 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
       stripos($statusMessage, 'Error response from daemon') !== FALSE ||
       stripos($statusMessage, 'no such container') !== FALSE
     );
+  }
+
+  /**
+   * Detects a stale Vast status mismatch during SSH bootstrap.
+   *
+   * This covers the case where the instance reports failure while also
+   * reporting a successful SSH runtime startup.
+   *
+   * @param array<string,string> $snapshot
+   *   Normalized instance snapshot.
+   */
+  private function isBootstrapStatusMismatch(array $snapshot): bool {
+    if (($snapshot['cur_state'] ?? '') !== 'running') {
+      return FALSE;
+    }
+
+    if (($snapshot['ssh_host'] ?? '') === '' || ($snapshot['ssh_port'] ?? '') === '') {
+      return FALSE;
+    }
+
+    $statusMessage = strtolower((string) ($snapshot['status_msg'] ?? ''));
+    if ($statusMessage === '') {
+      return FALSE;
+    }
+
+    return str_contains($statusMessage, 'success, running')
+      && str_contains($statusMessage, '/ssh');
   }
 
   /**

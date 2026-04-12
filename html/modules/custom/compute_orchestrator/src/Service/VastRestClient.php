@@ -321,8 +321,12 @@ final class VastRestClient implements VastRestClientInterface {
         throw new \RuntimeException('Container start failed: ' . $statusMsg);
       }
 
-      // Hard fail: explicit failure states.
-      if (in_array($actualStatus, ['error', 'exited', 'failed'], TRUE)) {
+      $isFailureState = in_array($actualStatus, ['error', 'exited', 'failed'], TRUE);
+      $isStatusMismatch = $this->isBootstrapStatusMismatch($curState, $actualStatus, $statusMsg, $sshHost, $sshPort);
+
+      // Hard fail: explicit failure states unless Vast is lagging behind a
+      // successful SSH runtime startup report.
+      if ($isFailureState && !$isStatusMismatch) {
         throw new \RuntimeException(
           'Instance entered failure state: ' . $actualStatus . ' — ' . $statusMsg
         );
@@ -335,10 +339,9 @@ final class VastRestClient implements VastRestClientInterface {
         }
       }
 
-      // Only probe after Vast reports actual_status=running.
-      // Vast can expose SSH host/port while still "creating", which causes
-      // pointless probe churn.
-      if ($curState === 'running' && $actualStatus === 'running' && $sshHost !== '' && $sshPort !== '') {
+      // Probe when Vast reports the workload as running, or when Vast status is
+      // stale but SSH startup has clearly succeeded.
+      if ($curState === 'running' && ($actualStatus === 'running' || $isStatusMismatch) && $sshHost !== '' && $sshPort !== '') {
 
         $user = (string) ($info['ssh_user'] ?? 'root');
 
@@ -515,6 +518,37 @@ final class VastRestClient implements VastRestClientInterface {
       $lines = array_merge($lines, $this->splitAndTrim($payload['debug']));
     }
     return array_values(array_filter($lines));
+  }
+
+  /**
+   * Detects a stale Vast status mismatch during runtime readiness polling.
+   */
+  private function isBootstrapStatusMismatch(
+    string $curState,
+    string $actualStatus,
+    string $statusMessage,
+    string $sshHost,
+    string $sshPort,
+  ): bool {
+    if ($curState !== 'running') {
+      return FALSE;
+    }
+
+    if (!in_array($actualStatus, ['error', 'exited', 'failed'], TRUE)) {
+      return FALSE;
+    }
+
+    if ($sshHost === '' || $sshPort === '') {
+      return FALSE;
+    }
+
+    $normalizedMessage = strtolower($statusMessage);
+    if ($normalizedMessage === '') {
+      return FALSE;
+    }
+
+    return str_contains($normalizedMessage, 'success, running')
+      && str_contains($normalizedMessage, '/ssh');
   }
 
   /**

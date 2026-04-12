@@ -239,9 +239,9 @@ final class VastRestClient implements VastRestClientInterface {
 
     $start = time();
     $adapter = $this->workloadAdapterManager->createInstance($workload);
-    // Caller timeout is the hard cap; adapter startup timeout remains guidance
-    // for workload-specific warmup classification.
-    $absoluteSafetyTimeout = max(60, $timeoutSeconds);
+    // Caller timeout is the hard cap for this polling slice. Stall detection
+    // and readiness classification still govern the overall startup behavior.
+    $absoluteSafetyTimeout = max(5, $timeoutSeconds);
     $stallThresholdSeconds = 600;
     $sshLossThresholdSeconds = 300;
     $sshNeverReadyThresholdSeconds = 180;

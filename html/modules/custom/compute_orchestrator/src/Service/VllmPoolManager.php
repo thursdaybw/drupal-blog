@@ -756,6 +756,9 @@ final class VllmPoolManager {
 
     $message = strtolower($exception->getMessage());
     foreach ([
+      'too many requests',
+      '429 too many requests',
+      'api requests too frequent',
       'bootstrap timeout',
       'absolute safety timeout',
       'stalled before ssh bootstrap',

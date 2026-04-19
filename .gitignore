@@ -53,3 +53,15 @@ gpt-oauth.yml
 ops/compose/staging/.env
 ops/compose/prod/.env
 ops/compose/prod/secrets/id_rsa_vastai
+
+# Phase 2 Cleanup - Local Environment & Temp Data
+.ddev/
+backups/
+content/sync/
+vllm-pool.json
+phpunit.browser.xml
+phpunit.dtt.xml
+dtt_device_profiles.yaml-off
+dtt_multi_device_test_base/
+html/sites/simpletest/
+pre-migration.backup.sql

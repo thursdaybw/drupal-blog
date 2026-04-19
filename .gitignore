@@ -65,3 +65,4 @@ dtt_device_profiles.yaml-off
 dtt_multi_device_test_base/
 html/sites/simpletest/
 pre-migration.backup.sql
+html/modules/custom/bevansbench_test/tests/fixtures/

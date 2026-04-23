@@ -20,6 +20,7 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
   public function __construct(
     private readonly VastRestClientInterface $vastClient,
     private readonly SshProbeExecutor $sshProbeExecutor,
+    private readonly SshKeyPathResolverInterface $sshKeyPathResolver,
     LoggerChannelFactoryInterface $loggerFactory,
   ) {
     $this->logger = $loggerFactory->get('compute_orchestrator');
@@ -146,7 +147,7 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
           $snapshot['ssh_host'],
           (int) $snapshot['ssh_port'],
           (string) ($info['ssh_user'] ?? 'root'),
-          $this->resolveSshKeyPath(),
+          $this->sshKeyPathResolver->resolveRequiredPath(),
         );
         $probe = $this->sshProbeExecutor->run($context, new SshProbeRequest(
           'bootstrap_login_check',
@@ -302,7 +303,7 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
       (string) ($instanceInfo['ssh_host'] ?? ''),
       (int) ($instanceInfo['ssh_port'] ?? 0),
       (string) ($instanceInfo['ssh_user'] ?? 'root'),
-      $this->resolveSshKeyPath(),
+      $this->sshKeyPathResolver->resolveRequiredPath(),
     );
 
     if ($context->host === '' || $context->port === 0) {
@@ -349,25 +350,6 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
 
     return str_contains($statusMessage, 'success, running')
       && str_contains($statusMessage, '/ssh');
-  }
-
-  /**
-   * Resolves the SSH private key used for Vast instance control.
-   */
-  private function resolveSshKeyPath(): string {
-    $candidate = getenv('VAST_SSH_PRIVATE_KEY_CONTAINER_PATH') ?: '';
-    if ($candidate === '') {
-      $home = getenv('HOME') ?: '';
-      if ($home !== '') {
-        $candidate = rtrim($home, '/') . '/.ssh/id_rsa_vastai';
-      }
-    }
-
-    if ($candidate === '' || !file_exists($candidate)) {
-      throw new \RuntimeException('VAST_SSH_PRIVATE_KEY_CONTAINER_PATH is not set to a readable private key.');
-    }
-
-    return $candidate;
   }
 
 }

@@ -4,14 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
-use GuzzleHttp\Exception\ClientException;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
 use Drupal\compute_orchestrator\Plugin\WorkloadReadinessAdapterManager;
 use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 use Drupal\Core\State\StateInterface;
-use GuzzleHttp\ClientInterface;
-use GuzzleHttp\Exception\GuzzleException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Process\Process;
 
@@ -21,39 +18,20 @@ use Symfony\Component\Process\Process;
 final class VastRestClient implements VastRestClientInterface {
 
   /**
-   * Guzzle client for Vast API requests.
-   */
-  private ClientInterface $httpClient;
-
-  /**
-   * Vast API bearer token.
-   */
-  private ?string $apiKey = NULL;
-
-  /**
    * Module logger channel.
    */
   private LoggerInterface $logger;
 
   public function __construct(
-    ClientInterface $http_client,
+    private readonly VastApiClientInterface $vastApiClient,
     private readonly BadHostRegistry $badHosts,
     private readonly WorkloadReadinessAdapterManager $workloadAdapterManager,
     private readonly SshProbeExecutor $sshProbeExecutor,
+    private readonly SshKeyPathResolverInterface $sshKeyPathResolver,
     LoggerChannelFactoryInterface $loggerFactory,
-    private readonly VastCredentialProviderInterface $credentials,
     private readonly StateInterface $state,
   ) {
-    $this->httpClient = $http_client;
     $this->logger = $loggerFactory->get('compute_orchestrator');
-
-    $apiKey = $this->credentials->getApiKey();
-    if ($apiKey === NULL || $apiKey === '') {
-      $this->logger->warning('Vast API key is not configured. Vast API calls are disabled.');
-      return;
-    }
-
-    $this->apiKey = $apiKey;
   }
 
   /**
@@ -142,44 +120,7 @@ final class VastRestClient implements VastRestClientInterface {
    * Executes an authenticated Vast REST request.
    */
   private function request(string $method, string $uri, array $options = []): array {
-    if ($this->apiKey === NULL || $this->apiKey === '') {
-      throw new \RuntimeException('Vast API key is not configured.');
-    }
-
-    try {
-      $response = $this->httpClient->request(
-        $method,
-        'https://console.vast.ai/api/v0/' . ltrim($uri, '/'),
-        array_merge_recursive([
-          'headers' => [
-            'Authorization' => 'Bearer ' . $this->apiKey,
-            'Accept' => 'application/json',
-          ],
-          'timeout' => 20,
-          'connect_timeout' => 10,
-        ], $options)
-      );
-
-      $body = (string) $response->getBody();
-      $decoded = json_decode($body, TRUE);
-
-      if (!is_array($decoded)) {
-        throw new \RuntimeException('Invalid JSON response from Vast API.');
-      }
-
-      return $decoded;
-    }
-    catch (GuzzleException $exception) {
-      if ($exception instanceof ClientException) {
-        $response = $exception->getResponse();
-        if ($response !== NULL) {
-          $body = (string) $response->getBody();
-          throw new \RuntimeException('Vast API error response: ' . $body, 0, $exception);
-        }
-      }
-
-      throw new \RuntimeException('Vast API request failed: ' . $exception->getMessage(), 0, $exception);
-    }
+    return $this->vastApiClient->request($method, $uri, $options);
   }
 
   /**
@@ -242,6 +183,10 @@ final class VastRestClient implements VastRestClientInterface {
     // Caller timeout is the hard cap for this polling slice. Stall detection
     // and readiness classification still govern the overall startup behavior.
     $absoluteSafetyTimeout = max(5, $timeoutSeconds);
+    // Drupal batch operations intentionally invoke this method with short
+    // "slice" timeouts. Use a shorter poll interval in that case so the slice
+    // can run multiple probes before timing out.
+    $pollIntervalSeconds = $absoluteSafetyTimeout <= 90 ? 10 : 30;
     $stallThresholdSeconds = 600;
     $sshLossThresholdSeconds = 300;
     $sshNeverReadyThresholdSeconds = 180;
@@ -273,7 +218,8 @@ final class VastRestClient implements VastRestClientInterface {
         if ($lastProbeKind && $lastProbeWhy) {
           $extra = ' Last probe failure (' . $lastProbeKind . '): ' . $lastProbeWhy;
         }
-        throw new \RuntimeException('Instance exceeded absolute safety timeout for workload ' . $workload . '.' . $extra);
+        $workloadLabel = $workload !== '' ? $workload : '(unknown)';
+        throw new \RuntimeException('Readiness polling slice timed out after ' . $absoluteSafetyTimeout . ' seconds for workload ' . $workloadLabel . '.' . $extra);
       }
 
       $info = $this->showInstance($instanceId);
@@ -383,7 +329,7 @@ final class VastRestClient implements VastRestClientInterface {
           if ($sshWasReachable && $sshLossSeconds >= $sshLossThresholdSeconds) {
             throw new \RuntimeException('Connectivity loss: SSH probe unavailable for ' . $sshLossSeconds . ' seconds.');
           }
-          sleep(30);
+          sleep($pollIntervalSeconds);
           continue;
         }
         $sshLostSince = NULL;
@@ -445,7 +391,7 @@ final class VastRestClient implements VastRestClientInterface {
           $lastProbeWhy = $why;
         }
 
-        sleep(30);
+        sleep($pollIntervalSeconds);
         continue;
       }
 
@@ -460,7 +406,7 @@ final class VastRestClient implements VastRestClientInterface {
         );
       }
 
-      sleep(30);
+      sleep($pollIntervalSeconds);
     }
   }
 
@@ -911,11 +857,11 @@ final class VastRestClient implements VastRestClientInterface {
    */
   private function sshLoginCheck(string $sshHost, int $sshPort, string $sshUser): array {
 
-    $keyPath = $this->resolveSshKeyPath();
-    if (!$keyPath) {
+    $keyPath = $this->sshKeyPathResolver->resolvePath();
+    if ($keyPath === NULL) {
       return [
         'ok' => FALSE,
-        'why' => 'SSH key not found at: ' . ($this->getSshKeyCandidate() ?: '(empty)'),
+        'why' => 'SSH key not found at: ' . ($this->sshKeyPathResolver->getCandidatePath() ?: '(empty)'),
       ];
     }
 
@@ -979,8 +925,8 @@ final class VastRestClient implements VastRestClientInterface {
    *   Probe results keyed by name.
    */
   private function executeWorkloadProbesViaSsh(array $commands, string $sshHost, int $sshPort, string $sshUser): array {
-    $keyPath = $this->resolveSshKeyPath();
-    if (!$keyPath) {
+    $keyPath = $this->sshKeyPathResolver->resolvePath();
+    if ($keyPath === NULL) {
       return [
         'ssh_key' => [
           'ok' => FALSE,
@@ -988,7 +934,7 @@ final class VastRestClient implements VastRestClientInterface {
           'failure_kind' => 'transport',
           'exit_code' => NULL,
           'stdout' => '',
-          'stderr' => 'SSH key not found at: ' . ($this->getSshKeyCandidate() ?: '(empty)'),
+          'stderr' => 'SSH key not found at: ' . ($this->sshKeyPathResolver->getCandidatePath() ?: '(empty)'),
           'exception' => 'missing_ssh_key',
         ],
       ];
@@ -1032,11 +978,6 @@ final class VastRestClient implements VastRestClientInterface {
         trim((string) ($result['stderr'] ?? '')) !== '' ? trim((string) ($result['stderr'] ?? '')) : '(empty)',
         trim((string) ($result['exception'] ?? '')) !== '' ? trim((string) ($result['exception'] ?? '')) : '(none)'
       );
-    }
-
-    $logs = trim((string) ($probeResults['logs']['stdout'] ?? ''));
-    if ($logs !== '') {
-      $parts[] = 'logs=' . $logs;
     }
 
     return implode(' | ', $parts);
@@ -1412,8 +1353,7 @@ final class VastRestClient implements VastRestClientInterface {
     }
 
     $lower = strtolower($message);
-    $prefix = 'instance exceeded absolute safety timeout for workload ';
-    if (!str_contains($lower, $prefix)) {
+    if (!str_contains($lower, 'readiness polling slice timed out')) {
       return FALSE;
     }
 
@@ -1421,36 +1361,21 @@ final class VastRestClient implements VastRestClientInterface {
       return TRUE;
     }
 
-    return str_contains($lower, strtolower($workload));
+    return str_contains($lower, 'workload ' . strtolower($workload));
   }
 
   /**
    * Resolves SSH key path from environment or default location.
    */
   private function resolveSshKeyPath(): ?string {
-    $candidate = $this->getSshKeyCandidate();
-    if ($candidate === '') {
-      return NULL;
-    }
-
-    return file_exists($candidate) ? $candidate : NULL;
+    return $this->sshKeyPathResolver->resolvePath();
   }
 
   /**
    * Returns the candidate SSH private key path (may not exist).
    */
   private function getSshKeyCandidate(): string {
-    $keyPath = getenv('VAST_SSH_PRIVATE_KEY_CONTAINER_PATH') ?: '';
-    if ($keyPath !== '') {
-      return $keyPath;
-    }
-
-    $home = getenv('HOME') ?: '';
-    if ($home === '') {
-      return '';
-    }
-
-    return rtrim($home, '/') . '/.ssh/id_rsa_vastai';
+    return $this->sshKeyPathResolver->getCandidatePath();
   }
 
   /**

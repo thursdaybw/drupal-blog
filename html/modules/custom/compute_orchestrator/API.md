@@ -38,6 +38,7 @@ Full method signatures are defined in `VastRestClientInterface` (`src/Service/Va
   - provision a fresh generic instance only when the pool has no usable member
 - `release()` – marks a leased instance available again
 - `getIdleShutdownSeconds()` – returns the configured idle shutdown threshold, defaulting to 600 seconds
+- `getMaxInstancesPerWorkload()` – returns the configured per-workload pool-size limit, defaulting to `5` with `0` meaning unlimited
 - `reapIdleAvailableInstances()` – stops available running instances that have exceeded the idle threshold
 - `remove()` / `clear()` – lets operators reset the pool inventory to exercise explicit empty-pool and single-candidate scenarios
 

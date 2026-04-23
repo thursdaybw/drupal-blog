@@ -43,7 +43,7 @@ final class VllmReadinessAdapter extends WorkloadReadinessAdapterBase {
         'timeout' => 10,
       ],
       'logs' => [
-        'command' => 'cat /tmp/vllm.log 2>/dev/null',
+        'command' => 'cat /tmp/vllm.log 2>/dev/null || cat /opt/vllm/run/server.log 2>/dev/null || true',
         'timeout' => 10,
       ],
     ];

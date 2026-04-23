@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Batch;
 
+use Drupal\compute_orchestrator\Exception\AcquirePendingException;
+
 /**
  * Batch callbacks for vLLM pool actions.
  *
@@ -28,10 +30,13 @@ final class VllmPoolBatch {
     $context['sandbox']['attempts'] = (int) ($context['sandbox']['attempts'] ?? 0);
     $context['message'] = t('Checking pooled instances for @workload...', ['@workload' => $workload]);
 
+    $bootstrapSliceSeconds = 25;
+    $workloadSliceSeconds = 25;
+
     try {
       /** @var \Drupal\compute_orchestrator\Service\VllmPoolManager $pool */
       $pool = \Drupal::service('compute_orchestrator.vllm_pool_manager');
-      $record = $pool->acquire($workload, NULL, TRUE, 25, 25);
+      $record = $pool->acquire($workload, NULL, TRUE, $bootstrapSliceSeconds, $workloadSliceSeconds);
       $context['results']['record'] = $record;
       $context['message'] = t('Workload ready on contract @id.', [
         '@id' => (string) ($record['contract_id'] ?? ''),
@@ -39,11 +44,25 @@ final class VllmPoolBatch {
       $context['finished'] = 1;
       return;
     }
-    catch (\Drupal\compute_orchestrator\Exception\AcquirePendingException $exception) {
+    catch (AcquirePendingException $exception) {
       $context['sandbox']['attempts']++;
-      $context['message'] = t('Still warming runtime (attempt @attempt): @message', [
+      $progress = $exception->getProgress();
+      $step = (string) ($progress['step'] ?? '?');
+      $stepTotal = (string) ($progress['step_total'] ?? '4');
+      $label = (string) ($progress['label'] ?? 'Warmup');
+      $result = (string) ($progress['result'] ?? 'Not ready yet');
+      $next = (string) ($progress['next'] ?? 'retry');
+      $contractId = (string) ($exception->getContractId() ?? '');
+
+      $context['message'] = t('Step @step/@total: @label. Attempt @attempt. Slice @slice s. Contract @id. Result: @result. Next: @next.', [
+        '@step' => $step,
+        '@total' => $stepTotal,
+        '@label' => $label,
         '@attempt' => (string) $context['sandbox']['attempts'],
-        '@message' => $exception->getMessage(),
+        '@slice' => (string) $workloadSliceSeconds,
+        '@id' => $contractId !== '' ? $contractId : '(unknown)',
+        '@result' => $result,
+        '@next' => $next,
       ]);
       $context['finished'] = min(0.95, 0.02 * $context['sandbox']['attempts']);
       return;

@@ -12,9 +12,16 @@ compute_orchestrator.settings:
   parent: system.admin_config_system
   weight: 109
 
-compute_orchestrator.vllm_pool_admin_applications:
-  title: 'vLLM pool overview'
-  description: 'Acquire/release/reap pooled Vast instances from Applications.'
+compute_orchestrator.group:
+  title: 'Compute Orchestrator'
+  description: 'Manage compute resources'
   route_name: compute_orchestrator.vllm_pool_admin
   parent: bb_platform.applications
   weight: 90
+
+compute_orchestrator.vllm_pool_admin_applications:
+  title: 'VLLM Pool Manager'
+  description: 'Acquire/release/reap pooled Vast instances from Applications.'
+  route_name: compute_orchestrator.vllm_pool_admin
+  parent: compute_orchestrator.group
+  weight: 10

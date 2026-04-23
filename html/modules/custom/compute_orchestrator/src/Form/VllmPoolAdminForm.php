@@ -24,6 +24,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 final class VllmPoolAdminForm extends FormBase {
 
   private const STATE_IDLE_REAP_ENABLED = 'compute_orchestrator.vllm_pool.idle_reap_enabled';
+  private const STATE_MAX_INSTANCES_PER_WORKLOAD = 'compute_orchestrator.vllm_pool.max_instances_per_workload';
+  private const STATE_WORKLOAD_READY_TIMEOUT_SECONDS = 'compute_orchestrator.vllm_pool.workload_ready_timeout_seconds';
 
   public function __construct(
     private readonly VllmPoolManager $poolManager,
@@ -64,6 +66,40 @@ final class VllmPoolAdminForm extends FormBase {
     $form['intro'] = [
       '#type' => 'markup',
       '#markup' => '<p>View and control the pooled Vast instances used for vLLM workloads. Client applications should call acquire/release and should not mutate pool timestamps directly.</p>',
+    ];
+
+    $form['how_it_works'] = [
+      '#type' => 'details',
+      '#title' => $this->t('How this pool works'),
+      '#open' => TRUE,
+    ];
+
+    $form['how_it_works']['help'] = [
+      '#type' => 'markup',
+      '#markup' => implode('', [
+        '<p>This page tracks reusable Vast instances for two server profiles: <strong>qwen-vl</strong> and <strong>whisper</strong>.</p>',
+        '<ol>',
+        '<li><strong>Acquire</strong> first tries to reuse an <strong>available</strong> instance of the requested server profile. If none are available, it can start a stopped one or create another one, up to the pool-size limit.</li>',
+        '<li>When an instance is handed out, it becomes <strong>leased</strong>.</li>',
+        '<li><strong>Lease expires</strong> is the time when Drupal will treat that lease as stale unless it is renewed.</li>',
+        '<li><strong>Release lease</strong> changes the instance back to <strong>available</strong>. It does not stop or destroy the instance.</li>',
+        '<li><strong>Reap available</strong> only applies to instances in <strong>available</strong> status. It stops them after the post-lease grace period has passed.</li>',
+        '<li><strong>Remove from pool</strong> only forgets the record in Drupal. <strong>Destroy instance</strong> deletes the Vast instance itself and removes it from pool tracking.</li>',
+        '</ol>',
+        '<p><strong>Pool size</strong> means the maximum number of instances allowed for one server profile.</p>',
+        '<h4>Glossary</h4>',
+        '<dl>',
+        '<dt><strong>Server profile</strong></dt><dd>The kind of server a pooled node should run, such as <code>qwen-vl</code> or <code>whisper</code>.</dd>',
+        '<dt><strong>Pool size</strong></dt><dd>The maximum number of pooled instances allowed for one server profile.</dd>',
+        '<dt><strong>Lease</strong></dt><dd>A temporary claim on an instance while a client is using it.</dd>',
+        '<dt><strong>Lease expires</strong></dt><dd>The time when Drupal will treat that lease as stale unless it is renewed.</dd>',
+        '<dt><strong>Release lease</strong></dt><dd>Changes an instance back to <strong>available</strong> without stopping or destroying it.</dd>',
+        '<dt><strong>Available</strong></dt><dd>An instance that can be acquired.</dd>',
+        '<dt><strong>Leased</strong></dt><dd>An instance that has already been handed out and is not available for another acquire.</dd>',
+        '<dt><strong>Reap</strong></dt><dd>Stop an instance that is in <strong>available</strong> status after the post-lease grace period has passed.</dd>',
+        '<dt><strong>Destroy</strong></dt><dd>Permanently delete the Vast instance and remove it from pool tracking.</dd>',
+        '</dl>',
+      ]),
     ];
 
     $hasApiKey = $this->resolveHasVastApiKey();
@@ -124,6 +160,24 @@ final class VllmPoolAdminForm extends FormBase {
       '#description' => $this->t('Default 600 seconds. Leased jobs should renew before expiry.'),
     ];
 
+    $form['settings']['max_instances_per_workload'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Max pooled instances per workload'),
+      '#min' => 0,
+      '#step' => 1,
+      '#default_value' => $this->poolManager->getMaxInstancesPerWorkload(),
+      '#description' => $this->t('Default 5. Set 0 for no explicit limit. When all matching instances are leased, acquire may scale out until this limit is reached.'),
+    ];
+
+    $form['settings']['workload_ready_timeout_seconds'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Workload ready timeout (seconds)'),
+      '#min' => 60,
+      '#step' => 1,
+      '#default_value' => $this->poolManager->getWorkloadReadyTimeoutSeconds(),
+      '#description' => $this->t('Default 900 seconds. Controls how long acquire waits for vLLM to respond on /v1/models during cold start.'),
+    ];
+
     $form['settings']['save_settings'] = [
       '#type' => 'submit',
       '#value' => $this->t('Save settings'),
@@ -147,7 +201,7 @@ final class VllmPoolAdminForm extends FormBase {
       '#title' => $this->t('Action help'),
       '#markup' => implode('', [
         '<ul>',
-        '<li><strong>Acquire Qwen / Acquire Whisper</strong>: reuse a tracked instance first; if none are usable, provision a fresh Vast instance.</li>',
+        '<li><strong>Acquire Qwen / Acquire Whisper</strong>: reuse matching tracked capacity first; if all matching instances are busy and pool limits allow it, start or provision another one.</li>',
         '<li><strong>Renew lease</strong>: extend lease expiry for the selected leased instance.</li>',
         '<li><strong>Release lease</strong>: mark a tracked instance as available for reuse (does not stop or destroy).</li>',
         '<li><strong>Remove from pool</strong>: stop tracking only (does not stop or destroy).</li>',
@@ -313,6 +367,10 @@ final class VllmPoolAdminForm extends FormBase {
     $this->state->set('compute_orchestrator.vllm_pool.idle_shutdown_seconds', max(0, $idle));
     $leaseTtl = (int) ($values['lease_ttl_seconds'] ?? $this->poolManager->getLeaseTtlSeconds());
     $this->state->set('compute_orchestrator.vllm_pool.lease_ttl_seconds', max(60, $leaseTtl));
+    $maxInstances = (int) ($values['max_instances_per_workload'] ?? $this->poolManager->getMaxInstancesPerWorkload());
+    $this->state->set(self::STATE_MAX_INSTANCES_PER_WORKLOAD, max(0, $maxInstances));
+    $workloadReadyTimeout = (int) ($values['workload_ready_timeout_seconds'] ?? $this->poolManager->getWorkloadReadyTimeoutSeconds());
+    $this->state->set(self::STATE_WORKLOAD_READY_TIMEOUT_SECONDS, max(60, $workloadReadyTimeout));
 
     $this->messenger()->addStatus($this->t('Settings saved.'));
     $form_state->setRedirectUrl(Url::fromRoute('compute_orchestrator.vllm_pool_admin'));
@@ -659,6 +717,7 @@ final class VllmPoolAdminForm extends FormBase {
       (string) $this->t('Contract'),
       (string) $this->t('Lease'),
       (string) $this->t('Lease expires'),
+      (string) $this->t('Lease countdown'),
       (string) $this->t('Last heartbeat'),
       (string) $this->t('Workload'),
       (string) $this->t('Model'),
@@ -668,6 +727,8 @@ final class VllmPoolAdminForm extends FormBase {
       (string) $this->t('Last used'),
       (string) $this->t('Last seen'),
       (string) $this->t('Last stopped'),
+      (string) $this->t('Reap status'),
+      (string) $this->t('Last status'),
       (string) $this->t('Last error'),
     ];
   }
@@ -683,28 +744,138 @@ final class VllmPoolAdminForm extends FormBase {
    */
   private function buildPoolTableRows(array $instances): array {
     $rows = [];
+    $now = time();
+    $idleSeconds = $this->poolManager->getIdleShutdownSeconds();
     foreach ($instances as $contractId => $record) {
       if (!is_array($record)) {
         continue;
       }
 
+      $leaseStatus = (string) ($record['lease_status'] ?? '');
+      $message = (string) ($record['last_error'] ?? '');
+      $lastStatus = '';
+      $lastError = '';
+
+      if ($message !== '') {
+        $terminalStatuses = [
+          'unavailable',
+          'destroyed',
+          'rented_elsewhere',
+        ];
+
+        if (in_array($leaseStatus, $terminalStatuses, TRUE)) {
+          $lastError = $message;
+        }
+        else {
+          $lastStatus = $message;
+        }
+      }
+
+      $leaseExpiresAt = (int) ($record['lease_expires_at'] ?? 0);
+      $lastHeartbeatAt = (int) ($record['last_heartbeat_at'] ?? 0);
+      $lastUsedAt = (int) ($record['last_used_at'] ?? 0);
+
       $rows[] = [
         (string) $contractId,
-        (string) ($record['lease_status'] ?? ''),
-        $this->formatTimestamp((int) ($record['lease_expires_at'] ?? 0)),
-        $this->formatTimestamp((int) ($record['last_heartbeat_at'] ?? 0)),
+        $leaseStatus,
+        $this->formatTimestamp($leaseExpiresAt),
+        $this->formatRelativeDeadline($leaseExpiresAt, $now),
+        $this->formatTimestamp($lastHeartbeatAt),
         (string) ($record['current_workload_mode'] ?? ''),
         (string) ($record['current_model'] ?? ''),
         (string) ($record['url'] ?? ''),
         (string) ($record['vast_cur_state'] ?? ''),
         (string) ($record['vast_actual_status'] ?? ''),
-        $this->formatTimestamp((int) ($record['last_used_at'] ?? 0)),
+        $this->formatTimestamp($lastUsedAt),
         $this->formatTimestamp((int) ($record['last_seen_at'] ?? 0)),
         $this->formatTimestamp((int) ($record['last_stopped_at'] ?? 0)),
-        (string) ($record['last_error'] ?? ''),
+        $this->describeReapStatus($record, $now, $idleSeconds),
+        $lastStatus,
+        $lastError,
       ];
     }
     return $rows;
+  }
+
+  /**
+   * Formats a relative deadline such as "in 8m" or "expired 2m ago".
+   */
+  private function formatRelativeDeadline(int $timestamp, int $now): string {
+    if ($timestamp <= 0) {
+      return '';
+    }
+
+    $delta = $timestamp - $now;
+    if ($delta >= 0) {
+      return 'in ' . $this->formatDuration((int) $delta);
+    }
+
+    return 'expired ' . $this->formatDuration((int) abs($delta)) . ' ago';
+  }
+
+  /**
+   * Returns a plain-language reap status for one pool record.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param int $now
+   *   Current unix timestamp.
+   * @param int $idleSeconds
+   *   Configured idle shutdown threshold.
+   */
+  private function describeReapStatus(array $record, int $now, int $idleSeconds): string {
+    $leaseStatus = (string) ($record['lease_status'] ?? '');
+    if ($leaseStatus === 'leased') {
+      $leaseExpiresAt = (int) ($record['lease_expires_at'] ?? 0);
+      return $leaseExpiresAt > 0
+        ? 'No — leased until ' . $this->formatTimestamp($leaseExpiresAt)
+        : 'No — currently leased';
+    }
+
+    if ($leaseStatus !== 'available') {
+      return 'No — only available instances are reaped';
+    }
+
+    if ($idleSeconds <= 0) {
+      return 'Disabled — post-lease reap is turned off';
+    }
+
+    $lastUsedAt = (int) ($record['last_used_at'] ?? 0);
+    if ($lastUsedAt <= 0) {
+      return 'Not yet — missing last-used timestamp';
+    }
+
+    $warmUntil = $lastUsedAt + $idleSeconds;
+    if ($now >= $warmUntil) {
+      return 'Yes — eligible now';
+    }
+
+    return 'Not yet — warm until ' . $this->formatTimestamp($warmUntil) . ' (' . $this->formatRelativeDeadline($warmUntil, $now) . ')';
+  }
+
+  /**
+   * Formats a small human duration such as 8m, 2h 5m, or 35s.
+   */
+  private function formatDuration(int $seconds): string {
+    $seconds = max(0, $seconds);
+    if ($seconds < 60) {
+      return $seconds . 's';
+    }
+
+    $minutes = intdiv($seconds, 60);
+    if ($minutes < 60) {
+      return $minutes . 'm';
+    }
+
+    $hours = intdiv($minutes, 60);
+    $minutesRemainder = $minutes % 60;
+    if ($hours < 24) {
+      return $minutesRemainder > 0 ? $hours . 'h ' . $minutesRemainder . 'm' : $hours . 'h';
+    }
+
+    $days = intdiv($hours, 24);
+    $hoursRemainder = $hours % 24;
+    return $hoursRemainder > 0 ? $days . 'd ' . $hoursRemainder . 'h' : $days . 'd';
   }
 
   /**

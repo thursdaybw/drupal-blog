@@ -16,15 +16,25 @@ services:
     arguments:
       - '@logger.factory'
 
+  compute_orchestrator.ssh_key_path_resolver:
+    class: Drupal\compute_orchestrator\Service\SshKeyPathResolver
+
+  compute_orchestrator.vast_api_client:
+    class: Drupal\compute_orchestrator\Service\VastApiClient
+    arguments:
+      - '@http_client'
+      - '@logger.factory'
+      - '@compute_orchestrator.vast_credential_provider'
+
   compute_orchestrator.vast_rest_client:
     class: Drupal\compute_orchestrator\Service\VastRestClient
     arguments:
-      - '@http_client'
+      - '@compute_orchestrator.vast_api_client'
       - '@compute_orchestrator.bad_host_registry'
       - '@plugin.manager.compute_orchestrator.workload_readiness_adapter'
       - '@compute_orchestrator.ssh_probe_executor'
+      - '@compute_orchestrator.ssh_key_path_resolver'
       - '@logger.factory'
-      - '@compute_orchestrator.vast_credential_provider'
       - '@state'
 
   compute_orchestrator.bad_host_registry:
@@ -46,15 +56,14 @@ services:
   compute_orchestrator.vast_instance_lifecycle_client:
     class: Drupal\compute_orchestrator\Service\VastInstanceLifecycleClient
     arguments:
-      - '@http_client'
-      - '@logger.factory'
-      - '@compute_orchestrator.vast_credential_provider'
+      - '@compute_orchestrator.vast_api_client'
 
   compute_orchestrator.generic_vllm_runtime_manager:
     class: Drupal\compute_orchestrator\Service\GenericVllmRuntimeManager
     arguments:
       - '@compute_orchestrator.vast_rest_client'
       - '@compute_orchestrator.ssh_probe_executor'
+      - '@compute_orchestrator.ssh_key_path_resolver'
       - '@logger.factory'
 
   compute_orchestrator.vllm_pool_repository:
@@ -71,3 +80,6 @@ services:
       - '@compute_orchestrator.vast_instance_lifecycle_client'
       - '@compute_orchestrator.vast_rest_client'
       - '@state'
+      - 3
+      - 10
+      - '@logger.factory'

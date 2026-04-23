@@ -48,6 +48,7 @@ ddev drush compute:vllm-pool-remove 34414828
   - only provision a fresh generic instance when no pooled candidate is usable
 - `compute:vllm-pool-release` marks an acquired instance available again without destroying it.
 - `compute:vllm-pool-reap-idle` stops available running instances after the idle shutdown window. The default is 600 seconds and can be changed with `drush state:set compute_orchestrator.vllm_pool.idle_shutdown_seconds 900`.
+- Pool scale-out is now limited by `compute_orchestrator.vllm_pool.max_instances_per_workload` (default `5`). Set it to `0` for unlimited. When all matching instances are leased, acquire may provision another one until this limit is reached. You can change it with `drush state:set compute_orchestrator.vllm_pool.max_instances_per_workload 2`.
 - `compute:vllm-pool-remove` deletes one tracked contract from the inventory after a targeted scenario run.
 
 ## Client lease contract

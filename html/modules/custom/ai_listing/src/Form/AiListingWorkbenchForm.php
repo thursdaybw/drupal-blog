@@ -22,7 +22,6 @@ use Drupal\ai_listing\Model\AiListingBatchFilter;
 use Drupal\ai_listing\Service\AiListingBatchDatasetProvider;
 use Drupal\ai_listing\Service\AiListingBatchSelectionManager;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * Builds the AI listing workbench form.
@@ -63,10 +62,6 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   private ?AiListingBatchSelectionManager $batchSelectionManager = NULL;
 
   /**
-   * Cached request stack service.
-   */
-  private ?RequestStack $requestStack = NULL;
-  /**
    * Cached listing type labels keyed by bundle.
    *
    * @var array<string,string>|null
@@ -85,7 +80,6 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $form->pagerParameters = $container->get('pager.parameters');
     $form->batchDatasetProvider = $container->get('ai_listing.batch_dataset_provider');
     $form->batchSelectionManager = $container->get('ai_listing.batch_selection_manager');
-    $form->requestStack = $container->get('request_stack');
     return $form;
   }
 

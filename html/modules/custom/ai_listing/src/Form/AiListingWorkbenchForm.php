@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\ai_listing\Form;
 
+use Drupal\Core\TempStore\PrivateTempStore;
+use Drupal\compute_orchestrator\Exception\AcquirePendingException;
 use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -20,23 +22,60 @@ use Drupal\ai_listing\Model\AiListingBatchFilter;
 use Drupal\ai_listing\Service\AiListingBatchDatasetProvider;
 use Drupal\ai_listing\Service\AiListingBatchSelectionManager;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\RequestStack;
 
+/**
+ * Builds the AI listing workbench form.
+ */
 final class AiListingWorkbenchForm extends FormBase implements ContainerInjectionInterface {
   public const WORKBENCH_TEMPSTORE_COLLECTION = 'ai_listing.workbench';
   public const PUBLISH_UPDATE_CONFIRM_TEMPSTORE_KEY = 'publish_update_confirmation';
   public const LOCATION_CONFIRM_TEMPSTORE_KEY = 'location_confirmation';
   public const SELECTED_LISTING_KEYS_FIELD = 'selected_listing_keys';
 
-  private ?EntityTypeManagerInterface $entityTypeManager = null;
-  private ?DateFormatterInterface $dateFormatter = null;
-  private ?PrivateTempStoreFactory $tempStoreFactory = null;
-  private ?PagerManagerInterface $pagerManager = null;
-  private ?PagerParametersInterface $pagerParameters = null;
-  private ?AiListingBatchDatasetProvider $batchDatasetProvider = null;
-  private ?AiListingBatchSelectionManager $batchSelectionManager = null;
-  /** @var array<string,string>|null */
-  private ?array $listingTypeLabels = null;
+  /**
+   * Cached entity type manager service.
+   */
+  private ?EntityTypeManagerInterface $entityTypeManager = NULL;
+  /**
+   * Cached date formatter service.
+   */
+  private ?DateFormatterInterface $dateFormatter = NULL;
+  /**
+   * Cached private tempstore factory service.
+   */
+  private ?PrivateTempStoreFactory $tempStoreFactory = NULL;
+  /**
+   * Cached pager manager service.
+   */
+  private ?PagerManagerInterface $pagerManager = NULL;
+  /**
+   * Cached pager parameters service.
+   */
+  private ?PagerParametersInterface $pagerParameters = NULL;
+  /**
+   * Cached batch dataset provider service.
+   */
+  private ?AiListingBatchDatasetProvider $batchDatasetProvider = NULL;
+  /**
+   * Cached batch selection manager service.
+   */
+  private ?AiListingBatchSelectionManager $batchSelectionManager = NULL;
 
+  /**
+   * Cached request stack service.
+   */
+  private ?RequestStack $requestStack = NULL;
+  /**
+   * Cached listing type labels keyed by bundle.
+   *
+   * @var array<string,string>|null
+   */
+  private ?array $listingTypeLabels = NULL;
+
+  /**
+   * Creates the workbench form instance.
+   */
   public static function create(ContainerInterface $container): self {
     $form = new self();
     $form->entityTypeManager = $container->get('entity_type.manager');
@@ -46,13 +85,20 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $form->pagerParameters = $container->get('pager.parameters');
     $form->batchDatasetProvider = $container->get('ai_listing.batch_dataset_provider');
     $form->batchSelectionManager = $container->get('ai_listing.batch_selection_manager');
+    $form->requestStack = $container->get('request_stack');
     return $form;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function getFormId(): string {
     return 'ai_listing_workbench_form';
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $statusFilter = $this->resolveFilterValue($form_state, 'status_filter', 'any');
     $bargainFilterMode = $this->resolveFilterValue($form_state, 'bargain_bin_filter', 'any');
@@ -211,7 +257,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     ];
     $form['listings_container']['summary']['selected'] = [
       '#type' => 'markup',
-      '#markup' => '<div><strong>' . $this->t('Selected:') . '</strong> <span id="ai-batch-selected-count">0</span></div>',
+      '#markup' => (string) $this->t('<div><strong>@label</strong> <span id="ai-batch-selected-count">0</span></div>', [
+        '@label' => $this->t('Selected:'),
+      ]),
     ];
     $form['listings_container']['summary']['clear_selection'] = [
       '#type' => 'button',
@@ -308,14 +356,23 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return $form;
   }
 
+  /**
+   * Ajax callback for refreshing the listings container.
+   */
   public function updateListingsCallback(array &$form, FormStateInterface $form_state): array {
     return $form['listings_container'];
   }
 
+  /**
+   * Rebuilds the form after filter submission.
+   */
   public function submitApplyFilters(array &$form, FormStateInterface $form_state): void {
     $form_state->setRebuild();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function validateForm(array &$form, FormStateInterface $form_state): void {
     if ($this->isApplyFiltersAction($form_state)
       || $this->isFilterDropdownAjaxAction($form_state)
@@ -334,18 +391,30 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
   }
 
+  /**
+   * Starts the location-update confirmation flow.
+   */
   public function submitUpdateLocation(array &$form, FormStateInterface $form_state): void {
     $this->redirectToLocationConfirmation($form_state);
   }
 
+  /**
+   * Starts the publish-or-update confirmation flow.
+   */
   public function submitPublishOrUpdate(array &$form, FormStateInterface $form_state): void {
     $this->redirectToPublishUpdateConfirmation($form_state, FALSE, '', 'publish_update');
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     $this->submitPublishOrUpdate($form, $form_state);
   }
 
+  /**
+   * Starts the delete flow for selected listings.
+   */
   public function submitDeleteSelected(array &$form, FormStateInterface $form_state): void {
     $selection = $this->getSelectedListingRefs($form_state);
     if ($selection === []) {
@@ -371,25 +440,22 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     batch_set(self::buildInferenceBatchDefinition());
   }
 
-  private function queueListingBatch(FormStateInterface $form_state, bool $setLocation, string $location, string $operationMode, int $locationTermId = 0): void {
-    $selection = $this->getSelectedListingRefs($form_state);
-    if ($selection === []) {
-      $this->messenger()->addError($this->t('Select at least one listing to update.'));
-      $form_state->setRebuild();
-      return;
-    }
-
-    if ($setLocation && $location === '') {
-      $this->messenger()->addError($this->t('Provide a storage location before submitting.'));
-      $form_state->setRebuild();
-      return;
-    }
-
-    batch_set(self::buildListingBatchDefinition($selection, $setLocation, $location, $operationMode, $locationTermId));
-  }
-
   /**
+   * Builds the publish/update batch definition.
+   *
    * @param array<int,array{entity_type:string,id:int}|int|string> $selection
+   *   Selected listing references.
+   * @param bool $setLocation
+   *   Whether to set a storage location first.
+   * @param string $location
+   *   The storage location string.
+   * @param string $operationMode
+   *   The batch operation mode.
+   * @param int $locationTermId
+   *   The storage-location term id.
+   *
+   * @return array<string,mixed>
+   *   The Drupal batch definition.
    */
   public static function buildListingBatchDefinition(array $selection, bool $setLocation, string $location, string $operationMode = 'publish', int $locationTermId = 0): array {
     $operations = [];
@@ -440,6 +506,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     ];
   }
 
+  /**
+   * Processes one publish/update batch operation.
+   */
   public static function processBatchOperation(string $listingType, int $listingId, bool $setLocation, string $location, string $operationMode, int $locationTermId, array &$context): void {
     $entityTypeManager = \Drupal::entityTypeManager();
     $storage = $entityTypeManager->getStorage('bb_ai_listing');
@@ -456,13 +525,16 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $context['results']['operation_mode'] = $operationMode;
 
     if (!$listing instanceof BbAiListing) {
-      $context['message'] = (string) \Drupal::translation()->translate('Skipping missing listing @id.', ['@id' => $listingId]);
+      $context['message'] = (string) \Drupal::translation()->translate(
+        'Skipping missing listing @id.',
+        ['@id' => $listingId],
+      );
       return;
     }
 
     if ($setLocation) {
       $listing->set('storage_location', $location);
-      $listing->set('storage_location_term', $locationTermId > 0 ? ['target_id' => $locationTermId] : null);
+      $listing->set('storage_location_term', $locationTermId > 0 ? ['target_id' => $locationTermId] : NULL);
     }
 
     if ($operationMode === 'location_only') {
@@ -499,7 +571,10 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
           '%reason' => $e->getMessage(),
         ]
       );
-      $context['message'] = (string) \Drupal::translation()->translate('Failed listing @id.', ['@id' => $listingId]);
+      $context['message'] = (string) \Drupal::translation()->translate(
+        'Failed listing @id.',
+        ['@id' => $listingId],
+      );
       return;
     }
 
@@ -513,7 +588,10 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
           '%reason' => $result->getMessage(),
         ]
       );
-      $context['message'] = (string) \Drupal::translation()->translate('Failed listing @id.', ['@id' => $listingId]);
+      $context['message'] = (string) \Drupal::translation()->translate(
+        'Failed listing @id.',
+        ['@id' => $listingId],
+      );
       return;
     }
 
@@ -529,6 +607,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     );
   }
 
+  /**
+   * Finishes the publish/update batch operation.
+   */
   public static function finishBatchOperation(bool $success, array $results, array $operations): void {
     $messenger = \Drupal::messenger();
     $translation = \Drupal::translation();
@@ -563,7 +644,13 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
+   * Builds the delete batch definition.
+   *
    * @param array<int,array{listing_type:string,id:int}> $selection
+   *   Selected listing references.
+   *
+   * @return array<string,mixed>
+   *   The Drupal batch definition.
    */
   public static function buildDeleteBatchDefinition(array $selection): array {
     $operations = [];
@@ -586,6 +673,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     ];
   }
 
+  /**
+   * Processes one delete batch operation.
+   */
   public static function processDeleteBatchOperation(string $listingType, int $listingId, array &$context): void {
     if (!isset($context['results']['success'])) {
       $context['results']['success'] = 0;
@@ -598,7 +688,13 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $storage = $entityTypeManager->getStorage('bb_ai_listing');
     $listing = $storage->load($listingId);
     if ($listing === NULL) {
-      $context['message'] = (string) \Drupal::translation()->translate('Skipping missing listing @type:@id.', ['@type' => $listingType, '@id' => $listingId]);
+      $context['message'] = (string) \Drupal::translation()->translate(
+        'Skipping missing listing @type:@id.',
+        [
+          '@type' => $listingType,
+          '@id' => $listingId,
+        ],
+      );
       return;
     }
 
@@ -630,10 +726,19 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
           '%reason' => $e->getMessage(),
         ]
       );
-      $context['message'] = (string) \Drupal::translation()->translate('Failed delete for listing @type:@id.', ['@type' => $listingType, '@id' => $listingId]);
+      $context['message'] = (string) \Drupal::translation()->translate(
+        'Failed delete for listing @type:@id.',
+        [
+          '@type' => $listingType,
+          '@id' => $listingId,
+        ],
+      );
     }
   }
 
+  /**
+   * Finishes the delete batch operation.
+   */
   public static function finishDeleteBatchOperation(bool $success, array $results, array $operations): void {
     $messenger = \Drupal::messenger();
     $translation = \Drupal::translation();
@@ -732,7 +837,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
         ]
       );
     }
-    catch (\Drupal\compute_orchestrator\Exception\AcquirePendingException $exception) {
+    catch (AcquirePendingException $exception) {
       $sandbox['acquire_attempts']++;
       $context['message'] = (string) t(
         'Waiting for pooled runtime warmup (attempt @attempt): @message',
@@ -797,15 +902,46 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
     else {
       try {
+        \Drupal::logger('ai_listing_inference')->notice(
+          'Batch listing inference started for listing @listing_id (@position/@total).',
+          [
+            '@listing_id' => $listingId,
+            '@position' => $position,
+            '@total' => $total,
+          ]
+        );
         $batchProcessor->processListing($listing);
         $context['results']['processed']++;
+        \Drupal::logger('ai_listing_inference')->notice(
+          'Batch listing inference completed for listing @listing_id (@position/@total).',
+          [
+            '@listing_id' => $listingId,
+            '@position' => $position,
+            '@total' => $total,
+          ]
+        );
       }
       catch (\Throwable $exception) {
         $context['results']['failed']++;
         $context['results']['errors'][] = 'Listing ' . $listingId . ' inference failed: ' . $exception->getMessage();
-        if (self::isInferenceConnectivityFailure($exception)) {
+        $isConnectivityFailure = self::isInferenceConnectivityFailure($exception);
+        \Drupal::logger('ai_listing_inference')->error(sprintf(
+          'Batch listing inference failed for listing %d (%d/%d). class=%s message=%s connectivity_failure=%s trace=%s',
+          $listingId,
+          $position,
+          $total,
+          $exception::class,
+          $exception->getMessage(),
+          $isConnectivityFailure ? 'yes' : 'no',
+          $exception->getTraceAsString(),
+        ));
+        if ($isConnectivityFailure) {
           $context['results']['aborted_early'] = TRUE;
           $context['results']['errors'][] = 'Aborting remaining listings because VLM connectivity failed.';
+          \Drupal::logger('ai_listing_inference')->error(sprintf(
+            'Batch listing inference is aborting remaining listings after listing %d because a connectivity failure was detected.',
+            $listingId,
+          ));
         }
       }
     }
@@ -913,6 +1049,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return FALSE;
   }
 
+  /**
+   * Checks whether a listing has inventory and marketplace data.
+   */
   private static function listingHasInventoryAndMarketplaceData(int $listingId): bool {
     $entityTypeManager = \Drupal::entityTypeManager();
 
@@ -938,6 +1077,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return $publicationIds !== [];
   }
 
+  /**
+   * Determines whether the current submit updates location for publishing.
+   */
   private function isSetLocationAndPublishAction(FormStateInterface $form_state): bool {
     $trigger = $form_state->getTriggeringElement();
     $triggerName = $trigger['#name'] ?? '';
@@ -953,12 +1095,18 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return $triggerName === 'run_ai_inference_ready';
   }
 
+  /**
+   * Determines whether the current submit applies filters.
+   */
   private function isApplyFiltersAction(FormStateInterface $form_state): bool {
     $trigger = $form_state->getTriggeringElement();
     $triggerName = $trigger['#name'] ?? '';
     return $triggerName === 'apply_filters';
   }
 
+  /**
+   * Determines whether the current submit is a filter AJAX action.
+   */
   private function isFilterDropdownAjaxAction(FormStateInterface $form_state): bool {
     $trigger = $form_state->getTriggeringElement();
     if (!is_array($trigger)) {
@@ -970,7 +1118,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       return TRUE;
     }
 
-    $parents = $trigger['#parents'] ?? null;
+    $parents = $trigger['#parents'] ?? NULL;
     if (!is_array($parents) || $parents === []) {
       return FALSE;
     }
@@ -992,6 +1140,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return NULL;
   }
 
+  /**
+   * Resolves a filter value from submitted form input.
+   */
   private function resolveFilterValue(FormStateInterface $form_state, string $key, string $default): string {
     $input = $form_state->getUserInput();
     if (isset($input[$key]) && is_scalar($input[$key])) {
@@ -999,11 +1150,11 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     }
 
     $value = $form_state->getValue($key);
-    if ($value !== null && is_scalar($value)) {
+    if ($value !== NULL && is_scalar($value)) {
       return trim((string) $value);
     }
 
-    $queryValue = \Drupal::request()->query->get($key);
+    $queryValue = $this->requestStack?->getCurrentRequest()?->query->get($key);
     if (is_string($queryValue)) {
       return trim($queryValue);
     }
@@ -1011,6 +1162,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return $default;
   }
 
+  /**
+   * Redirects to the publish/update confirmation flow.
+   */
   private function redirectToPublishUpdateConfirmation(
     FormStateInterface $form_state,
     bool $setLocation,
@@ -1046,6 +1200,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $form_state->setRedirect('ai_listing.workbench.publish_update_confirm');
   }
 
+  /**
+   * Redirects to the location confirmation flow.
+   */
   private function redirectToLocationConfirmation(FormStateInterface $form_state): void {
     $selection = $this->getSelectedListingRefs($form_state);
     if ($selection === []) {
@@ -1069,6 +1226,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $form_state->setRedirect('ai_listing.workbench.location_confirm');
   }
 
+  /**
+   * Finds selected listings that do not yet have a storage location.
+   */
   private function findListingsMissingStorageLocation(array $listingIds): array {
     if ($listingIds === []) {
       return [];
@@ -1079,7 +1239,7 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     $missingIds = [];
 
     foreach ($listingIds as $listingId) {
-      $listing = $listings[$listingId] ?? null;
+      $listing = $listings[$listingId] ?? NULL;
       if (!$listing instanceof BbAiListing) {
         continue;
       }
@@ -1093,6 +1253,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return $missingIds;
   }
 
+  /**
+   * Resolves the selected items-per-page value.
+   */
   private function resolveItemsPerPage(FormStateInterface $form_state): int {
     $value = $this->resolveFilterValue($form_state, 'items_per_page', '50');
     $itemsPerPage = (int) $value;
@@ -1104,6 +1267,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return $itemsPerPage;
   }
 
+  /**
+   * Resolves the selected sort field.
+   */
   private function resolveSortField(FormStateInterface $form_state): string {
     $sortField = trim($this->resolveFilterValue($form_state, 'sort', 'created'));
     $allowedSortFields = [
@@ -1127,15 +1293,26 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return $sortField;
   }
 
+  /**
+   * Resolves the selected sort direction.
+   */
   private function resolveSortDirection(FormStateInterface $form_state): string {
     $direction = strtolower(trim($this->resolveFilterValue($form_state, 'order', 'asc')));
     return $direction === 'desc' ? 'desc' : 'asc';
   }
 
   /**
+   * Builds the listing table header.
+   *
+   * @param string $sortField
+   *   The active sort field.
+   * @param string $sortDirection
+   *   The active sort direction.
    * @param array<string,string> $baseParameters
+   *   Base query parameters to preserve in sort links.
    *
    * @return array<string,\Drupal\Core\StringTranslation\TranslatableMarkup|string|\Drupal\Component\Render\MarkupInterface>
+   *   Table header values keyed by column.
    */
   private function buildListingTableHeader(string $sortField, string $sortDirection, array $baseParameters): array {
     return [
@@ -1155,7 +1332,21 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
+   * Builds a sortable table header cell.
+   *
+   * @param string|\Stringable $label
+   *   The header label.
+   * @param string $field
+   *   The field key for sorting.
+   * @param string $currentSortField
+   *   The currently active sort field.
+   * @param string $currentSortDirection
+   *   The currently active sort direction.
    * @param array<string,string> $baseParameters
+   *   Base query parameters to preserve.
+   *
+   * @return string|\Drupal\Component\Render\MarkupInterface
+   *   The rendered sortable header cell.
    */
   private function buildSortableHeaderCell(
     string|\Stringable $label,
@@ -1188,9 +1379,13 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
+   * Builds table options for listing rows.
+   *
    * @param array<string,array{selection_key:string,listing_type:string,listing_id:int,entity:\Drupal\ai_listing\Entity\BbAiListing,created:int,sku:string,is_published_to_ebay:bool,ebay_listing_id:?string}> $rows
+   *   Listing rows keyed by selection key.
    *
    * @return array<string,array<string,string|\Drupal\Component\Render\MarkupInterface>>
+   *   Table options keyed by selection key.
    */
   private function buildListingTableOptions(array $rows): array {
     $options = [];
@@ -1231,9 +1426,13 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
+   * Builds mobile card render arrays for listing rows.
+   *
    * @param array<string,array{selection_key:string,listing_type:string,listing_id:int,entity:\Drupal\ai_listing\Entity\BbAiListing,created:int,sku:string,is_published_to_ebay:bool,ebay_listing_id:?string}> $rows
+   *   Listing rows keyed by selection key.
    *
    * @return array<string,array<string,mixed>>
+   *   Mobile card render arrays keyed by selection key.
    */
   private function buildMobileListingCards(array $rows): array {
     $cards = [];
@@ -1314,9 +1513,13 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
+   * Builds a thumbnail URI lookup keyed by listing id.
+   *
    * @param array<string,array{selection_key:string,listing_type:string,listing_id:int,entity:\Drupal\ai_listing\Entity\BbAiListing,created:int,sku:string,is_published_to_ebay:bool,ebay_listing_id:?string}> $rows
+   *   Listing rows keyed by selection key.
    *
    * @return array<int,string>
+   *   Thumbnail URIs keyed by listing id.
    */
   private function buildListingThumbnailUriLookup(array $rows): array {
     if (!$this->getEntityTypeManager()->hasDefinition('listing_image')) {
@@ -1372,7 +1575,10 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
+   * Builds the mobile thumbnail render array.
+   *
    * @return array<string,mixed>
+   *   A render array for the thumbnail area.
    */
   private function buildMobileThumbnail(?string $thumbnailUri): array {
     if ($thumbnailUri === NULL || $thumbnailUri === '') {
@@ -1401,7 +1607,10 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
+   * Builds a mobile metadata row.
+   *
    * @return array<string,mixed>
+   *   A render array for one metadata item.
    */
   private function buildMobileMetaItem(string $label, string $value): array {
     return [
@@ -1422,6 +1631,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     ];
   }
 
+  /**
+   * Returns a trimmed string field value when the field exists.
+   */
   private function getStringFieldValueIfExists(BbAiListing $listing, string $fieldName): string {
     if (!$listing->hasField($fieldName)) {
       return '';
@@ -1430,6 +1642,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return trim((string) ($listing->get($fieldName)->value ?? ''));
   }
 
+  /**
+   * Builds the display label for a listing row.
+   */
   private function buildListingLabel(string $listingType, BbAiListing $listing): string {
     if ($listingType === 'book_bundle') {
       return (string) ($listing->get('field_title')->value ?: $listing->label() ?: $this->t('Untitled bundle'));
@@ -1442,6 +1657,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return (string) ($listing->label() ?: $listing->get('ebay_title')->value ?: $this->t('Untitled listing'));
   }
 
+  /**
+   * Builds the display label for a listing type.
+   */
   private function buildTypeLabel(string $listingType): string {
     $label = $this->getListingTypeLabels()[$listingType] ?? NULL;
     if (is_string($label) && $label !== '') {
@@ -1452,10 +1670,13 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
+   * Loads listing type labels keyed by bundle.
+   *
    * @return array<string,string>
+   *   Listing type labels keyed by type id.
    */
   private function getListingTypeLabels(): array {
-    if ($this->listingTypeLabels !== null) {
+    if ($this->listingTypeLabels !== NULL) {
       return $this->listingTypeLabels;
     }
 
@@ -1475,6 +1696,9 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return $this->listingTypeLabels;
   }
 
+  /**
+   * Resolves the listing bundle for a batch item id.
+   */
   private static function resolveListingTypeForBatchItem(int $listingId): string {
     $listing = \Drupal::entityTypeManager()->getStorage('bb_ai_listing')->load($listingId);
     if ($listing instanceof BbAiListing) {
@@ -1484,10 +1708,16 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return '';
   }
 
+  /**
+   * Returns the current pager page.
+   */
   private function getCurrentPage(): int {
     return $this->getPagerParameters()->findPage();
   }
 
+  /**
+   * Builds the eBay item link markup for a listing id.
+   */
   private function buildEbayItemLink(?string $ebayListingId): string|MarkupInterface {
     if ($ebayListingId === NULL || $ebayListingId === '') {
       return (string) $this->t('—');
@@ -1501,12 +1731,11 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
     return Link::fromTextAndUrl($this->t('View'), $url)->toString();
   }
 
-  private function buildSelectionKey(string $listingType, int $id): string {
-    return $this->getBatchSelectionManager()->buildSelectionKey($listingType, $id);
-  }
-
   /**
+   * Returns selected listing references from form state.
+   *
    * @return array<int,array{listing_type:string,id:int}>
+   *   Selected listing references.
    */
   private function getSelectedListingRefs(FormStateInterface $form_state): array {
     return $this->getBatchSelectionManager()
@@ -1514,7 +1743,10 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
   }
 
   /**
+   * Returns submitted selected listing keys from form state.
+   *
    * @return string[]
+   *   Selected listing keys.
    */
   private function getSubmittedSelectedListingKeys(FormStateInterface $form_state): array {
     $submittedValue = $form_state->getValue(self::SELECTED_LISTING_KEYS_FIELD);
@@ -1526,62 +1758,67 @@ final class AiListingWorkbenchForm extends FormBase implements ContainerInjectio
       ->extractSelectionKeys($submittedValue, $currentPageSelection);
   }
 
+  /**
+   * Builds the encoded selected-listing payload for the client.
+   */
   private function buildSelectedListingKeysPayload(FormStateInterface $form_state): string {
     return $this->getBatchSelectionManager()
       ->encodeSelectionKeys($this->getSubmittedSelectedListingKeys($form_state));
   }
 
+  /**
+   * Returns the entity type manager service.
+   */
   private function getEntityTypeManager(): EntityTypeManagerInterface {
-    if ($this->entityTypeManager === null) {
-      $this->entityTypeManager = \Drupal::entityTypeManager();
-    }
+    assert($this->entityTypeManager instanceof EntityTypeManagerInterface);
     return $this->entityTypeManager;
   }
 
+  /**
+   * Returns the date formatter service.
+   */
   private function getDateFormatter(): DateFormatterInterface {
-    if ($this->dateFormatter === null) {
-      $this->dateFormatter = \Drupal::service('date.formatter');
-    }
+    assert($this->dateFormatter instanceof DateFormatterInterface);
     return $this->dateFormatter;
   }
 
-  private function getConfirmTempStore(): \Drupal\Core\TempStore\PrivateTempStore {
-    if ($this->tempStoreFactory === null) {
-      $this->tempStoreFactory = \Drupal::service('tempstore.private');
-    }
-
+  /**
+   * Returns the workbench confirmation tempstore.
+   */
+  private function getConfirmTempStore(): PrivateTempStore {
+    assert($this->tempStoreFactory instanceof PrivateTempStoreFactory);
     return $this->tempStoreFactory->get(self::WORKBENCH_TEMPSTORE_COLLECTION);
   }
 
+  /**
+   * Returns the pager manager service.
+   */
   private function getPagerManager(): PagerManagerInterface {
-    if ($this->pagerManager === null) {
-      $this->pagerManager = \Drupal::service('pager.manager');
-    }
-
+    assert($this->pagerManager instanceof PagerManagerInterface);
     return $this->pagerManager;
   }
 
+  /**
+   * Returns the pager parameters service.
+   */
   private function getPagerParameters(): PagerParametersInterface {
-    if ($this->pagerParameters === null) {
-      $this->pagerParameters = \Drupal::service('pager.parameters');
-    }
-
+    assert($this->pagerParameters instanceof PagerParametersInterface);
     return $this->pagerParameters;
   }
 
+  /**
+   * Returns the batch dataset provider service.
+   */
   private function getBatchDatasetProvider(): AiListingBatchDatasetProvider {
-    if ($this->batchDatasetProvider === null) {
-      $this->batchDatasetProvider = \Drupal::service('ai_listing.batch_dataset_provider');
-    }
-
+    assert($this->batchDatasetProvider instanceof AiListingBatchDatasetProvider);
     return $this->batchDatasetProvider;
   }
 
+  /**
+   * Returns the batch selection manager service.
+   */
   private function getBatchSelectionManager(): AiListingBatchSelectionManager {
-    if ($this->batchSelectionManager === null) {
-      $this->batchSelectionManager = \Drupal::service('ai_listing.batch_selection_manager');
-    }
-
+    assert($this->batchSelectionManager instanceof AiListingBatchSelectionManager);
     return $this->batchSelectionManager;
   }
 

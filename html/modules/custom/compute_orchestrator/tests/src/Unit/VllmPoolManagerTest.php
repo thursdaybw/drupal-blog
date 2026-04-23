@@ -7,6 +7,12 @@ namespace Drupal\Tests\compute_orchestrator\Unit;
 require_once __DIR__ . '/../../../src/Exception/AcquirePendingException.php';
 require_once __DIR__ . '/../../../src/Exception/WorkloadReadinessException.php';
 require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
+require_once __DIR__ . '/../../../src/Service/VllmPoolManager.php';
+require_once __DIR__ . '/../../../src/Service/GenericVllmRuntimeManagerInterface.php';
+require_once __DIR__ . '/../../../src/Service/VastInstanceLifecycleClientInterface.php';
+require_once __DIR__ . '/../../../src/Service/VastRestClientInterface.php';
+require_once __DIR__ . '/../../../src/Service/VllmPoolRepositoryInterface.php';
+require_once __DIR__ . '/../../../src/Service/VllmWorkloadCatalogInterface.php';
 
 use Drupal\compute_orchestrator\Service\GenericVllmRuntimeManagerInterface;
 use Drupal\compute_orchestrator\Service\VastInstanceLifecycleClientInterface;
@@ -15,7 +21,6 @@ use Drupal\compute_orchestrator\Service\VllmPoolManager;
 use Drupal\compute_orchestrator\Service\VllmPoolRepositoryInterface;
 use Drupal\compute_orchestrator\Service\VllmWorkloadCatalogInterface;
 use Drupal\Core\State\StateInterface;
-use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -23,6 +28,9 @@ use PHPUnit\Framework\TestCase;
  */
 final class VllmPoolManagerTest extends TestCase {
 
+  /**
+   * Tests register instance stores arbitrary leased contract for pool testing.
+   */
   public function testRegisterInstanceStoresArbitraryLeasedContractForPoolTesting(): void {
     $repository = $this->newInMemoryRepository([]);
 
@@ -72,6 +80,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('http://194.14.47.19:22097', $record['url']);
   }
 
+  /**
+   * Tests acquire reuses running matching instance before fresh provision.
+   */
   public function testAcquireReusesRunningMatchingInstanceBeforeFreshProvision(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -159,10 +170,16 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('123', $record['contract_id']);
     $this->assertSame('leased', $record['lease_status']);
     $this->assertSame('qwen-vl', $record['current_workload_mode']);
-    $this->assertSame('Qwen/Qwen2-VL-7B-Instruct', $record['current_model']);
+    $this->assertSame(
+      'Qwen/Qwen2-VL-7B-Instruct',
+      $record['current_model'],
+    );
     $this->assertSame('http://1.2.3.4:22097', $record['url']);
   }
 
+  /**
+   * Tests acquire skips external sleeping instances and provisions fresh.
+   */
   public function testAcquireSkipsExternallyRentedSleepingInstanceAndFallsBackToFreshProvision(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -283,6 +300,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('fresh_fallback', $records['999']['source']);
   }
 
+  /**
+   * Tests acquire marks queued wake as rented elsewhere.
+   */
   public function testAcquireMarksQueuedWakeAsRentedElsewhere(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -362,6 +382,9 @@ final class VllmPoolManagerTest extends TestCase {
     }
   }
 
+  /**
+   * Tests acquire switches running instance to requested workload.
+   */
   public function testAcquireSwitchesRunningInstanceToRequestedWorkload(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -447,9 +470,15 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('123', $record['contract_id']);
     $this->assertSame('leased', $record['lease_status']);
     $this->assertSame('qwen-vl', $record['current_workload_mode']);
-    $this->assertSame('Qwen/Qwen2-VL-7B-Instruct', $record['current_model']);
+    $this->assertSame(
+      'Qwen/Qwen2-VL-7B-Instruct',
+      $record['current_model'],
+    );
   }
 
+  /**
+   * Tests acquire falls back to fresh after wake rate limit.
+   */
   public function testAcquireFallsBackToFreshAfterWakeRateLimit(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -562,7 +591,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertStringContainsString('429 Too Many Requests', (string) $records['123']['last_error']);
   }
 
-
+  /**
+   * Tests acquire scales out when only matching instance is leased.
+   */
   public function testAcquireScalesOutWhenOnlyMatchingInstanceIsLeased(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -650,6 +681,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('leased', $repository->get('123')['lease_status']);
   }
 
+  /**
+   * Tests acquire refuses scale out when matching pool max is reached.
+   */
   public function testAcquireRefusesScaleOutWhenMatchingPoolMaxIsReached(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -711,7 +745,9 @@ final class VllmPoolManagerTest extends TestCase {
     $manager->acquire('qwen-vl');
   }
 
-
+  /**
+   * Tests acquire scale out counts only matching runtime profile.
+   */
   public function testAcquireScaleOutCountsOnlyMatchingRuntimeProfile(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -802,6 +838,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('whisper', $record['current_workload_mode']);
   }
 
+  /**
+   * Tests acquire unlimited pool size allows scale out.
+   */
   public function testAcquireUnlimitedPoolSizeAllowsScaleOut(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -892,6 +931,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('999', $record['contract_id']);
   }
 
+  /**
+   * Tests acquire does not count unavailable member against pool limit.
+   */
   public function testAcquireDoesNotCountUnavailableMemberAgainstPoolLimit(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -978,6 +1020,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('999', $record['contract_id']);
   }
 
+  /**
+   * Tests acquire without fresh throws when pool is empty.
+   */
   public function testAcquireWithoutFreshThrowsWhenPoolIsEmpty(): void {
     $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
     $catalog->expects($this->once())
@@ -1010,6 +1055,9 @@ final class VllmPoolManagerTest extends TestCase {
     $manager->acquire('qwen-vl', NULL, FALSE);
   }
 
+  /**
+   * Tests acquire fresh failure destroys leaked contract.
+   */
   public function testAcquireFreshFailureDestroysLeakedContract(): void {
     $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
     $catalog->expects($this->once())
@@ -1069,7 +1117,9 @@ final class VllmPoolManagerTest extends TestCase {
     $manager->acquire('qwen-vl');
   }
 
-
+  /**
+   * Tests acquire fresh failure includes cleanup failure when destroy throws.
+   */
   public function testAcquireFreshFailureIncludesCleanupFailureWhenDestroyThrows(): void {
     $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
     $catalog->expects($this->once())
@@ -1138,6 +1188,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertStringContainsString('simulated destroy failure', (string) $record['cleanup_error']);
   }
 
+  /**
+   * Tests acquire fresh failure verifies destroy actually removed contract.
+   */
   public function testAcquireFreshFailureVerifiesDestroyActuallyRemovedContract(): void {
     $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
     $catalog->expects($this->once())
@@ -1215,6 +1268,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('failed', $record['cleanup_status']);
   }
 
+  /**
+   * Tests remove and clear delete tracked inventory.
+   */
   public function testRemoveAndClearDeleteTrackedInventory(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -1266,6 +1322,9 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame([], $repository->all());
   }
 
+  /**
+   * Tests reap idle available instances stops running instance past threshold.
+   */
   public function testReapIdleAvailableInstancesStopsRunningInstancePastThreshold(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
@@ -1334,6 +1393,65 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertArrayHasKey('last_stopped_at', $record);
   }
 
+  /**
+   * Tests reap idle instances allows immediate reaping at zero threshold.
+   */
+  public function testReapIdleAvailableInstancesAllowsImmediateReapWhenThresholdIsZero(): void {
+    $repository = $this->newInMemoryRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'qwen-vl',
+        'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'lease_status' => 'available',
+        'host' => '1.2.3.4',
+        'port' => '22097',
+        'url' => 'http://1.2.3.4:22097',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => time(),
+        'last_error' => '',
+      ],
+    ]);
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->once())
+      ->method('stopInstance')
+      ->with('123')
+      ->willReturn(['success' => TRUE]);
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('123')
+      ->willReturn([
+        'id' => '123',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+      ]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->createMock(VllmWorkloadCatalogInterface::class),
+      $this->createMock(GenericVllmRuntimeManagerInterface::class),
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      3,
+      0,
+    );
+
+    $results = $manager->reapIdleAvailableInstances(0);
+    $record = $repository->get('123');
+
+    $this->assertSame('stopped', $results[0]['action']);
+    $this->assertNotNull($record);
+    $this->assertArrayHasKey('last_stopped_at', $record);
+  }
+
+  /**
+   * Tests reap idle available instances honours dry run.
+   */
   public function testReapIdleAvailableInstancesHonoursDryRun(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [

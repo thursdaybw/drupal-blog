@@ -136,14 +136,24 @@ final class VllmInstancePoolCommand extends DrushCommands {
    *
    * @command compute:vllm-pool-reap-idle
    * @option idle-seconds
-   *   Override the configured post-lease grace period. Defaults to state
-   *   compute_orchestrator.vllm_pool.idle_shutdown_seconds, or 600 seconds.
+   *   Override the configured grace period. Use 0 to reap immediately.
+   * @option no-reap
+   *   Skip reaping entirely for this invocation.
    * @option dry-run
    *   Report matching instances without stopping them.
    */
-  public function reapIdle(array $options = ['idle-seconds' => NULL, 'dry-run' => FALSE]): void {
-    $idleSeconds = isset($options['idle-seconds']) && (string) $options['idle-seconds'] !== ''
-      ? (int) $options['idle-seconds']
+  public function reapIdle(array $options = ['idle-seconds' => NULL, 'no-reap' => FALSE, 'dry-run' => FALSE]): void {
+    if ((bool) ($options['no-reap'] ?? FALSE)) {
+      $this->output()->writeln('Reaping skipped because --no-reap was provided.');
+      return;
+    }
+
+    $idleSecondsOption = $options['idle-seconds'] ?? NULL;
+    if ($idleSecondsOption === FALSE) {
+      $idleSecondsOption = $this->extractIdleSecondsFromArgv();
+    }
+    $idleSeconds = $idleSecondsOption !== NULL && (string) $idleSecondsOption !== ''
+      ? (int) $idleSecondsOption
       : $this->poolManager->getIdleShutdownSeconds();
     $results = $this->poolManager->reapIdleAvailableInstances($idleSeconds, (bool) ($options['dry-run'] ?? FALSE));
     if ($results === []) {
@@ -172,6 +182,45 @@ final class VllmInstancePoolCommand extends DrushCommands {
   public function remove(string $instanceId): void {
     $this->poolManager->remove($instanceId);
     $this->output()->writeln('Removed pooled instance ' . $instanceId . '.');
+  }
+
+  /**
+   * Extracts --idle-seconds from raw argv when Drush normalizes zero to FALSE.
+   */
+  private function extractIdleSecondsFromArgv(): ?int {
+    $argv = $_SERVER['argv'] ?? [];
+    if (!is_array($argv)) {
+      return NULL;
+    }
+
+    foreach ($argv as $arg) {
+      if (!is_string($arg)) {
+        continue;
+      }
+      if (str_starts_with($arg, '--idle-seconds=')) {
+        return (int) substr($arg, strlen('--idle-seconds='));
+      }
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Destroys the Vast instance and removes it from the pool inventory.
+   *
+   * @param string $instanceId
+   *   Contract ID to destroy and remove.
+   *
+   * @command compute:vllm-pool-destroy-remove
+   */
+  public function destroyRemove(string $instanceId): void {
+    $result = $this->poolManager->destroyAndRemove($instanceId);
+    $this->output()->writeln(sprintf(
+      '%s action=%s message=%s',
+      $result['contract_id'] ?? '',
+      $result['action'] ?? '',
+      $result['message'] ?? '',
+    ));
   }
 
   /**

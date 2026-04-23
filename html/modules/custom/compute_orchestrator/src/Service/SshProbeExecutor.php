@@ -13,6 +13,8 @@ use Symfony\Component\Process\Process;
  */
 final class SshProbeExecutor {
 
+  private const JSONL_LOG_PATH = '/tmp/compute-orchestrator-ssh-probes.log';
+
   /**
    * Module logger channel.
    */
@@ -39,6 +41,16 @@ final class SshProbeExecutor {
         'remote' => $remoteCommand,
       ]
     );
+    $this->appendJsonlLog([
+      'event' => 'invoke',
+      'timestamp' => date(DATE_ATOM),
+      'probe' => $request->name,
+      'host' => $context->host,
+      'port' => $context->port,
+      'user' => $context->user,
+      'remote_command' => $remoteCommand,
+      'timeout_seconds' => $request->timeoutSeconds,
+    ]);
 
     $process = new Process([
       'ssh',
@@ -70,6 +82,7 @@ final class SshProbeExecutor {
         'exception' => $e->getMessage(),
       ];
       $this->logProbeResult($request->name, $result);
+      $this->appendProbeResultLog($request->name, $context, $remoteCommand, $result);
       return $result;
     }
 
@@ -83,7 +96,54 @@ final class SshProbeExecutor {
       'exception' => NULL,
     ];
     $this->logProbeResult($request->name, $result);
+    $this->appendProbeResultLog($request->name, $context, $remoteCommand, $result);
     return $result;
+  }
+
+  /**
+   * Appends a normalized probe result row to the JSONL diagnostics log.
+   *
+   * @param string $probe
+   *   The probe name.
+   * @param \Drupal\compute_orchestrator\Service\SshConnectionContext $context
+   *   SSH connection details used for the probe.
+   * @param string $remoteCommand
+   *   The remote command that was executed.
+   * @param array<string, mixed> $result
+   *   The normalized probe result payload.
+   */
+  private function appendProbeResultLog(string $probe, SshConnectionContext $context, string $remoteCommand, array $result): void {
+    $this->appendJsonlLog([
+      'event' => 'result',
+      'timestamp' => date(DATE_ATOM),
+      'probe' => $probe,
+      'host' => $context->host,
+      'port' => $context->port,
+      'user' => $context->user,
+      'remote_command' => $remoteCommand,
+      'ok' => ($result['ok'] ?? FALSE) === TRUE,
+      'transport_ok' => ($result['transport_ok'] ?? FALSE) === TRUE,
+      'failure_kind' => (string) ($result['failure_kind'] ?? 'unknown'),
+      'exit_code' => $result['exit_code'] ?? NULL,
+      'stdout' => (string) ($result['stdout'] ?? ''),
+      'stderr' => (string) ($result['stderr'] ?? ''),
+      'exception' => (string) ($result['exception'] ?? ''),
+    ]);
+  }
+
+  /**
+   * Appends a single JSONL diagnostics row to disk.
+   *
+   * @param array<string, mixed> $row
+   *   The row to append.
+   */
+  private function appendJsonlLog(array $row): void {
+    try {
+      @file_put_contents(self::JSONL_LOG_PATH, json_encode($row, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND | LOCK_EX);
+    }
+    catch (\Throwable $e) {
+      $this->logger->warning('Failed to append SSH probe JSONL log: {message}', ['message' => $e->getMessage()]);
+    }
   }
 
   /**

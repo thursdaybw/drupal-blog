@@ -5,3 +5,7 @@ compute_orchestrator.settings:
     vast_api_key:
       type: string
       label: 'Vast API key'
+    max_hourly_price:
+      type: float
+      label: "Maximum hourly Vast price"
+

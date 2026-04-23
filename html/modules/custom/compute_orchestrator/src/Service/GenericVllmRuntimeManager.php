@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Psr\Log\LoggerInterface;
 
@@ -21,6 +22,7 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
     private readonly VastRestClientInterface $vastClient,
     private readonly SshProbeExecutor $sshProbeExecutor,
     private readonly SshKeyPathResolverInterface $sshKeyPathResolver,
+    private readonly ConfigFactoryInterface $configFactory,
     LoggerChannelFactoryInterface $loggerFactory,
   ) {
     $this->logger = $loggerFactory->get('compute_orchestrator');
@@ -39,15 +41,18 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
       'direct_port_count' => ['gte' => 8],
     ];
 
+    $maxHourlyPrice = (float) ($this->configFactory->get('compute_orchestrator.settings')->get('max_hourly_price') ?? 0.5);
+
     $offer = $this->vastClient->selectBestOffer(
       $filters,
       [],
       ['RU', 'CN', 'IR', 'KP', 'SY'],
       20,
+      $maxHourlyPrice,
     );
 
     if ($offer === NULL || empty($offer['id'])) {
-      throw new \RuntimeException('No suitable Vast offer matched the generic vLLM filters.');
+      throw new \RuntimeException(sprintf('No suitable Vast offer matched the generic vLLM filters under the configured hourly cap of $%.2f.', $maxHourlyPrice));
     }
 
     $create = $this->vastClient->createInstance(

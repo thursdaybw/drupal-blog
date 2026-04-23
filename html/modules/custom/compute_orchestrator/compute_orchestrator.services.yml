@@ -64,6 +64,7 @@ services:
       - '@compute_orchestrator.vast_rest_client'
       - '@compute_orchestrator.ssh_probe_executor'
       - '@compute_orchestrator.ssh_key_path_resolver'
+      - '@config.factory'
       - '@logger.factory'
 
   compute_orchestrator.vllm_pool_repository:

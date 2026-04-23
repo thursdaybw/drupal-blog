@@ -32,6 +32,7 @@ final class ComputeOrchestratorSettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $config = $this->config('compute_orchestrator.settings');
     $hasApiKey = trim((string) $config->get('vast_api_key')) !== '';
+    $maxHourlyPrice = (float) ($config->get('max_hourly_price') ?? 0.5);
 
     $form['help'] = [
       '#type' => 'item',
@@ -56,6 +57,16 @@ final class ComputeOrchestratorSettingsForm extends ConfigFormBase {
       '#description' => $this->t('This clears the editable config value. It cannot clear a settings.php config override.'),
     ];
 
+    $form['max_hourly_price'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Maximum hourly Vast price'),
+      '#description' => $this->t('Fresh generic vLLM provisioning will refuse offers above this hourly USD cap.'),
+      '#default_value' => $maxHourlyPrice,
+      '#min' => 0,
+      '#step' => 0.01,
+      '#required' => TRUE,
+    ];
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -74,6 +85,9 @@ final class ComputeOrchestratorSettingsForm extends ConfigFormBase {
         $config->set('vast_api_key', $apiKey);
       }
     }
+
+    $maxHourlyPrice = (float) $form_state->getValue('max_hourly_price');
+    $config->set('max_hourly_price', max(0, $maxHourlyPrice));
 
     $config->save();
     parent::submitForm($form, $form_state);

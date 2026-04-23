@@ -354,9 +354,6 @@ final class VllmPoolManager {
    */
   public function reapIdleAvailableInstances(?int $idleSeconds = NULL, bool $dryRun = FALSE): array {
     $threshold = max(0, $idleSeconds ?? $this->getIdleShutdownSeconds());
-    if ($threshold === 0) {
-      return [];
-    }
 
     $now = time();
     $results = [];
@@ -377,7 +374,10 @@ final class VllmPoolManager {
       }
 
       $lastUsedAt = (int) ($record['last_used_at'] ?? 0);
-      if ($lastUsedAt <= 0 || ($now - $lastUsedAt) < $threshold) {
+      if ($lastUsedAt <= 0) {
+        continue;
+      }
+      if ($threshold > 0 && ($now - $lastUsedAt) < $threshold) {
         continue;
       }
 

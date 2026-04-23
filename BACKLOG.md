@@ -1,0 +1,1 @@
+- Upgrade PHPUnit from ^9 to modern version (align with Drupal core-dev / PHPUnit 11)

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+if [[ "${SKIP_QUALITY_GATES:-0}" == "1" ]]; then
+  echo "Skipping quality gates because SKIP_QUALITY_GATES=1"
+  exit 0
+fi
+
+mapfile -t staged_files < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [[ ${#staged_files[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+phpcs_files=()
+
+for path in "${staged_files[@]}"; do
+  [[ -f "$path" ]] || continue
+
+  case "$path" in
+    html/modules/custom/*|html/themes/custom/*|html/profiles/custom/*)
+      ;;
+    *)
+      continue
+      ;;
+  esac
+
+  case "$path" in
+    *.php|*.module|*.inc|*.install|*.theme|*.profile)
+      phpcs_files+=("$path")
+      ;;
+  esac
+done
+
+if [[ ${#phpcs_files[@]} -gt 0 ]]; then
+  echo "Running PHPCS on staged files..."
+  ./scripts/phpcs.sh "${phpcs_files[@]}"
+fi

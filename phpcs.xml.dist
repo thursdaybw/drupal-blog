@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<ruleset name="BevansBench Drupal Coding Standards">
+  <description>Drupal coding standards for custom code in BevansBench.</description>
+
+  <file>html/modules/custom</file>
+  <file>html/themes/custom</file>
+  <file>html/profiles/custom</file>
+
+  <exclude-pattern>*/vendor/*</exclude-pattern>
+
+  <arg name="extensions" value="php,module,inc,install,theme,profile"/>
+  <arg name="report" value="full"/>
+
+  <rule ref="Drupal"/>
+  <rule ref="DrupalPractice"/>
+</ruleset>

@@ -172,6 +172,33 @@ final class VllmInstancePoolCommand extends DrushCommands {
   }
 
   /**
+   * Reconciles tracked pool records against real Vast state.
+   *
+   * @param array<string,mixed> $options
+   *   Command options keyed by dry-run.
+   *
+   * @command compute:vllm-pool-reconcile
+   * @option dry-run
+   *   Report proposed fixes without saving them.
+   */
+  public function reconcile(array $options = ['dry-run' => FALSE]): void {
+    $results = $this->poolManager->reconcile((bool) ($options['dry-run'] ?? FALSE));
+    if ($results === []) {
+      $this->output()->writeln('No pooled instances are registered.');
+      return;
+    }
+
+    foreach ($results as $result) {
+      $this->output()->writeln(sprintf(
+        '%s action=%s message=%s',
+        $result['contract_id'] ?? '',
+        $result['action'] ?? '',
+        $result['message'] ?? '',
+      ));
+    }
+  }
+
+  /**
    * Removes one instance from the pool inventory.
    *
    * @param string $instanceId

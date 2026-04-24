@@ -343,6 +343,86 @@ final class VllmPoolManager {
   }
 
   /**
+   * Reconciles tracked pool records against real Vast instance state.
+   *
+   * @return array<int,array<string,string>>
+   *   Operator-facing reconciliation rows.
+   */
+  public function reconcile(bool $dryRun = FALSE): array {
+    $results = [];
+    foreach ($this->poolRepository->all() as $contractId => $record) {
+      if (!is_array($record)) {
+        continue;
+      }
+
+      try {
+        $info = $this->vastClient->showInstance((string) $contractId);
+      }
+      catch (\Throwable $exception) {
+        $results[] = [
+          'contract_id' => (string) $contractId,
+          'action' => 'inspect_failed',
+          'message' => $exception->getMessage(),
+        ];
+        continue;
+      }
+
+      $runtimeState = $this->deriveRuntimeState($info);
+      $updated = $record;
+      $updated['runtime_state'] = $runtimeState;
+      $updated['host'] = trim((string) ($info['public_ipaddr'] ?? ($updated['host'] ?? '')));
+      $updated['port'] = $this->extractPublicPort($info);
+      $updated['url'] = $this->buildPublicUrl($info);
+      $updated['last_seen_at'] = time();
+
+      $action = 'unchanged';
+      $message = 'Record already matched live Vast state.';
+
+      if ($this->shouldNormalizeToAvailable($record, $runtimeState)) {
+        $updated['lease_status'] = 'available';
+        $updated['last_error'] = '';
+        $updated['last_phase'] = 'state_reconcile';
+        $updated['last_action'] = 'normalize_available';
+        if (
+          (string) ($record['lease_status'] ?? '') !== 'available'
+          || (string) ($record['runtime_state'] ?? '') !== $runtimeState
+          || trim((string) ($record['last_error'] ?? '')) !== ''
+        ) {
+          $action = 'normalized_available';
+          $message = 'Stopped or running instance had no active lease and was restored to available.';
+        }
+      }
+
+      if ($runtimeState === 'destroyed' && (string) ($updated['lease_status'] ?? '') !== 'destroyed') {
+        $updated['lease_status'] = 'destroyed';
+        $updated['last_phase'] = 'state_reconcile';
+        $updated['last_action'] = 'mark_destroyed';
+        $action = 'marked_destroyed';
+        $message = 'Tracked record points at a destroyed instance.';
+      }
+
+      if ($action !== 'unchanged' && !$dryRun) {
+        $this->poolRepository->save($updated);
+      }
+      elseif ($action === 'unchanged' && $updated != $record && !$dryRun) {
+        $this->poolRepository->save($updated);
+      }
+
+      if ($dryRun && $action !== 'unchanged') {
+        $action = 'would_' . $action;
+      }
+
+      $results[] = [
+        'contract_id' => (string) $contractId,
+        'action' => $action,
+        'message' => $message,
+      ];
+    }
+
+    return $results;
+  }
+
+  /**
    * Stops reap-eligible instances.
    *
    * Eligible rows are:
@@ -1282,6 +1362,62 @@ final class VllmPoolManager {
     }
 
     return 20;
+  }
+
+  /**
+   * Derives a normalized runtime state from Vast metadata.
+   */
+  private function deriveRuntimeState(array $info): string {
+    if ($this->isRunningState($info)) {
+      return 'running';
+    }
+
+    $curState = strtolower(trim((string) ($info['cur_state'] ?? '')));
+    $actualStatus = strtolower(trim((string) ($info['actual_status'] ?? '')));
+    foreach ([$curState, $actualStatus] as $state) {
+      if (in_array($state, ['stopped', 'exited'], TRUE)) {
+        return 'stopped';
+      }
+      if (in_array($state, ['created', 'starting', 'scheduled', 'scheduling'], TRUE)) {
+        return 'starting';
+      }
+      if (in_array($state, ['destroyed', 'deleted'], TRUE)) {
+        return 'destroyed';
+      }
+    }
+
+    return 'unknown';
+  }
+
+  /**
+   * Determines whether a drifted record can be normalized to available.
+   *
+   * @param array<string,mixed> $record
+   *   Stored pool record.
+   * @param string $runtimeState
+   *   Normalized runtime state derived from Vast.
+   */
+  private function shouldNormalizeToAvailable(array $record, string $runtimeState): bool {
+    $leaseStatus = (string) ($record['lease_status'] ?? '');
+    if ($leaseStatus === 'leased' || $leaseStatus === 'destroyed' || $leaseStatus === 'rented_elsewhere') {
+      return FALSE;
+    }
+    if (!in_array($runtimeState, ['running', 'stopped'], TRUE)) {
+      return FALSE;
+    }
+    return !$this->hasActiveLeaseMetadata($record);
+  }
+
+  /**
+   * Detects whether the record still carries an active lease claim.
+   *
+   * @param array<string,mixed> $record
+   *   Stored pool record.
+   */
+  private function hasActiveLeaseMetadata(array $record): bool {
+    return trim((string) ($record['lease_token'] ?? '')) !== ''
+      || (int) ($record['leased_at'] ?? 0) > 0
+      || (int) ($record['lease_expires_at'] ?? 0) > time();
   }
 
   /**

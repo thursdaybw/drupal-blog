@@ -30,6 +30,60 @@ require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
 final class VllmPoolStateMachineTest extends TestCase {
 
   /**
+   * Tests reconcile restores a drifted stopped instance to available.
+   */
+  public function testReconcileNormalizesStoppedReusableInstance(): void {
+    $repository = new StateMachinePoolRepository([
+      '100' => [
+        'contract_id' => '100',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'whisper',
+        'current_model' => 'openai/whisper-large-v3-turbo',
+        'lease_status' => 'unavailable',
+        'host' => '198.53.64.194',
+        'port' => '40537',
+        'url' => 'http://198.53.64.194:40537',
+        'source' => 'fresh_fallback',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => 'stale failure',
+        'lease_token' => '',
+        'leased_at' => 0,
+        'lease_expires_at' => 0,
+      ],
+    ]);
+
+    $catalog = new FakeWorkloadCatalog();
+    $state = $this->createMock(StateInterface::class);
+    $vast = new FakeVastClient([
+      '100' => FakeVastClient::instance('100', 'stopped', 'exited', '198.53.64.194', '40537'),
+    ]);
+    $lifecycle = new FakeLifecycleClient($vast);
+    $runtime = new FakeRuntimeManager($vast);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtime,
+      $lifecycle,
+      $vast,
+      $state,
+      1,
+      0,
+    );
+
+    $results = $manager->reconcile(FALSE);
+    $record = $repository->get('100');
+
+    $this->assertCount(1, $results);
+    $this->assertSame('normalized_available', $results[0]['action']);
+    $this->assertNotNull($record);
+    $this->assertSame('available', $record['lease_status']);
+    $this->assertSame('stopped', $record['runtime_state']);
+    $this->assertSame('', $record['last_error']);
+  }
+
+  /**
    * Tests reap stops an available instance but keeps it reusable.
    */
   public function testReapStopsAvailableInstanceButKeepsItReusable(): void {

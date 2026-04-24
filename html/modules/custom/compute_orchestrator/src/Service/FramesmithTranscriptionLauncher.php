@@ -12,7 +12,7 @@ use Psr\Log\LoggerInterface;
 final class FramesmithTranscriptionLauncher {
 
   public function __construct(
-    private readonly FramesmithTranscriptionTaskStore $taskStore,
+    private readonly FramesmithTranscriptionTaskStoreInterface $taskStore,
     private readonly LoggerInterface $logger,
     private readonly string $appRoot,
   ) {}

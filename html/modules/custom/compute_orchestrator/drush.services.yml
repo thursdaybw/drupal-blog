@@ -40,6 +40,6 @@ services:
   compute_orchestrator.framesmith_transcription_command:
     class: Drupal\compute_orchestrator\Command\FramesmithTranscriptionCommand
     arguments:
-      - '@compute_orchestrator.framesmith_transcription_task_store'
+      - '@compute_orchestrator.framesmith_transcription_runner'
     tags:
       - { name: drush.command }

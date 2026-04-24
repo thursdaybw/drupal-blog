@@ -75,6 +75,69 @@ This preserves immediate task kickoff without requiring cron or a separate daemo
 Reference:
 - Product ADR: `/home/bevan/workspace/bevans-bench-product/docs/architecture/adr/2026-04-24-framesmith-transcription-execution-model.md`
 
+## Testing strategy
+
+Do not burn Vast.ai credits during normal development or automated testing.
+
+Framesmith API and orchestration work should be tested primarily with fake or mocked compute-orchestrator dependencies, following the existing patterns already used in `compute_orchestrator` unit tests.
+
+### Preferred approach
+
+- unit test orchestration logic with fake or mocked implementations of Vast-facing interfaces
+- kernel test the Drupal API contract with fake services injected into the container
+- keep real Vast-backed smoke testing manual and opt-in only
+
+### Practical testing shape
+
+1. Extract long-running transcription orchestration into a dedicated runner service so the Drush command stays thin.
+2. Unit test that runner service with fake dependencies rather than real Vast provisioning.
+3. Kernel test the Framesmith API routes and task/status/result payloads with fake runner or launcher services.
+4. Keep detached-process behaviour out of most tests except for limited manual verification.
+
+### What to fake
+
+Prefer fake PHP service implementations over a fake external HTTP server.
+
+Use fakes or mocks for:
+
+- `VllmPoolManager` or the lower Vast-facing interfaces beneath it
+- runtime management / readiness dependencies
+- SSH execution layers
+- task/result persistence seams where helpful
+
+### Why
+
+This matches the existing `compute_orchestrator` testing style, keeps tests deterministic, avoids unnecessary infrastructure complexity, and prevents accidental Vast.ai credit usage.
+
+## Flexible task guide
+
+Use this as a working guide, not a rigid sequence. Tasks may move, split, merge, or change shape as implementation details become clearer.
+
+### Current guiding tasks
+
+- [x] Record the execution model decision: immediate kickoff, no cron in the critical path.
+- [x] Add the initial Framesmith API skeleton: start, upload, status, result.
+- [x] Add a detached launch path using a one-shot Drush command.
+- [ ] Extract orchestration from the Drush command into a dedicated runner service.
+- [ ] Add fake-backed unit tests for the runner service.
+- [ ] Add kernel tests for the Framesmith API contract using fake services.
+- [ ] Replace stub runner progress with real task lifecycle transitions.
+- [ ] Wire runner acquisition to `compute_orchestrator` for `whisper`.
+- [ ] Define isolated remote working paths such as `/tmp/framesmith/{task_id}`.
+- [ ] Add remote execution and result collection flow.
+- [ ] Persist transcript result payloads in a frontend-consumable shape.
+- [ ] Add lease release and failure recovery handling.
+- [ ] Repoint `html/framesmith/script.js` away from legacy `video_forge` endpoints.
+- [ ] Validate end-to-end locally without real Vast provisioning by default.
+- [ ] Run an explicit manual real-compute smoke test only when the fake-backed path is stable.
+- [ ] Document production cutover and rollback notes.
+
+### Working rule
+
+Keep the goal stable even if the plan changes:
+
+`Framesmith transcription starts immediately, runs through compute_orchestrator, reports live task state, and does not depend on cron-triggered queue execution.`
+
 ## Links
 
 - Product execution card: `/home/bevan/workspace/bevans-bench-product/docs/kanban/backlog/15-make-framesmith-functional-using-compute-orchestrator.md`

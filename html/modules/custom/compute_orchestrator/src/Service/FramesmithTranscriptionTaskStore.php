@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 /**
  * Stores Framesmith transcription task state in Drupal state.
  */
-final class FramesmithTranscriptionTaskStore {
+final class FramesmithTranscriptionTaskStore implements FramesmithTranscriptionTaskStoreInterface {
 
   private const STATE_KEY = 'compute_orchestrator.framesmith_transcription.tasks';
 

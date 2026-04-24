@@ -502,6 +502,7 @@ final class VllmPoolManager {
       $info = $this->vastClient->showInstance($contractId);
       $record['last_seen_at'] = time();
       if (!$this->isRunningState($info)) {
+        $record['runtime_state'] = 'stopped';
         $record['last_error'] = '';
         $this->poolRepository->save($record);
         return [
@@ -520,6 +521,7 @@ final class VllmPoolManager {
       }
 
       $this->instanceLifecycleClient->stopInstance($contractId);
+      $record['runtime_state'] = 'stopped';
       $record['last_stopped_at'] = time();
       $record['last_error'] = '';
       $this->poolRepository->save($record);
@@ -627,8 +629,10 @@ final class VllmPoolManager {
       $phase = 'wake_instance';
       $action = 'request Vast start';
       $startResponse = $this->instanceLifecycleClient->startInstance($contractId);
+      $record['runtime_state'] = 'starting';
       if ($this->isQueuedExternalLeaseResponse($startResponse)) {
         $record['lease_status'] = 'rented_elsewhere';
+        $record['runtime_state'] = 'unknown';
         $record['last_error'] = trim((string) ($startResponse['msg'] ?? 'Wake attempt was queued because required resources are unavailable.'));
         $record['last_seen_at'] = time();
         $this->poolRepository->save($record);
@@ -638,6 +642,7 @@ final class VllmPoolManager {
       if ($this->isWakeBlockedByExternalLease($contractId)) {
         $this->instanceLifecycleClient->stopInstance($contractId);
         $record['lease_status'] = 'rented_elsewhere';
+        $record['runtime_state'] = 'unknown';
         $record['last_error'] = 'Wake attempt stayed in scheduling; instance is likely rented by another user.';
         $record['last_seen_at'] = time();
         $this->poolRepository->save($record);
@@ -665,6 +670,7 @@ final class VllmPoolManager {
         $progress = $this->buildRetryableProgressSnapshot($phase, $action, $exception);
         $status = $this->formatRetryableStatusLine($contractId, $progress);
         $record['lease_status'] = 'bootstrapping';
+        $record['runtime_state'] = 'starting';
         $record['last_error'] = $status;
         $record['last_phase'] = $phase;
         $record['last_action'] = $action;
@@ -675,6 +681,7 @@ final class VllmPoolManager {
       if ($wakeAttempted && !$bootstrapCompleted && !$workloadStartIssued) {
         try {
           $this->instanceLifecycleClient->stopInstance($contractId);
+          $record['runtime_state'] = 'stopped';
           $record['last_stopped_at'] = time();
         }
         catch (\Throwable) {
@@ -741,6 +748,7 @@ final class VllmPoolManager {
       'port' => $this->extractPublicPort($instanceInfo),
       'url' => $this->buildPublicUrl($instanceInfo),
       'source' => 'fresh_fallback',
+      'runtime_state' => 'running',
       'last_seen_at' => time(),
       'last_used_at' => time(),
       'last_error' => '',
@@ -768,6 +776,7 @@ final class VllmPoolManager {
         $progress = $this->buildRetryableProgressSnapshot($phase, $action, $exception);
         $status = $this->formatRetryableStatusLine($contractId, $progress);
         $record['lease_status'] = 'bootstrapping';
+        $record['runtime_state'] = 'starting';
         $record['last_error'] = $status;
         $record['last_phase'] = $phase;
         $record['last_action'] = $action;
@@ -1143,6 +1152,7 @@ final class VllmPoolManager {
       if ($actualStatus === 'scheduling') {
         try {
           $this->instanceLifecycleClient->stopInstance($contractId);
+          $record['runtime_state'] = 'stopped';
           $record['last_stopped_at'] = time();
         }
         catch (\Throwable) {
@@ -1206,6 +1216,7 @@ final class VllmPoolManager {
     $record['current_workload_mode'] = (string) ($definition['mode'] ?? '');
     $record['current_model'] = (string) ($definition['model'] ?? '');
     $record['lease_status'] = 'leased';
+    $record['runtime_state'] = 'running';
     $record['lease_token'] = $this->generateLeaseToken();
     $record['leased_at'] = $now;
     $record['last_heartbeat_at'] = $now;

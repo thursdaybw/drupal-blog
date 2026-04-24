@@ -30,6 +30,66 @@ require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
 final class VllmPoolStateMachineTest extends TestCase {
 
   /**
+   * Tests reap stops an available instance but keeps it reusable.
+   */
+  public function testReapStopsAvailableInstanceButKeepsItReusable(): void {
+    $repository = new StateMachinePoolRepository([
+      '100' => [
+        'contract_id' => '100',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'qwen-vl',
+        'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'lease_status' => 'available',
+        'runtime_state' => 'running',
+        'host' => '10.0.0.1',
+        'port' => '22097',
+        'url' => 'http://10.0.0.1:22097',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => '',
+      ],
+    ]);
+
+    $catalog = new FakeWorkloadCatalog();
+    $state = $this->createMock(StateInterface::class);
+    $vast = new FakeVastClient([
+      '100' => FakeVastClient::instance('100', 'running', 'running', '198.53.64.194', '40537'),
+    ]);
+    $lifecycle = new FakeLifecycleClient($vast);
+    $runtime = new FakeRuntimeManager($vast);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtime,
+      $lifecycle,
+      $vast,
+      $state,
+      1,
+      0,
+    );
+
+    $results = $manager->reapIdleAvailableInstances(0, FALSE);
+    $record = $repository->get('100');
+
+    $this->assertCount(1, $results);
+    $this->assertSame('stopped', $results[0]['action']);
+    $this->assertNotNull($record);
+    $this->assertSame('available', $record['lease_status']);
+    $this->assertSame('stopped', $record['runtime_state']);
+    $this->assertSame(['100'], $lifecycle->stopCalls);
+
+    $vast->instances['100'] = FakeVastClient::instance('100', 'stopped', 'exited', '198.53.64.194', '40537');
+    $reused = $manager->acquire('qwen-vl');
+    $this->assertSame('100', $reused['contract_id']);
+    $this->assertSame('leased', $reused['lease_status']);
+    $this->assertSame('running', $reused['runtime_state']);
+    $this->assertSame(['100'], $lifecycle->startCalls);
+    $this->assertSame(0, $runtime->freshProvisionCalls);
+  }
+
+  /**
    * Tests stopped instance wakes and reuses without fresh provision.
    */
   public function testStoppedInstanceWakesAndReusesWithoutFreshProvision(): void {
@@ -40,6 +100,7 @@ final class VllmPoolStateMachineTest extends TestCase {
         'current_workload_mode' => 'qwen-vl',
         'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
         'lease_status' => 'available',
+        'runtime_state' => 'stopped',
         'host' => '10.0.0.1',
         'port' => '22097',
         'url' => 'http://10.0.0.1:22097',
@@ -73,6 +134,7 @@ final class VllmPoolStateMachineTest extends TestCase {
 
     $this->assertSame('100', $record['contract_id']);
     $this->assertSame('leased', $record['lease_status']);
+    $this->assertSame('running', $record['runtime_state']);
     $this->assertSame(0, $runtime->freshProvisionCalls);
     $this->assertSame(['100'], $lifecycle->startCalls);
     $this->assertSame([], $vast->destroyCalls);
@@ -89,6 +151,7 @@ final class VllmPoolStateMachineTest extends TestCase {
         'current_workload_mode' => 'qwen-vl',
         'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
         'lease_status' => 'available',
+        'runtime_state' => 'stopped',
         'host' => '10.0.0.1',
         'port' => '22097',
         'url' => 'http://10.0.0.1:22097',
@@ -146,6 +209,7 @@ final class VllmPoolStateMachineTest extends TestCase {
         'current_workload_mode' => 'qwen-vl',
         'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
         'lease_status' => 'available',
+        'runtime_state' => 'stopped',
         'host' => '10.0.0.1',
         'port' => '22097',
         'url' => 'http://10.0.0.1:22097',

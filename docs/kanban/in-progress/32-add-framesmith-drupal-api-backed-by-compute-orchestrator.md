@@ -289,6 +289,35 @@ Proposed direction:
 Follow-up engineering implication:
 - after the immediate smoke-test fixes, add an integration pass that aligns Framesmith task observability with the pool-admin workflow so runtime acquisition, release, reap, and destroy are all clearly the same underlying lifecycle
 
+### Reaped-instance reuse bug
+
+Latest real-compute investigation uncovered a pool-behaviour bug that now needs active attention.
+
+Observed behaviour:
+- an available pooled whisper instance was reaped/stopped to save cost
+- a later acquire did not restart and reuse that stopped instance
+- instead the pool manager provisioned a fresh fallback instance, which burned additional Vast credits
+
+Current diagnosis:
+- the pool model is conflating lease availability with runtime power state
+- reaping/stopping appears to move an otherwise reusable instance into an effectively unavailable state
+- acquire logic then skips it and falls through to fresh provisioning
+
+Required design correction:
+- keep lease semantics and runtime power state on separate axes
+- `lease_status` should answer lease availability (`available`, `leased`, etc.)
+- a separate runtime/power state should answer whether the instance is `running`, `stopped`, `starting`, or similar
+- a stopped instance can still be `available` for acquire
+
+Expected behaviour after fix:
+- release: instance becomes available without being stopped
+- reap: instance is stopped but remains available for future acquire/restart
+- acquire: prefers available running instances, then available stopped instances that can be restarted, then fresh fallback only when no reusable capacity exists
+
+Implementation follow-up:
+- add focused tests for stopped-instance reuse after reap
+- update pool admin help text so it explicitly reflects the lease-state/runtime-state split and the intended restart-on-acquire behaviour
+
 ## Links
 
 - Product execution card: `/home/bevan/workspace/bevans-bench-product/docs/kanban/backlog/15-make-framesmith-functional-using-compute-orchestrator.md`
@@ -298,4 +327,4 @@ Follow-up engineering implication:
 
 ## Next action
 
-Stop/reap the currently running real-compute Vast instance through the canonical pool-management path to avoid unnecessary spend, then inspect and fix the real transcription failure (`fclose(): supplied resource is not a valid stream resource`). After that, align Framesmith task observability with the pool-admin lifecycle so pool records remain the canonical source of truth and task-level lease data is clearly an audit/debug snapshot.
+Fix the stopped-instance reuse bug in `compute_orchestrator` so reaped pooled instances remain available for future acquire/restart instead of being treated as unavailable and triggering fresh fallback provisioning. Cover that behaviour with focused tests, update the vLLM pool admin help text to explain the lease-state/runtime-state split, and then resume the real Framesmith smoke path.

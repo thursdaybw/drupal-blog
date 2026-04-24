@@ -38,15 +38,19 @@ docker-compose down && docker-compose build && docker-compose up -d
 docker-compose exec -u www-data appserver bash -c "cd /var/www && composer install && ./vendor/bin/drush cim -y"
 ```
 
-## Restore the production database and sitefiles to local
+## Restore production data into local DDEV
 ```
-# Restore the DB
-lando drush sql-drop -y && ssh root@myhost "cd /root/workspace/drupal-blog && docker-compose exec -T -u www-data appserver bash -c \"cd /var/www && ./vendor/bin/drush sql-dump --gzip\"" |gunzip |lando drush sqlc && lando drush cr
-ddev drush sql-drop -y && ssh root@myhost "cd /root/workspace/drupal-blog && docker-compose exec -T -u www-data appserver bash -c \"cd /var/www && ./vendor/bin/drush sql-dump --gzip\"" |gunzip |ddev drush sqlc && ddev drush cr
+# Restore the production database only.
+ddev restore-from-prod
 
-# Sync site files
-rsync -avz -e "ssh" --progress root@85.31.234.104:/root/workspace/drupal-blog/html/sites/default/files/ ./html/sites/default/files/
+# Restore the production database and all public files.
+ddev restore-from-prod --with-files
+
+# Restore the production database and only a specific files subdirectory.
+ddev restore-from-prod --with-files --files-subdir=ai-intake
 ```
+
+Use the DDEV command instead of hardcoding production host paths in docs. The command is the canonical interface and can evolve with infrastructure changes.
 
 ## Loging with bash
 ```

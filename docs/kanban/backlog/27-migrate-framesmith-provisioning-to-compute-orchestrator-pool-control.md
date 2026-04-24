@@ -10,7 +10,7 @@ Framesmith (`video_forge`) still provisions Vast instances directly via legacy C
 - host app carries one orchestration contract for both listing inference and transcription workloads.
 - both workloads share the same generic GPU-node contract, with runtime model/process switching and persistent cache reuse
 - easier extraction of Framesmith runtime from monolith once orchestration is unified.
-- migration starts only after the generic vLLM runtime is proven as a BB AI Listing drop-in replacement.
+- migration can now proceed as a pragmatic host-site Phase 1 because the pooled runtime path has been live-validated enough for Framesmith integration.
 
 ## Acceptance criteria
 
@@ -23,18 +23,19 @@ Framesmith (`video_forge`) still provisions Vast instances directly via legacy C
 
 ## Implementation notes
 
-- keep current direct-provision path behind a temporary fallback flag only during migration window
+- do not modify `video_forge`; build the active Framesmith path through new Drupal endpoints backed by `compute_orchestrator`
 - avoid introducing new production-only shell behavior in queue workers
-- dependency gate: do not begin active Framesmith cutover until product card `13` and `bb-ai-listing` card `16` complete pooled-node generic runtime milestones (Qwen drop-in, Whisper runtime, runtime switching contract)
-- blocked on host-site card [`29-finish-compute-orchestrator-pooled-instance-lease-and-switch-api.md`](/home/bevan/workspace/bevansbench.com/docs/kanban/backlog/29-finish-compute-orchestrator-pooled-instance-lease-and-switch-api.md), which must define and implement the lease/fallback policy for sleeping pooled instances before Framesmith adopts the pool
+- Phase 1 should use the existing Drupal host as the integration layer rather than waiting for full service extraction
+- the pool lease policy is validated enough to unblock Framesmith Phase 1; remaining pool hardening should continue in parallel
 
-## Status update - 2026-04-10
+## Status update - 2026-04-24
 
-- Do not start active Framesmith cutover yet.
-- Generic image can run Qwen and Whisper, and Whisper transcription has been proven on a live Vast instance.
-- Pool API work is underway in `bb-ai-listing`; one real Vast branch has been validated (`34414828` asleep/rented elsewhere), but reusable-running and runtime-switch live scenarios still need completion.
+- Active Framesmith cutover is now unblocked for a pragmatic Phase 1.
+- `compute_orchestrator` pool acquire/release and runtime reuse are live enough in this host repo to support a Framesmith integration path.
+- Qwen inference has been validated through the production AI Listings path.
+- Whisper should be requested through the same pooled runtime contract rather than the legacy `video_forge` Vast CLI path.
+- Full extraction remains a later phase; the immediate host-site task is a Drupal API shim for Framesmith.
 
 ## Next action
 
-- Wait for card `29` to be ported and live-validated in this repo.
-- Then add a Framesmith adapter that requests `whisper` from `compute_orchestrator` instead of calling the legacy `video_forge` Vast provisioning path directly.
+- Execute in-progress card [`32-add-framesmith-drupal-api-backed-by-compute-orchestrator.md`](../in-progress/32-add-framesmith-drupal-api-backed-by-compute-orchestrator.md): add Framesmith-facing Drupal endpoints and wire them to `compute_orchestrator` `whisper` acquire/release.

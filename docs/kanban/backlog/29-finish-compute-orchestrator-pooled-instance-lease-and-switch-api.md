@@ -12,7 +12,7 @@ Today we can provision a generic instance and start a workload on it, but we do 
 - only create a fresh Vast instance when the configured pool has no usable member
 - track which workload/model is active on a pooled instance and switch it deterministically when needed
 
-Without this API, Framesmith migration would be premature and BB AI Listing cannot yet rely on a proper shared GPU pool contract.
+This API is now validated enough to support a pragmatic Framesmith Phase 1 while remaining hardening continues.
 
 ## Outcomes
 
@@ -52,10 +52,14 @@ Without this API, Framesmith migration would be premature and BB AI Listing cann
   - unit coverage for register, empty-pool refusal, reuse, rented-elsewhere fallback, workload switching, and inventory cleanup
 - Live validation against Vast instance `34414828` found and fixed a real wake-classification bug: Vast can return `resources_unavailable` immediately for an asleep leased instance; this must be treated as `rented_elsewhere`.
 
+## Status update - 2026-04-24
+
+- The verified pool API has been ported into this host-site repo far enough to support real production AI Listing inference.
+- Production deploy succeeded with the committed `requestStack` fix and the current `compute_orchestrator` path.
+- A pooled instance was registered on prod and successfully acquired for AI inference.
+- The previous blocker language for Framesmith is superseded: Framesmith can now begin a pragmatic Phase 1 integration against `compute_orchestrator` while remaining pool hardening continues.
+
 ## Next action
 
-- Resume live validation from `bb-ai-listing` with an actually available generic instance, then port the verified module changes into this host-site repo.
-- Keep Framesmith migration blocked until the live pool matrix proves:
-  - matching running runtime reuse
-  - `qwen-vl -> whisper` switch on the same instance
-  - fresh fallback only when no pool member is usable.
+- Keep hardening pool operations in parallel, especially fresh fallback persistence and idle reap verification.
+- Support in-progress card [`32-add-framesmith-drupal-api-backed-by-compute-orchestrator.md`](../in-progress/32-add-framesmith-drupal-api-backed-by-compute-orchestrator.md) by exposing the minimal host Drupal API needed for Framesmith to request a `whisper` runtime.

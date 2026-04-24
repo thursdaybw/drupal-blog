@@ -10,7 +10,14 @@ This board tracks delivery work for the `bevansbench.com` codebase, including tr
 
 ## Current migration focus
 
-- Extract Framesmith runtime out of the monolith:
+- Make Framesmith functional through a short-term Drupal API backed by `compute_orchestrator`:
+  - [32-add-framesmith-drupal-api-backed-by-compute-orchestrator.md](./in-progress/32-add-framesmith-drupal-api-backed-by-compute-orchestrator.md)
+
+## Migration direction
+
+- Short term: keep Framesmith served from this host and call Drupal endpoints backed by `compute_orchestrator`.
+- Medium term: remove active dependence on `video_forge` for Framesmith transcription orchestration.
+- Long term: extract Framesmith runtime and shared compute orchestration out of the host-site monolith:
   - [25-extract-framesmith-runtime-out-of-bevansbench-monolith.md](./backlog/25-extract-framesmith-runtime-out-of-bevansbench-monolith.md)
 
 ## Working agreement

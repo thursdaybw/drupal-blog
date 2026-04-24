@@ -178,6 +178,28 @@ Current position:
 
 ### Browser automation follow-up
 
+### Browser automation progress note
+
+Latest confirmed position:
+- the served Framesmith API now works end to end in fake mode on the live DDEV site
+- the frontend has been repointed to the new `/api/framesmith/transcription/...` API
+- the remaining uncertainty is now browser-level final-state assertion behaviour, not backend architecture
+
+What the browser work has already shown:
+- the DTT browser smoke is reaching the real UI flow rather than failing purely at setup
+- the correct visible milestones for assertions are the user-facing states:
+  - `No video loaded`
+  - `Video ready`
+  - `Captions ready`
+  - `Transcript` button enabled
+  - transcript panel text visible
+- one concrete issue found during browser work was that the generated fixture MP4 must live under the real DDEV docroot (`/var/www/html/html`) to be fetchable by `/framesmith/?fixture=...`
+
+Immediate next focus:
+- finish stabilising the DTT browser smoke test around visible UI milestones
+- prefer assertions on status text and transcript-button enablement before the final transcript-panel text assertion
+- use the existing fixture query-param path (`?fixture=...`) rather than Selenium file-upload automation where possible
+
 ### Frontend wiring dependency note
 
 A browser-automation test remains part of the plan, but it is not the immediate next implementation step anymore.
@@ -216,4 +238,4 @@ Intended scope:
 
 ## Next action
 
-Repoint the served Framesmith frontend from the legacy `video_forge` transcription endpoints to the new `/api/framesmith/transcription/...` API. Once that frontend wiring is in place, add the focused fake-mode browser-automation smoke test using the existing Drupal browser-testing stack (DTT/WebDriver/Selenium), then run the first real end-to-end smoke test with the known-text WAV fixture.
+Finish stabilising the focused fake-mode browser-automation smoke test for `/framesmith/` using the existing Drupal browser-testing stack (DTT/WebDriver/Selenium), with visible UI milestones as the source of truth: `Video ready`, `Captions ready`, `Transcript` enabled, then transcript panel text. After that, run the first real end-to-end smoke test with the known-text WAV fixture.

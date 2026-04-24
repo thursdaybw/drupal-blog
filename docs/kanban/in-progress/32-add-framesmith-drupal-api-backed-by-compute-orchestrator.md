@@ -176,6 +176,18 @@ Current position:
 - fake transcription execution exists now
 - fake lease / fake Vast behaviour is intentionally deferred until it becomes clearly useful
 
+### Browser automation follow-up
+
+Because frontend access is not always available from the user's current device, the next frontend verification step should prefer the existing Drupal browser-testing stack over manual walkthroughs.
+
+Intended scope:
+- switch Framesmith transcription executor mode to `fake`
+- drive the real served frontend with DTT/WebDriver/Selenium
+- upload the known WAV fixture or equivalent deterministic fixture
+- wait for completion through the real UI flow
+- assert the fake transcript result appears as expected
+- keep this separate from the later real-compute smoke test
+
 ## Links
 
 - Product execution card: `/home/bevan/workspace/bevans-bench-product/docs/kanban/backlog/15-make-framesmith-functional-using-compute-orchestrator.md`
@@ -185,4 +197,4 @@ Current position:
 
 ## Next action
 
-Add an explicit fake runtime transcription executor for frontend/dev work, make executor selection configurable, then run the first real end-to-end smoke test with the known-text WAV fixture.
+Add a focused browser-automation test for the fake-mode Framesmith transcription flow using the existing Drupal browser-testing stack (DTT/WebDriver/Selenium), so the real served frontend can be driven from the machine without requiring manual laptop interaction. After that, run the first real end-to-end smoke test with the known-text WAV fixture.

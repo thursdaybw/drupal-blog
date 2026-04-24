@@ -318,6 +318,116 @@ Implementation follow-up:
 - add focused tests for stopped-instance reuse after reap
 - update pool admin help text so it explicitly reflects the lease-state/runtime-state split and the intended restart-on-acquire behaviour
 
+### Headless compute_orchestrator direction
+
+Recent investigation clarified that the Framesmith path is intentionally diverging from Drupal Batch API orchestration.
+
+Architectural intent:
+- Framesmith should eventually become a standalone project, not a Drupal-bound frontend
+- `compute_orchestrator` should serve that future by acting as a headless compute service behind an API
+- for that reason, Framesmith should not depend on Drupal Batch API or browser-mediated Drupal execution patterns
+
+Important distinction:
+- the existing qwen-vl/admin path on main is still using Drupal Batch API and remains appropriate for Drupal-admin-driven workflows today
+- the Framesmith path is future-facing headless orchestration, so it needs a service/job execution model rather than Drupal UI batch execution
+- the current problem is therefore not “Framesmith should use Batch API”, but “the replacement async/background execution model is not yet robust enough”
+
+Implications for planning:
+- keep the Batch API path for existing Drupal-admin workflows until the headless execution path is mature and proven
+- after `compute_orchestrator` reaches a reliable headless-service model, plan a deliberate retirement/migration of Batch API orchestration so there is a single execution model
+- treat the current detached Drush launcher as a temporary bridge, not the desired long-term async execution foundation
+
+### Portability / lift-out design goal
+
+A new cross-cutting design goal should be tracked explicitly: `compute_orchestrator` should be only circumstantially inside Drupal.
+
+Desired future property:
+- core orchestration logic should be structured so it could later be lifted out of Drupal into its own service/application with limited rewrite
+- Drupal should ideally provide one host environment, UI, and integration shell around that logic rather than being the hard-wired center of the design
+
+Practical architectural consequences:
+- prefer narrow adapters around Drupal-specific concerns (state, logging, commands, forms, controllers, file handling, queue/execution wiring)
+- keep workload orchestration, lease logic, task lifecycle logic, and external API/client logic as framework-light as possible
+- define interfaces at boundaries so alternative implementations could later swap in:
+  - a different queue/worker backend
+  - a different UI/admin surface
+  - a different persistence layer
+  - a different host framework or standalone daemon/service shell
+- avoid letting Drupal Batch API, forms, or container conventions leak deeply into orchestration domain logic
+
+Planning follow-up:
+- identify current Drupal-coupled seams in `compute_orchestrator`
+- define the target split between framework-agnostic orchestration core and Drupal adapters
+- record a backlog item for introducing a more robust headless async execution model to replace the current detached Drush bridge
+- later, once that model is proven, create a migration plan to retire Batch API execution paths onto the shared headless execution model
+
+### Vast.ai coupling boundary
+
+A further portability concern is now explicit: `compute_orchestrator` is currently very Vast.ai-shaped.
+
+Risk:
+- even if orchestration logic becomes more headless and less Drupal-bound, it may still remain tightly coupled to Vast.ai assumptions
+- that would limit future ability to support a different compute provider, a self-hosted cluster, local workers, or an abstraction layer over multiple backends
+
+Planning goal:
+- identify which parts of the current system are genuinely generic orchestration concerns versus which are Vast.ai-specific provider concerns
+- draw a clearer boundary so provider-specific lifecycle/search/provision/instance-state behaviour is isolated behind interfaces/adapters
+
+Likely Vast.ai-coupled seams to inventory:
+- offer search and host-selection logic
+- create/start/stop/destroy instance lifecycle calls
+- Vast-specific instance state vocabulary and transitions
+- port/URL/public-IP extraction logic
+- boot/readiness assumptions shaped around Vast responses
+- error handling and retry logic tied to Vast API semantics (rate limits, queued scheduling, rented-elsewhere detection)
+- pool reconciliation logic that currently interprets Vast instance payloads directly
+
+Target architectural direction:
+- keep orchestration domain logic provider-agnostic where possible
+- isolate provider-specific translation into dedicated adapters/contracts
+- make it possible in future to swap or add:
+  - another cloud/provider backend
+  - a local/dev compute backend
+  - a queue/worker fleet not based on Vast instances
+
+Planning follow-up:
+- create an inventory of current Vast.ai-specific assumptions in `compute_orchestrator`
+- define the intended provider boundary and contracts
+- identify which current services should become provider adapters rather than orchestration-domain services
+- record follow-on backlog work for progressive provider decoupling
+
+### Detached-runner observability / task log visibility
+
+Recent synchronous debugging proved that the actual Framesmith runner body works correctly end to end:
+- task state transitions work when the runner is invoked directly
+- pooled whisper runtime acquisition works
+- remote transcription works
+- pooled runtime release works
+
+That isolates the current blocker to the detached launch/handoff bridge rather than the job body.
+
+New planning insight:
+- directing detached runner output to `/dev/null` is the wrong long-term trade-off
+- the headless async execution path needs first-class observability, not blind background execution
+- detached runner stdout/stderr should be captured in a task-scoped way so failures can be inspected through tooling and later surfaced in the UI
+
+Desired direction:
+- replace blind `/dev/null` redirection with deliberate detached-runner output capture
+- store execution visibility as task-scoped runtime/operator information rather than as a surprise ad hoc root-level file dump
+- make that information retrievable via admin/API/debug tooling
+- later add an operator-facing viewport/panel in the UI for task execution logs and recent runner events
+
+Architectural significance:
+- this supports the headless-service direction better than hidden shell-side files do
+- the conceptual object is “task execution log / runner visibility”, which should survive even if Drupal is later replaced as the UI shell
+- Drupal can render that visibility now, but the logging/observability concept should belong to the compute/task model rather than to Drupal-specific batch or shell conventions
+
+Planning follow-up:
+- introduce task-scoped detached-runner output capture
+- define where that visibility lives (task store, dedicated task-log store, or similar)
+- expose it through debug/admin retrieval paths first
+- later design the UI viewport for operator visibility
+
 ## Links
 
 - Product execution card: `/home/bevan/workspace/bevans-bench-product/docs/kanban/backlog/15-make-framesmith-functional-using-compute-orchestrator.md`
@@ -327,4 +437,4 @@ Implementation follow-up:
 
 ## Next action
 
-Fix the stopped-instance reuse bug in `compute_orchestrator` so reaped pooled instances remain available for future acquire/restart instead of being treated as unavailable and triggering fresh fallback provisioning. Cover that behaviour with focused tests, update the vLLM pool admin help text to explain the lease-state/runtime-state split, and then resume the real Framesmith smoke path.
+Resolve the Framesmith detached-runner/async execution blocker now that synchronous execution has proven the runner body itself works. Replace blind detached launch output disposal with task-scoped runner output capture/observability, while continuing to plan the broader headless execution model and the Vast.ai provider-boundary work.

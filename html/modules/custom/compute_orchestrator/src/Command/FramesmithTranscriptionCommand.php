@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Command;
 
-use Drupal\compute_orchestrator\Service\FramesmithTranscriptionRunner;
 use Drush\Commands\DrushCommands;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Runs one Framesmith transcription task.
@@ -13,7 +13,7 @@ use Drush\Commands\DrushCommands;
 final class FramesmithTranscriptionCommand extends DrushCommands {
 
   public function __construct(
-    private readonly FramesmithTranscriptionRunner $runner,
+    private readonly ContainerInterface $container,
   ) {
     parent::__construct();
   }
@@ -25,7 +25,7 @@ final class FramesmithTranscriptionCommand extends DrushCommands {
    */
   public function run(string $taskId): void {
     $this->output()->writeln('Running Framesmith transcription task ' . $taskId . '.');
-    $this->runner->run($taskId);
+    $this->container->get('compute_orchestrator.framesmith_transcription_runner')->run($taskId);
     $this->output()->writeln('Completed Framesmith transcription task ' . $taskId . '.');
   }
 

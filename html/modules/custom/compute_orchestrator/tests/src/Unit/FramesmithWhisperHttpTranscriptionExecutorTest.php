@@ -65,4 +65,50 @@ final class FramesmithWhisperHttpTranscriptionExecutorTest extends TestCase {
     @unlink($tmpFile);
   }
 
+  /**
+   * @covers ::transcribe
+   */
+  public function testTranscribeToleratesConsumedMultipartStream(): void {
+    $tmpFile = tempnam(sys_get_temp_dir(), 'framesmith-audio-');
+    if ($tmpFile === FALSE) {
+      $this->fail('Failed to create temp audio file.');
+    }
+    file_put_contents($tmpFile, 'fake-audio');
+
+    $httpClient = $this->createMock(ClientInterface::class);
+    $fileSystem = $this->createMock(FileSystemInterface::class);
+    $fileSystem->expects($this->once())->method('realpath')->with('temporary://task/audio.wav')->willReturn($tmpFile);
+
+    $httpClient->expects($this->once())
+      ->method('request')
+      ->willReturnCallback(function (string $method, string $url, array $options): Response {
+        $this->assertSame('POST', $method);
+        $this->assertSame('http://10.0.0.4:9000/v1/audio/transcriptions', $url);
+        $this->assertArrayHasKey('multipart', $options);
+        foreach ($options['multipart'] as $part) {
+          if (($part['name'] ?? '') === 'file') {
+            $this->assertTrue(is_resource($part['contents']));
+            fclose($part['contents']);
+          }
+        }
+
+        return new Response(200, [], json_encode([
+          'text' => 'Framesmith test one two three.',
+          'segments' => [['id' => 0, 'text' => 'Framesmith test one two three.']],
+          'language' => 'en',
+          'duration' => 5.7,
+        ], JSON_THROW_ON_ERROR));
+      });
+
+    $executor = new FramesmithWhisperHttpTranscriptionExecutor($httpClient, $fileSystem);
+    $result = $executor->transcribe([
+      'url' => 'http://10.0.0.4:9000',
+      'current_model' => 'openai/whisper-large-v3-turbo',
+    ], 'temporary://task/audio.wav', 'task-2');
+
+    $this->assertSame('Framesmith test one two three.', $result['json']['text']);
+
+    @unlink($tmpFile);
+  }
+
 }

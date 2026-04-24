@@ -80,7 +80,9 @@ final class FramesmithWhisperHttpTranscriptionExecutor implements FramesmithTran
       throw new \RuntimeException('Whisper transcription request failed: ' . $exception->getMessage(), 0, $exception);
     }
     finally {
-      fclose($handle);
+      if (is_resource($handle)) {
+        fclose($handle);
+      }
     }
 
     $body = (string) $response->getBody();

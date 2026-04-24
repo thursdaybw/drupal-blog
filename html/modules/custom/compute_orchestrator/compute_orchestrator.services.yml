@@ -84,3 +84,18 @@ services:
       - 3
       - 10
       - '@logger.factory'
+
+  compute_orchestrator.framesmith_transcription_task_store:
+    class: Drupal\compute_orchestrator\Service\FramesmithTranscriptionTaskStore
+    arguments:
+      - '@state'
+      - '@uuid'
+      - '@file_system'
+
+  compute_orchestrator.framesmith_transcription_launcher:
+    class: Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncher
+    arguments:
+      - '@compute_orchestrator.framesmith_transcription_task_store'
+      - '@file_system'
+      - '@logger.factory'
+      - '%app.root%'

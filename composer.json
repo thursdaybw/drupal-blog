@@ -38,7 +38,7 @@
         "drupal/default_content": "^2.0@alpha",
         "drupal/dynamic_entity_reference": "^3.2",
         "drupal/jsonapi_extras": "^3.26",
-        "drupal/markdown": "^3.0@RC",
+        "drupal/markdown": "^3.1",
         "drupal/matomo": "^1.23",
         "drupal/metatag": "^2.0",
         "drupal/openai": "^1.0@alpha",
@@ -52,7 +52,7 @@
         "drupal/vani": "^10.0",
         "drupaltest/queue-runner-trait": "^1.2",
         "drush/drush": "^12.1",
-        "league/commonmark": "^1.0",
+        "league/commonmark": "^2.7",
         "thursdaybw/video_forge": "dev-main",
         "wikimedia/composer-merge-plugin": "^2.1"
     },

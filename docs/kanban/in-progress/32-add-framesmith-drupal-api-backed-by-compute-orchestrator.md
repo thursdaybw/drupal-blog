@@ -229,6 +229,66 @@ Intended scope:
 - assert the fake transcript result appears as expected
 - keep this separate from the later real-compute smoke test
 
+### Pool lifecycle integration design issue
+
+### Task model vs runtime model clarification
+
+The Framesmith task model is not considered superfluous.
+
+Current architectural clarification:
+- keep the Framesmith task model because it represents application/job state
+- do not let the task model become a second competing runtime-lifecycle model
+- keep `compute_orchestrator` pool records as the canonical infrastructure/runtime source of truth
+
+Framesmith task model should own:
+- task id and project/video linkage
+- uploaded asset references
+- Framesmith job status and history
+- transcript/result references
+- user-facing failure/debug context
+- future draft/project workflow state
+
+`compute_orchestrator` pool model should own:
+- contract id / pooled instance identity
+- lease status
+- workload mode / current model
+- availability for reuse
+- release / reap / destroy lifecycle
+- operational runtime state and cost-control actions
+
+Bridge rule:
+- Framesmith tasks may store lease snapshots for audit/debug
+- but those snapshots must be clearly non-authoritative
+- tasks should link to the canonical pool contract/record identity instead of implying a separate runtime lifecycle
+
+Why this matters:
+- Framesmith is expected to grow durable project state later (drafts, return later, repeated work on the same project)
+- that future reinforces the need for a real task/project model
+- it also reinforces the need to keep job/application state separate from infrastructure lifecycle state
+
+Latest real-compute smoke uncovered an important design mismatch.
+
+What was observed:
+- the real Framesmith transcription path did use the existing `compute_orchestrator` pool lifecycle rather than a separate competing Vast implementation
+- the task progressed through `acquiring_runtime` and captured a real pooled whisper lease snapshot
+- the lease metadata appeared on the Framesmith task record (`lease` / `released_lease` snapshots)
+- the expected global Drupal state keys were not updated, and the pool-admin mental model was therefore not the same as the task-level observability model
+
+Why this matters:
+- pool administration currently establishes one operational source of truth around pool records, lease status, release, reap/stop, and destroy
+- Framesmith task debugging currently surfaces lease snapshots on the task itself
+- that split makes it look like there may be two competing acquisition paths, even when Framesmith is actually standing on the existing pool manager
+- it also makes cost-control actions harder to reason about in incident situations because the operator has to correlate task-local snapshots with pool-level records manually
+
+Proposed direction:
+- keep `VllmPoolManager` / pool records as the canonical operational source of truth for runtime lifecycle
+- treat task-level `lease` / `released_lease` fields as audit/debug snapshots only
+- explicitly link Framesmith task records to the canonical pool contract/record identity so admin tooling and task debugging point at the same instance
+- make stop/reap/destroy expectations visible from the Framesmith task context without creating a second lease-management model
+
+Follow-up engineering implication:
+- after the immediate smoke-test fixes, add an integration pass that aligns Framesmith task observability with the pool-admin workflow so runtime acquisition, release, reap, and destroy are all clearly the same underlying lifecycle
+
 ## Links
 
 - Product execution card: `/home/bevan/workspace/bevans-bench-product/docs/kanban/backlog/15-make-framesmith-functional-using-compute-orchestrator.md`
@@ -238,4 +298,4 @@ Intended scope:
 
 ## Next action
 
-Finish stabilising the focused fake-mode browser-automation smoke test for `/framesmith/` using the existing Drupal browser-testing stack (DTT/WebDriver/Selenium), with visible UI milestones as the source of truth: `Video ready`, `Captions ready`, `Transcript` enabled, then transcript panel text. After that, run the first real end-to-end smoke test with the known-text WAV fixture.
+Stop/reap the currently running real-compute Vast instance through the canonical pool-management path to avoid unnecessary spend, then inspect and fix the real transcription failure (`fclose(): supplied resource is not a valid stream resource`). After that, align Framesmith task observability with the pool-admin lifecycle so pool records remain the canonical source of truth and task-level lease data is clearly an audit/debug snapshot.

@@ -48,7 +48,8 @@ final class FramesmithTranscriptionRunner {
       'running',
       [
         'runner_started_at' => time(),
-        'lease' => $lease,
+        'runtime_contract_id' => $contractId,
+        'runtime_lease_snapshot' => $lease,
       ],
       'Runner started immediately without cron.',
     );
@@ -58,7 +59,10 @@ final class FramesmithTranscriptionRunner {
         $this->taskStore->transition(
           $taskId,
           'acquiring_runtime',
-          ['lease' => $lease],
+          [
+            'runtime_contract_id' => $contractId,
+            'runtime_lease_snapshot' => $lease,
+          ],
           'Acquired pooled whisper runtime from compute_orchestrator.',
         );
       }
@@ -66,7 +70,10 @@ final class FramesmithTranscriptionRunner {
         $this->taskStore->transition(
           $taskId,
           'acquiring_runtime',
-          ['lease' => []],
+          [
+            'runtime_contract_id' => '',
+            'runtime_lease_snapshot' => [],
+          ],
           'Fake transcription mode selected; skipping real runtime lease.',
         );
       }
@@ -75,7 +82,8 @@ final class FramesmithTranscriptionRunner {
         $taskId,
         'transcribing',
         [
-          'lease' => $lease,
+          'runtime_contract_id' => $contractId,
+          'runtime_lease_snapshot' => $lease,
           'local_audio_path' => $localAudioPath,
         ],
         'Submitting audio to selected transcription executor.',
@@ -90,8 +98,9 @@ final class FramesmithTranscriptionRunner {
         $taskId,
         'completed',
         [
-          'lease' => $lease,
-          'released_lease' => $releasedLease,
+          'runtime_contract_id' => $contractId,
+          'runtime_lease_snapshot' => $lease,
+          'runtime_release_snapshot' => $releasedLease,
           'result' => $result,
         ],
         $contractId !== ''
@@ -117,8 +126,9 @@ final class FramesmithTranscriptionRunner {
         $taskId,
         $exception->getMessage(),
         [
-          'lease' => $lease,
-          'released_lease' => $releasedLease,
+          'runtime_contract_id' => $contractId,
+          'runtime_lease_snapshot' => $lease,
+          'runtime_release_snapshot' => $releasedLease,
         ],
       );
       throw $exception;

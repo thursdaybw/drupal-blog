@@ -86,7 +86,7 @@ final class FramesmithTranscriptionController extends ControllerBase {
       'status' => $task['status'] ?? 'unknown',
       'launched' => (bool) ($launch['launched'] ?? FALSE),
       'launch' => $launch,
-      'task' => $task,
+      'task' => $this->buildTaskPayload($task),
     ]);
   }
 
@@ -135,7 +135,7 @@ final class FramesmithTranscriptionController extends ControllerBase {
       'task_id' => $taskId,
       'status' => $task['status'] ?? 'unknown',
       'launch' => $launch,
-      'task' => $task,
+      'task' => $this->buildTaskPayload($task),
     ]);
   }
 
@@ -165,7 +165,7 @@ final class FramesmithTranscriptionController extends ControllerBase {
       'status' => $task['status'] ?? 'unknown',
       'transcript_ready' => !empty($task['result']['json']),
       'json_url' => $task['result']['json_url'] ?? NULL,
-      'task' => $task,
+      'task' => $this->buildTaskPayload($task),
     ]);
   }
 
@@ -194,8 +194,26 @@ final class FramesmithTranscriptionController extends ControllerBase {
       'task_id' => $taskId,
       'status' => $task['status'] ?? 'unknown',
       'result' => $task['result'] ?? NULL,
-      'task' => $task,
+      'task' => $this->buildTaskPayload($task),
     ]);
+  }
+
+  /**
+   * Builds the public task payload.
+   *
+   * Keeps the canonical pool contract link while treating lease blobs as
+   * internal debug snapshots rather than authoritative task state.
+   *
+   * @param array<string,mixed> $task
+   *   Raw stored task.
+   *
+   * @return array<string,mixed>
+   *   Public task payload.
+   */
+  private function buildTaskPayload(array $task): array {
+    unset($task['lease'], $task['released_lease']);
+    unset($task['runtime_lease_snapshot'], $task['runtime_release_snapshot']);
+    return $task;
   }
 
 }

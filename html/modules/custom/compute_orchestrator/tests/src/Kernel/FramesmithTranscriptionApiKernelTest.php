@@ -126,6 +126,9 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
     assert($taskStore instanceof FramesmithTranscriptionTaskStoreInterface);
     $task = $taskStore->create(['video_id' => 'vid-3']);
     $taskStore->transition($task['task_id'], 'completed', [
+      'runtime_contract_id' => '35456908',
+      'runtime_lease_snapshot' => ['contract_id' => '35456908'],
+      'runtime_release_snapshot' => ['contract_id' => '35456908'],
       'result' => [
         'json' => ['text' => 'hello world', 'segments' => []],
         'json_url' => '/tmp/result.json',
@@ -140,6 +143,9 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
     $this->assertSame('completed', $statusPayload['status']);
     $this->assertTrue($statusPayload['transcript_ready']);
     $this->assertSame('/tmp/result.json', $statusPayload['json_url']);
+    $this->assertSame('35456908', $statusPayload['task']['runtime_contract_id']);
+    $this->assertArrayNotHasKey('runtime_lease_snapshot', $statusPayload['task']);
+    $this->assertArrayNotHasKey('runtime_release_snapshot', $statusPayload['task']);
 
     $resultResponse = $controller->result(Request::create('/api/framesmith/transcription/result', 'GET', ['task_id' => $task['task_id']]));
     $resultPayload = json_decode($resultResponse->getContent() ?: '{}', TRUE, 512, JSON_THROW_ON_ERROR);

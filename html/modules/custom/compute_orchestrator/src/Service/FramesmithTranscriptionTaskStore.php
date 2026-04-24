@@ -44,6 +44,9 @@ final class FramesmithTranscriptionTaskStore implements FramesmithTranscriptionT
       'local_audio_path' => '',
       'launch_ready' => FALSE,
       'launch' => [],
+      'runtime_contract_id' => '',
+      'runtime_lease_snapshot' => [],
+      'runtime_release_snapshot' => [],
       'result' => NULL,
       'history' => [
         [

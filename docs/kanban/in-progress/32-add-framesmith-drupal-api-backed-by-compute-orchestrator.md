@@ -27,8 +27,8 @@ This restores Framesmith functionality while preserving the later path to extrac
 ## Definition of done
 
 - [x] Add Framesmith-facing Drupal routes for transcription start/upload/status/result.
-- [ ] Route implementation requests a `whisper` runtime from `compute_orchestrator`.
-- [ ] Route implementation records enough task/lease state to recover or release leases.
+- [x] Route implementation requests a `whisper` runtime from `compute_orchestrator`.
+- [x] Route implementation records enough task/lease state to recover or release leases.
 - [ ] Transcription execution uses per-task remote paths, e.g. `/tmp/framesmith/{task_id}`.
 - [ ] Successful completion releases the compute lease or leaves it in an intentional reusable state.
 - [ ] Failure paths record useful status and do not orphan active leases silently.
@@ -120,9 +120,9 @@ Use this as a working guide, not a rigid sequence. Tasks may move, split, merge,
 - [x] Add a detached launch path using a one-shot Drush command.
 - [x] Extract orchestration from the Drush command into a dedicated runner service.
 - [x] Add fake-backed unit tests for the runner service.
-- [ ] Add kernel tests for the Framesmith API contract using fake services.
+- [x] Add kernel tests for the Framesmith API contract using fake services.
 - [ ] Replace stub runner progress with real task lifecycle transitions.
-- [ ] Wire runner acquisition to `compute_orchestrator` for `whisper`.
+- [x] Wire runner acquisition to `compute_orchestrator` for `whisper`.
 - [ ] Define isolated remote working paths such as `/tmp/framesmith/{task_id}`.
 - [ ] Add remote execution and result collection flow.
 - [ ] Persist transcript result payloads in a frontend-consumable shape.
@@ -147,4 +147,4 @@ Keep the goal stable even if the plan changes:
 
 ## Next action
 
-Wire the runner to real `compute_orchestrator` whisper acquire/release behind fake-backed tests, then add kernel coverage for the Framesmith API contract.
+Replace the remaining remote-execution placeholder with real per-task transcription execution and result collection, while keeping Vast-backed behavior covered by fake-backed tests by default.

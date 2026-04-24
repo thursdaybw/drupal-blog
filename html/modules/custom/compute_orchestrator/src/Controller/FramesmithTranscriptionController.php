@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Controller;
 
-use Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncher;
+use Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncherInterface;
 use Drupal\compute_orchestrator\Service\FramesmithTranscriptionTaskStoreInterface;
 use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -19,7 +19,7 @@ final class FramesmithTranscriptionController extends ControllerBase {
 
   public function __construct(
     private readonly FramesmithTranscriptionTaskStoreInterface $taskStore,
-    private readonly FramesmithTranscriptionLauncher $launcher,
+    private readonly FramesmithTranscriptionLauncherInterface $launcher,
   ) {}
 
   /**

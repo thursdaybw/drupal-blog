@@ -4,18 +4,26 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Psr\Log\LoggerInterface;
 
 /**
  * Launches detached Framesmith transcription runners.
  */
-final class FramesmithTranscriptionLauncher {
+final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLauncherInterface {
+
+  /**
+   * Logger channel for transcription launcher events.
+   */
+  private readonly LoggerInterface $logger;
 
   public function __construct(
     private readonly FramesmithTranscriptionTaskStoreInterface $taskStore,
-    private readonly LoggerInterface $logger,
+    LoggerChannelFactoryInterface $loggerFactory,
     private readonly string $appRoot,
-  ) {}
+  ) {
+    $this->logger = $loggerFactory->get('compute_orchestrator');
+  }
 
   /**
    * Launches the detached runner for one task.

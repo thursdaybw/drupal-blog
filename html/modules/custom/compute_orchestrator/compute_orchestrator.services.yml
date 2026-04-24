@@ -98,11 +98,20 @@ services:
     class: Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncher
     arguments:
       - '@compute_orchestrator.framesmith_transcription_task_store'
-      - '@file_system'
       - '@logger.factory'
       - '%app.root%'
+
+  Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncherInterface: '@compute_orchestrator.framesmith_transcription_launcher'
+
+  compute_orchestrator.framesmith_runtime_lease_manager:
+    class: Drupal\compute_orchestrator\Service\FramesmithVllmPoolLeaseManager
+    arguments:
+      - '@compute_orchestrator.vllm_pool_manager'
+
+  Drupal\compute_orchestrator\Service\FramesmithRuntimeLeaseManagerInterface: '@compute_orchestrator.framesmith_runtime_lease_manager'
 
   compute_orchestrator.framesmith_transcription_runner:
     class: Drupal\compute_orchestrator\Service\FramesmithTranscriptionRunner
     arguments:
       - '@compute_orchestrator.framesmith_transcription_task_store'
+      - '@compute_orchestrator.framesmith_runtime_lease_manager'

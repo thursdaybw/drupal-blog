@@ -178,11 +178,30 @@ Current position:
 
 ### Browser automation follow-up
 
+### Frontend wiring dependency note
+
+A browser-automation test remains part of the plan, but it is not the immediate next implementation step anymore.
+
+What was discovered:
+- the real served Framesmith app is currently available at `/framesmith/`
+- the app UI is still wired to legacy `video_forge` transcription endpoints
+- the new Framesmith Drupal API exists, but the frontend has not yet been repointed to it
+
+Implication:
+- a browser automation test written immediately would exercise the old path, not the new Framesmith API work
+- therefore the browser smoke test plan is retained, but now depends on a frontend repoint phase first
+
+Retained follow-up after repoint:
+- run fake-mode browser automation against the real served `/framesmith/` UI
+- drive the real Transcribe flow through DTT/WebDriver/Selenium
+- assert transcript completion against the deterministic fake executor result
+- then proceed to the later real-compute smoke test
+
 Because frontend access is not always available from the user's current device, the next frontend verification step should prefer the existing Drupal browser-testing stack over manual walkthroughs.
 
 Intended scope:
 - switch Framesmith transcription executor mode to `fake`
-- drive the real served frontend with DTT/WebDriver/Selenium
+- drive the real served frontend with DTT/WebDriver/Selenium after the frontend has been repointed to the new API
 - upload the known WAV fixture or equivalent deterministic fixture
 - wait for completion through the real UI flow
 - assert the fake transcript result appears as expected
@@ -197,4 +216,4 @@ Intended scope:
 
 ## Next action
 
-Add a focused browser-automation test for the fake-mode Framesmith transcription flow using the existing Drupal browser-testing stack (DTT/WebDriver/Selenium), so the real served frontend can be driven from the machine without requiring manual laptop interaction. After that, run the first real end-to-end smoke test with the known-text WAV fixture.
+Repoint the served Framesmith frontend from the legacy `video_forge` transcription endpoints to the new `/api/framesmith/transcription/...` API. Once that frontend wiring is in place, add the focused fake-mode browser-automation smoke test using the existing Drupal browser-testing stack (DTT/WebDriver/Selenium), then run the first real end-to-end smoke test with the known-text WAV fixture.

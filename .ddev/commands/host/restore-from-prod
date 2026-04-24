@@ -1,22 +1,89 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
-set -x
 
+## #ddev-generated
+## Description: Restore the production database into local DDEV, with optional production site-file rsync.
+## Usage: restore-from-prod [--with-files] [--files-subdir=<relative/path>] [--dry-run]
+## Example: ddev restore-from-prod --with-files --files-subdir=ai-intake
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 SSH_TARGET="bb-drupal-prod"
 REMOTE_WORKSPACE="/home/bevan/workspace/bb-platform-prod"
 REMOTE_COMPOSE_PATH="${REMOTE_WORKSPACE}/docker-compose.yml"
 REMOTE_ENV_PATH="${REMOTE_WORKSPACE}/.env"
 REMOTE_COMPOSE_PREFIX="sudo -n docker compose -f ${REMOTE_COMPOSE_PATH} --env-file ${REMOTE_ENV_PATH}"
+REMOTE_FILES_ROOT="${REMOTE_WORKSPACE}/html/sites/default/files"
+LOCAL_FILES_ROOT="${PROJECT_ROOT}/html/sites/default/files"
+WITH_FILES=false
+FILES_SUBDIR=""
+DRY_RUN=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --with-files)
+      WITH_FILES=true
+      ;;
+    --files-subdir=*)
+      WITH_FILES=true
+      FILES_SUBDIR="${arg#*=}"
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    *)
+      echo "Unknown argument: $arg"
+      exit 1
+      ;;
+  esac
+done
+
+REMOTE_FILES_PATH="${REMOTE_FILES_ROOT}"
+LOCAL_FILES_PATH="${LOCAL_FILES_ROOT}"
+
+if [[ -n "${FILES_SUBDIR}" ]]; then
+  FILES_SUBDIR="${FILES_SUBDIR#/}"
+  FILES_SUBDIR="${FILES_SUBDIR%/}"
+  REMOTE_FILES_PATH="${REMOTE_FILES_ROOT}/${FILES_SUBDIR}"
+  LOCAL_FILES_PATH="${LOCAL_FILES_ROOT}/${FILES_SUBDIR}"
+fi
+
+echo "restore-from-prod"
+echo "- db restore: yes"
+echo "- files sync: ${WITH_FILES}"
+if [[ "${WITH_FILES}" == true ]]; then
+  echo "- remote files: ${SSH_TARGET}:${REMOTE_FILES_PATH}/"
+  echo "- local files: ${LOCAL_FILES_PATH}/"
+fi
+if [[ "${DRY_RUN}" == true ]]; then
+  echo "- dry run: true"
+fi
+
+if [[ "${DRY_RUN}" == true ]]; then
+  echo "[dry-run] ssh ${SSH_TARGET} ${REMOTE_COMPOSE_PREFIX} up -d appserver db"
+  echo "[dry-run] ssh ${SSH_TARGET} ${REMOTE_COMPOSE_PREFIX} exec -T db sh -lc 'mysqldump --default-character-set=utf8mb4 --no-tablespaces -u\"\${MYSQL_USER}\" -p\"\${MYSQL_PASSWORD}\" \"\${MYSQL_DATABASE}\" | gzip -c' | gunzip | ddev mysql --default-character-set=utf8mb4"
+  if [[ "${WITH_FILES}" == true ]]; then
+    echo "[dry-run] ssh ${SSH_TARGET} test -d ${REMOTE_FILES_PATH}"
+    echo "[dry-run] mkdir -p ${LOCAL_FILES_PATH}"
+    echo "[dry-run] rsync -av --progress ${SSH_TARGET}:${REMOTE_FILES_PATH}/ ${LOCAL_FILES_PATH}/"
+  fi
+  exit 0
+fi
 
 # Ensure the remote runtime services are up before dumping the database.
-ssh "${SSH_TARGET}" "${REMOTE_COMPOSE_PREFIX} up -d appserver db"
+ssh "${SSH_TARGET}" "${REMOTE_COMPOSE_PREFIX} up -d appserver db" >/dev/null
 
 # Restore the production database into the local DDEV environment.
 ddev drush sql-drop -y
 ssh "${SSH_TARGET}" "${REMOTE_COMPOSE_PREFIX} exec -T db sh -lc 'mysqldump --default-character-set=utf8mb4 --no-tablespaces -u\"\${MYSQL_USER}\" -p\"\${MYSQL_PASSWORD}\" \"\${MYSQL_DATABASE}\" | gzip -c'" \
   | gunzip \
   | ddev mysql --default-character-set=utf8mb4
+
+if [[ "${WITH_FILES}" == true ]]; then
+  ssh "${SSH_TARGET}" "test -d '${REMOTE_FILES_PATH}'"
+  mkdir -p "${LOCAL_FILES_PATH}"
+  rsync -av --progress "${SSH_TARGET}:${REMOTE_FILES_PATH}/" "${LOCAL_FILES_PATH}/"
+fi
 
 ddev drush cr
 ddev drush sql-query "DELETE FROM file_managed WHERE uri = 'public://banner2.png';"

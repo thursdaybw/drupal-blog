@@ -40,18 +40,11 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
       throw new \RuntimeException('Cannot launch task without uploaded audio: ' . $taskId);
     }
 
-    $logDirectory = dirname($this->appRoot) . '/private/framesmith-transcription-logs';
-    if (!is_dir($logDirectory) && !mkdir($logDirectory, 0770, TRUE) && !is_dir($logDirectory)) {
-      throw new \RuntimeException('Failed to create Framesmith log directory.');
-    }
-
-    $logPath = $logDirectory . '/' . $taskId . '.log';
     $drushBinary = $this->resolveDrushBinary();
     $command = sprintf(
-      'setsid %s compute:framesmith-run-transcription %s >> %s 2>&1 < /dev/null & echo $!',
+      'setsid %s compute:framesmith-run-transcription %s > /dev/null 2>&1 < /dev/null & echo $!',
       escapeshellarg($drushBinary),
       escapeshellarg($taskId),
-      escapeshellarg($logPath),
     );
 
     $process = proc_open(
@@ -81,7 +74,6 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
       $this->taskStore->fail($taskId, $message, [
         'launch' => [
           'command' => $drushBinary . ' compute:framesmith-run-transcription ' . $taskId,
-          'log_path' => $logPath,
           'stdout' => $stdout,
           'stderr' => $stderr,
           'exit_code' => $exitCode,
@@ -93,7 +85,6 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
 
     $launch = [
       'command' => $drushBinary . ' compute:framesmith-run-transcription ' . $taskId,
-      'log_path' => $logPath,
       'pid' => (int) $stdout,
       'launched_at' => time(),
       'launched' => TRUE,

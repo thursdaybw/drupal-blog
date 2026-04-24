@@ -25,7 +25,22 @@ final class FramesmithTranscriptionCommand extends DrushCommands {
    */
   public function run(string $taskId): void {
     $this->output()->writeln('Running Framesmith transcription task ' . $taskId . '.');
-    $this->container->get('compute_orchestrator.framesmith_transcription_runner')->run($taskId);
+
+    try {
+      $this->container->get('compute_orchestrator.framesmith_transcription_runner')->run($taskId);
+    }
+    catch (\Throwable $exception) {
+      $this->container->get('logger.channel.compute_orchestrator')->error(
+        'Framesmith transcription task {task_id} failed: {message}',
+        [
+          'task_id' => $taskId,
+          'message' => $exception->getMessage(),
+          'exception' => $exception,
+        ],
+      );
+      throw $exception;
+    }
+
     $this->output()->writeln('Completed Framesmith transcription task ' . $taskId . '.');
   }
 

@@ -121,10 +121,10 @@ Use this as a working guide, not a rigid sequence. Tasks may move, split, merge,
 - [x] Extract orchestration from the Drush command into a dedicated runner service.
 - [x] Add fake-backed unit tests for the runner service.
 - [x] Add kernel tests for the Framesmith API contract using fake services.
-- [ ] Replace stub runner progress with real task lifecycle transitions.
+- [x] Replace stub runner progress with real task lifecycle transitions.
 - [x] Wire runner acquisition to `compute_orchestrator` for `whisper`.
 - [ ] Define isolated remote working paths such as `/tmp/framesmith/{task_id}`.
-- [ ] Add remote execution and result collection flow.
+- [x] Add remote execution and result collection flow.
 - [ ] Persist transcript result payloads in a frontend-consumable shape.
 - [ ] Add lease release and failure recovery handling.
 - [ ] Repoint `html/framesmith/script.js` away from legacy `video_forge` endpoints.
@@ -138,6 +138,44 @@ Keep the goal stable even if the plan changes:
 
 `Framesmith transcription starts immediately, runs through compute_orchestrator, reports live task state, and does not depend on cron-triggered queue execution.`
 
+## Execution mode note
+
+The Framesmith backend now has an explicit transcription execution seam via `FramesmithTranscriptionExecutorInterface`.
+
+Current implementation state:
+- real executor path exists and posts audio to the leased Whisper runtime over HTTP
+- fake-backed PHPUnit coverage exists for the runner and executor seam
+- runtime fake mode for frontend/dev use is still required
+
+### Required follow-up
+
+Add a fake runtime executor for local/frontend testing so Framesmith can talk to the real Drupal API without acquiring pooled Vast/Whisper compute.
+
+Requirements for fake mode:
+- use the same Drupal API contract as real mode
+- return deterministic transcript payloads
+- never acquire real pooled compute when fake mode is enabled
+- be explicitly selectable by configuration/environment
+- remain easy to reason about in project tracking and operator docs
+
+### Future tracking note: fake lease / fake Vast layer
+
+Not needed for the immediate frontend/dev fake-mode milestone, but likely useful later as the project grows.
+
+Potential future seam:
+- fake `FramesmithRuntimeLeaseManagerInterface` for runtime/dev flows that want to simulate lease acquisition and release
+- possibly deeper fake `compute_orchestrator` / Vast-facing services for more realistic orchestration tests
+
+Likely future uses:
+- simulate lease contention
+- simulate startup delays and lease failures
+- test stale lease recovery behaviour
+- exercise more realistic orchestration paths without real Vast spend
+
+Current position:
+- fake transcription execution exists now
+- fake lease / fake Vast behaviour is intentionally deferred until it becomes clearly useful
+
 ## Links
 
 - Product execution card: `/home/bevan/workspace/bevans-bench-product/docs/kanban/backlog/15-make-framesmith-functional-using-compute-orchestrator.md`
@@ -147,4 +185,4 @@ Keep the goal stable even if the plan changes:
 
 ## Next action
 
-Replace the remaining remote-execution placeholder with real per-task transcription execution and result collection, while keeping Vast-backed behavior covered by fake-backed tests by default.
+Add an explicit fake runtime transcription executor for frontend/dev work, make executor selection configurable, then run the first real end-to-end smoke test with the known-text WAV fixture.

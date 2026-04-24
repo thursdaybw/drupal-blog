@@ -12,13 +12,11 @@ final class FramesmithTranscriptionRunner {
   public function __construct(
     private readonly FramesmithTranscriptionTaskStoreInterface $taskStore,
     private readonly FramesmithRuntimeLeaseManagerInterface $leaseManager,
+    private readonly FramesmithTranscriptionExecutorInterface $executor,
   ) {}
 
   /**
    * Executes one Framesmith transcription task.
-   *
-   * This is currently a skeleton used to prove immediate detached kickoff
-   * before wiring in real remote execution.
    *
    * @param string $taskId
    *   Task identifier.
@@ -29,10 +27,20 @@ final class FramesmithTranscriptionRunner {
       throw new \RuntimeException('Unknown Framesmith transcription task: ' . $taskId);
     }
 
-    $lease = $this->leaseManager->acquireWhisperRuntime();
-    $contractId = trim((string) ($lease['contract_id'] ?? ''));
-    if ($contractId === '') {
-      throw new \RuntimeException('Whisper runtime acquisition did not return a contract_id.');
+    $localAudioPath = trim((string) ($task['local_audio_path'] ?? ''));
+    if ($localAudioPath === '') {
+      throw new \RuntimeException('Task has no uploaded audio to transcribe: ' . $taskId);
+    }
+
+    $lease = [];
+    $contractId = '';
+
+    if ($this->executor->requiresRuntimeLease()) {
+      $lease = $this->leaseManager->acquireWhisperRuntime();
+      $contractId = trim((string) ($lease['contract_id'] ?? ''));
+      if ($contractId === '') {
+        throw new \RuntimeException('Whisper runtime acquisition did not return a contract_id.');
+      }
     }
 
     $this->taskStore->transition(
@@ -46,52 +54,63 @@ final class FramesmithTranscriptionRunner {
     );
 
     try {
-      $this->taskStore->transition(
-        $taskId,
-        'acquiring_runtime',
-        ['lease' => $lease],
-        'Acquired pooled whisper runtime from compute_orchestrator.',
-      );
+      if ($lease !== []) {
+        $this->taskStore->transition(
+          $taskId,
+          'acquiring_runtime',
+          ['lease' => $lease],
+          'Acquired pooled whisper runtime from compute_orchestrator.',
+        );
+      }
+      else {
+        $this->taskStore->transition(
+          $taskId,
+          'acquiring_runtime',
+          ['lease' => []],
+          'Fake transcription mode selected; skipping real runtime lease.',
+        );
+      }
 
-      usleep(250000);
       $this->taskStore->transition(
         $taskId,
         'transcribing',
-        ['lease' => $lease],
-        'Placeholder: remote whisper execution will happen here.',
+        [
+          'lease' => $lease,
+          'local_audio_path' => $localAudioPath,
+        ],
+        'Submitting audio to selected transcription executor.',
       );
 
-      usleep(250000);
-      $releasedLease = $this->leaseManager->releaseRuntime($contractId);
+      $result = $this->executor->transcribe($lease, $localAudioPath, $taskId);
+      $releasedLease = [];
+      if ($contractId !== '') {
+        $releasedLease = $this->leaseManager->releaseRuntime($contractId);
+      }
       $this->taskStore->transition(
         $taskId,
         'completed',
         [
           'lease' => $lease,
           'released_lease' => $releasedLease,
-          'result' => [
-            'mode' => 'skeleton',
-            'message' => 'Detached Drush runner executed successfully. Replace this stub with real compute_orchestrator-backed transcription.',
-            'json' => [
-              'text' => 'Framesmith detached transcription skeleton completed successfully.',
-              'segments' => [],
-            ],
-            'json_url' => NULL,
-            'completed_at' => time(),
-          ],
+          'result' => $result,
         ],
-        'Stub runner completed and released pooled runtime.',
+        $contractId !== ''
+          ? 'Transcription completed and pooled runtime released.'
+          : 'Fake transcription completed without real compute.',
       );
     }
     catch (\Throwable $exception) {
-      try {
-        $releasedLease = $this->leaseManager->releaseRuntime($contractId);
-      }
-      catch (\Throwable) {
-        $releasedLease = [
-          'contract_id' => $contractId,
-          'release_failed' => TRUE,
-        ];
+      $releasedLease = [];
+      if ($contractId !== '') {
+        try {
+          $releasedLease = $this->leaseManager->releaseRuntime($contractId);
+        }
+        catch (\Throwable) {
+          $releasedLease = [
+            'contract_id' => $contractId,
+            'release_failed' => TRUE,
+          ];
+        }
       }
 
       $this->taskStore->fail(

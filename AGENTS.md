@@ -65,6 +65,20 @@ Example split direction for eBay infrastructure:
 - Never edit contrib code directly; patch via composer patches when needed.
 - Keep secrets out of VCS; inject through environment/settings.
 
+### 10. Tooling and runtime discipline
+- Use the repository runtime and wrappers by default.
+- Do not assume host PHP matches the project runtime.
+- For coding standards, use `./scripts/phpcs.sh`.
+- For PHPUnit, use `ddev exec ./vendor/bin/phpunit ...` unless the repository provides a narrower wrapper.
+- If a tool fails because of missing PHP extensions on the host, rerun it through the project runtime before drawing conclusions.
+
+### 11. Incremental SOLID refactoring
+- Apply SOLID incrementally where it improves clarity, testability, and change safety.
+- Do not perform broad speculative refactors without a clear need.
+- Be especially strict about SRP: each class should have one clear responsibility and one obvious reason to change.
+- Name modules, classes, methods, and variables by intent.
+- Prefer small, explicit abstractions when they remove ambiguity or make testing easier.
+
 ## Definition of Done for new work
 - Boundaries are explicit and respected.
 - Interfaces and adapters are coherent.

@@ -26,7 +26,7 @@ This restores Framesmith functionality while preserving the later path to extrac
 
 ## Definition of done
 
-- [ ] Add Framesmith-facing Drupal routes for transcription start/upload/status/result.
+- [x] Add Framesmith-facing Drupal routes for transcription start/upload/status/result.
 - [ ] Route implementation requests a `whisper` runtime from `compute_orchestrator`.
 - [ ] Route implementation records enough task/lease state to recover or release leases.
 - [ ] Transcription execution uses per-task remote paths, e.g. `/tmp/framesmith/{task_id}`.
@@ -118,8 +118,8 @@ Use this as a working guide, not a rigid sequence. Tasks may move, split, merge,
 - [x] Record the execution model decision: immediate kickoff, no cron in the critical path.
 - [x] Add the initial Framesmith API skeleton: start, upload, status, result.
 - [x] Add a detached launch path using a one-shot Drush command.
-- [ ] Extract orchestration from the Drush command into a dedicated runner service.
-- [ ] Add fake-backed unit tests for the runner service.
+- [x] Extract orchestration from the Drush command into a dedicated runner service.
+- [x] Add fake-backed unit tests for the runner service.
 - [ ] Add kernel tests for the Framesmith API contract using fake services.
 - [ ] Replace stub runner progress with real task lifecycle transitions.
 - [ ] Wire runner acquisition to `compute_orchestrator` for `whisper`.
@@ -147,4 +147,4 @@ Keep the goal stable even if the plan changes:
 
 ## Next action
 
-Inspect current Framesmith frontend calls in `html/framesmith/script.js`, then add the minimal Drupal route/controller/service layer needed to provide equivalent transcription start/upload/status/result behavior using `compute_orchestrator`.
+Wire the runner to real `compute_orchestrator` whisper acquire/release behind fake-backed tests, then add kernel coverage for the Framesmith API contract.

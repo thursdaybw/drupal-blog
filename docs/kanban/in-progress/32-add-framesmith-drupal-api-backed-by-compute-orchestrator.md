@@ -428,6 +428,60 @@ Planning follow-up:
 - expose it through debug/admin retrieval paths first
 - later design the UI viewport for operator visibility
 
+### Drush launcher as temporary adapter only
+
+A further design constraint is now explicit: using `drush` as the launched worker command is in tension with the long-term portability goal for `compute_orchestrator`.
+
+Clarified position:
+- using a Drush command as the current worker entrypoint may be acceptable as a temporary implementation detail while `compute_orchestrator` still lives inside Drupal
+- but Drush must not become the conceptual async job contract of the system
+- instead, the spawn/worker boundary should be treated as a swappable adapter seam
+
+Why this matters:
+- a Drush-launched child process brings in Drupal bootstrap, Drush command wiring, and a Drupal-hosted process model as part of the execution boundary
+- that may be part of the immediate detached-launch fragility in DDEV
+- and it also works against the longer-term goal of lifting orchestration logic out of Drupal with limited rewrite
+
+Desired direction:
+- define the launcher/worker seam explicitly in framework-light terms (for example, “run task X”)
+- keep the current Drush-based worker launch as one adapter implementation of that seam
+- make it possible later to replace that adapter with alternatives such as:
+  - standalone CLI worker
+  - queue worker
+  - supervised daemon/service
+  - different host framework / process runner
+
+Planning implication:
+- avoid hard-wiring more Drush assumptions into orchestration domain logic
+- when working on the current detached-launch bug, prefer solutions that strengthen the swappable launcher seam rather than deepening coupling to Drush-specific behaviour
+
+### Task ownership remains unsettled; preserve optionality
+
+Another boundary has now been identified more clearly: task CRUD/storage currently crosses concerns in a way that may reflect an unresolved ownership question rather than a settled design.
+
+Current signal:
+- Framesmith has a dedicated `FramesmithTranscriptionTaskStore` inside `compute_orchestrator`
+- elsewhere, there is also a Drupal entity-backed task model around `video_forge_tasks`
+- the naming itself suggests a cross-boundary concern: a Framesmith-specific task concept currently implemented inside `compute_orchestrator`
+
+Important conclusion:
+- task ownership is not yet fully settled
+- and it does not need to be forced prematurely right now
+
+The key design response is therefore:
+- preserve optionality rather than pretending the final owner is already known
+- treat task CRUD/lifecycle persistence as an adapter boundary
+- avoid hard-wiring the system to a single host-specific storage assumption such as Drupal state, a Drupal entity, or a specific module-owned persistence mechanism
+
+Planning implication:
+- define a task contract boundary now
+- defer the final ownership decision until the product and system shape make it clearer
+- keep open the possibility of later evolving toward either:
+  - Framesmith-owned tasks with `compute_orchestrator` acting as a compute backend/service
+  - or a more generic compute job/task model owned by `compute_orchestrator`
+
+The important thing now is not to decide too early, but to avoid making later clarification expensive.
+
 ## Links
 
 - Product execution card: `/home/bevan/workspace/bevans-bench-product/docs/kanban/backlog/15-make-framesmith-functional-using-compute-orchestrator.md`
@@ -437,4 +491,4 @@ Planning follow-up:
 
 ## Next action
 
-Resolve the Framesmith detached-runner/async execution blocker now that synchronous execution has proven the runner body itself works. Replace blind detached launch output disposal with task-scoped runner output capture/observability, while continuing to plan the broader headless execution model and the Vast.ai provider-boundary work.
+Resolve the Framesmith detached-runner/async execution blocker with explicit launcher-seam instrumentation and without deepening accidental coupling to Drush. In parallel planning, keep both the launcher seam and the task CRUD/storage seam explicitly swappable so unsettled ownership and portability questions remain cheap to resolve later.

@@ -355,7 +355,7 @@
           {{ deploy_target.env_path }}
       when: deploy_env_effective == 'prod'
 
-    - name: Assert required Vast runtime variables exist for production deploy
+    - name: Assert required Vast runtime variables exist for staging and production deploys
       ansible.builtin.assert:
         that:
           - "(env_content.content | b64decode) is regex('(?m)^VAST_API_KEY=.+$')"
@@ -371,7 +371,7 @@
 
           File:
           {{ deploy_target.env_path }}
-      when: deploy_env_effective == 'prod'
+      when: deploy_target.local_vast_ssh_key_src is defined
 
     - name: Validate environment compose configuration
       ansible.builtin.command:

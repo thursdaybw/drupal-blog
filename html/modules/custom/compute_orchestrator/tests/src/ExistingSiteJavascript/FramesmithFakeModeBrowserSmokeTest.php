@@ -8,12 +8,16 @@ use Drupal\Core\State\StateInterface;
 use Drupal\user\Entity\User;
 use thursdaybw\DttMultiDeviceTestBase\DesktopTestBase;
 
+require_once __DIR__ . '/FramesmithBrowserSmokeFlowTrait.php';
+
 /**
  * Browser smoke test for the fake-mode Framesmith transcription flow.
  *
  * @group compute_orchestrator
  */
 final class FramesmithFakeModeBrowserSmokeTest extends DesktopTestBase {
+
+  use FramesmithBrowserSmokeFlowTrait;
 
   /**
    * State key that selects fake or real Framesmith transcription execution.
@@ -69,60 +73,11 @@ final class FramesmithFakeModeBrowserSmokeTest extends DesktopTestBase {
   public function testFramesmithTranscribesFixtureInSelectedMode(): void {
     $this->ensureSilentFixtureVideo();
 
-    $fixtureUrl = '/framesmith-browser-smoke.mp4';
-    $this->visit('/framesmith/?fixture=' . rawurlencode($fixtureUrl));
-
-    $this->assertSession()->waitForText('Video ready', 30000);
-    $this->assertSession()->buttonExists('Transcribe');
-
-    $this->getSession()->getPage()->pressButton('Transcribe');
-
-    $this->assertSession()->waitForText('Captions ready', 30000);
-
-    $deadline = time() + $this->transcriptionUiTimeoutSeconds();
-    $transcriptButton = NULL;
-    while (time() < $deadline) {
-      $transcriptButton = $this->getSession()->getPage()->find('css', '#showTranscriptBtn');
-      if ($transcriptButton && !$transcriptButton->hasAttribute('disabled')) {
-        break;
-      }
-      usleep(250000);
-    }
-
-    $statusText = $this->getSession()->getPage()->find('css', '#videoSourceStatus')?->getText() ?? '';
-    $buttonDisabled = $transcriptButton?->hasAttribute('disabled');
-    $this->assertNotNull($transcriptButton, 'Transcript button should exist.');
-    $this->assertFalse(
-      (bool) $buttonDisabled,
-      "Transcript button never enabled. Status text: {$statusText}",
-    );
-
-    $transcriptButton->click();
-
-    $deadline = time() + $this->transcriptionUiTimeoutSeconds();
-    $panelText = '';
-    while (time() < $deadline) {
-      $panelText = $this->getSession()->getPage()->find('css', '#transcriptPanelText')?->getText() ?? '';
-      if ($this->transcriptPanelIsReady($panelText)) {
-        break;
-      }
-      usleep(250000);
-    }
-
-    if ($this->framesmithTranscriptionExecutorMode === 'fake') {
-      $this->assertStringContainsString(
-        'Fake Framesmith transcript for audio.wav.',
-        $panelText,
-        "Transcript panel text: {$panelText}
-Status text: {$statusText}",
-      );
-      return;
-    }
-
-    $this->assertNotSame(
-      '',
-      trim($panelText),
-      "Transcript panel text should not be empty. Status text: {$statusText}",
+    $this->runFramesmithTranscriptionSmokeFlow(
+      '/framesmith/',
+      '/framesmith-browser-smoke.mp4',
+      $this->framesmithTranscriptionExecutorMode === 'fake',
+      $this->transcriptionUiTimeoutSeconds(),
     );
   }
 
@@ -131,17 +86,6 @@ Status text: {$statusText}",
    */
   private function transcriptionUiTimeoutSeconds(): int {
     return $this->framesmithTranscriptionExecutorMode === 'fake' ? 30 : 900;
-  }
-
-  /**
-   * Returns TRUE when the transcript panel has reached expected mode output.
-   */
-  private function transcriptPanelIsReady(string $panelText): bool {
-    if ($this->framesmithTranscriptionExecutorMode === 'fake') {
-      return str_contains($panelText, 'Fake Framesmith transcript for audio.wav.');
-    }
-
-    return trim($panelText) !== '';
   }
 
   /**

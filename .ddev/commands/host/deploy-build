@@ -4,8 +4,8 @@ set -euo pipefail
 
 ## #ddev-generated
 ## Description: Build production image on the VPS build environment.
-## Usage: deploy-build [--dry-run] [--image-tag=<tag>] [--force-rebuild]
-## Example: ddev deploy-build --dry-run
+## Usage: deploy-build [--dry-run] [--image-tag=<tag>] [--force-rebuild] [--git-ref=<ref>]
+## Example: ddev deploy-build --dry-run --git-ref=feature/my-branch
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 LOCAL_ARTIFACT_DIR="${PROJECT_ROOT}/.ddev/.artifacts"
@@ -21,6 +21,7 @@ REMOTE_GIT_KEY_PATH="/home/bevan/.ssh/bevansbench-drupal_support"
 DRY_RUN=false
 FORCE_REBUILD=false
 IMAGE_TAG_OVERRIDE=""
+GIT_REF_OVERRIDE=""
 
 for arg in "$@"; do
   case "$arg" in
@@ -29,6 +30,9 @@ for arg in "$@"; do
       ;;
     --image-tag=*)
       IMAGE_TAG_OVERRIDE="${arg#*=}"
+      ;;
+    --git-ref=*)
+      GIT_REF_OVERRIDE="${arg#*=}"
       ;;
     --force-rebuild)
       FORCE_REBUILD=true
@@ -45,10 +49,39 @@ fail() {
   exit 1
 }
 
+
+warn_if_git_ref_may_not_be_fetchable_remotely() {
+  if [ "${DEPLOY_GIT_REF}" = "HEAD" ]; then
+    return
+  fi
+
+  if git -C "${PROJECT_ROOT}" rev-parse --verify --quiet "origin/${DEPLOY_GIT_REF}" >/dev/null; then
+    return
+  fi
+
+  echo "Warning: --git-ref=${DEPLOY_GIT_REF} is not present as origin/${DEPLOY_GIT_REF}." >&2
+  echo "The remote build host can only check out commits reachable from fetched remote refs." >&2
+  echo "Push the branch/ref first, or use a commit SHA that is reachable from origin." >&2
+}
+
 resolve_git_context() {
-  HEAD_FULL_SHA="$(git -C "${PROJECT_ROOT}" rev-parse HEAD)"
-  HEAD_SHORT_SHA="$(git -C "${PROJECT_ROOT}" rev-parse --short=12 HEAD)"
-  GIT_BRANCH="$(git -C "${PROJECT_ROOT}" rev-parse --abbrev-ref HEAD)"
+  if [ -n "${GIT_REF_OVERRIDE}" ]; then
+    DEPLOY_GIT_REF="${GIT_REF_OVERRIDE}"
+  else
+    DEPLOY_GIT_REF="HEAD"
+  fi
+
+  if ! HEAD_FULL_SHA="$(git -C "${PROJECT_ROOT}" rev-parse "${DEPLOY_GIT_REF}^{commit}" 2>/dev/null)"; then
+    fail "Build phase aborted. Could not resolve --git-ref=${DEPLOY_GIT_REF} to a commit."
+  fi
+
+  HEAD_SHORT_SHA="$(git -C "${PROJECT_ROOT}" rev-parse --short=12 "${HEAD_FULL_SHA}")"
+  CURRENT_GIT_BRANCH="$(git -C "${PROJECT_ROOT}" rev-parse --abbrev-ref HEAD)"
+  if [ "${DEPLOY_GIT_REF}" = "HEAD" ]; then
+    GIT_BRANCH="${CURRENT_GIT_BRANCH}"
+  else
+    GIT_BRANCH="${DEPLOY_GIT_REF}"
+  fi
 
   if [ -n "$(git -C "${PROJECT_ROOT}" status --short --untracked-files=no)" ]; then
     WORKING_TREE_DIRTY=true
@@ -63,7 +96,7 @@ resolve_git_context() {
   if git -C "${PROJECT_ROOT}" rev-parse --verify origin/main >/dev/null 2>&1; then
     ORIGIN_MAIN_SHA="$(git -C "${PROJECT_ROOT}" rev-parse origin/main)"
     local counts
-    counts="$(git -C "${PROJECT_ROOT}" rev-list --left-right --count HEAD...origin/main)"
+    counts="$(git -C "${PROJECT_ROOT}" rev-list --left-right --count "${HEAD_FULL_SHA}"...origin/main)"
     AHEAD_COUNT="${counts%%$'\t'*}"
     BEHIND_COUNT="${counts##*$'\t'}"
     if [ "${AHEAD_COUNT}" -gt 0 ] && [ "${BEHIND_COUNT}" -gt 0 ]; then
@@ -81,7 +114,9 @@ resolve_git_context() {
 print_git_context() {
   echo "- pwd: $(pwd)"
   echo "- project root: ${PROJECT_ROOT}"
-  echo "- git branch: ${GIT_BRANCH}"
+  echo "- deploy git ref: ${DEPLOY_GIT_REF}"
+  echo "- current local branch: ${CURRENT_GIT_BRANCH}"
+  echo "- git branch/ref label: ${GIT_BRANCH}"
   echo "- git HEAD: ${HEAD_FULL_SHA}"
   echo "- git HEAD short: ${HEAD_SHORT_SHA}"
   echo "- working tree dirty: ${WORKING_TREE_DIRTY}"
@@ -137,6 +172,8 @@ write_release_env() {
     REMOTE_GIT_KEY_PATH "${REMOTE_GIT_KEY_PATH}" \
     HEAD_FULL_SHA "${HEAD_FULL_SHA}" \
     HEAD_SHORT_SHA "${HEAD_SHORT_SHA}" \
+    DEPLOY_GIT_REF "${DEPLOY_GIT_REF}" \
+    CURRENT_GIT_BRANCH "${CURRENT_GIT_BRANCH}" \
     GIT_BRANCH "${GIT_BRANCH}" \
     WORKING_TREE_DIRTY "${WORKING_TREE_DIRTY}" \
     ORIGIN_MAIN_SHA "${ORIGIN_MAIN_SHA}" \
@@ -157,6 +194,8 @@ write_build_metadata() {
     REMOTE_COMPOSER_HOME "${REMOTE_COMPOSER_HOME}" \
     REMOTE_COMPOSER_PATH "${REMOTE_COMPOSER_PATH}" \
     REMOTE_GIT_KEY_PATH "${REMOTE_GIT_KEY_PATH}" \
+    DEPLOY_GIT_REF "${DEPLOY_GIT_REF}" \
+    CURRENT_GIT_BRANCH "${CURRENT_GIT_BRANCH}" \
     GIT_BRANCH "${GIT_BRANCH}" \
     WORKING_TREE_DIRTY "${WORKING_TREE_DIRTY}" \
     ORIGIN_MAIN_SHA "${ORIGIN_MAIN_SHA}" \
@@ -197,6 +236,7 @@ print_plan() {
 }
 
 resolve_git_context
+warn_if_git_ref_may_not_be_fetchable_remotely
 resolve_artifact_context
 print_plan
 write_release_env

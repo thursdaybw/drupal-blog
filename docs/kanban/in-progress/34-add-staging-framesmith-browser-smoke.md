@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented; staging run is skipped unless explicit credentials and fixture URL are provided.
+Implemented; the full staging gate now verifies browser transcription and cron-driven warm-runtime reaping.
 
 ## Context
 
@@ -62,6 +62,33 @@ ddev exec vendor/bin/phpunit -c phpunit.dtt.xml \
 ```
 
 `FRAMESMITH_STAGING_FIXTURE_PATH` is a local MP4 path available to the DTT/PHPUnit process. WebDriver uploads this local file through the real Framesmith `<input type="file">`, so the file does not need to exist on staging first. If omitted, the test defaults to `/var/www/html/html/framesmith-browser-smoke.mp4`.
+
+
+## Running the full staging smoke gate
+
+Use the DDEV host command when validating a staging build before production.
+It wraps the browser smoke with staging setup/teardown and cron reap verification:
+
+```bash
+ddev test-framesmith-staging-smoke
+```
+
+The gate:
+
+- saves the current staging post-lease grace period;
+- sets a short grace period for the test, default `0` seconds;
+- generates a one-time login URL with staging Drush without printing it;
+- runs the black-box browser upload/transcription smoke;
+- runs staging Drupal cron;
+- asserts the released runtime pool record was reaped as `runtime_state=stopped`
+  with `last_phase=idle_reap`;
+- restores the original grace period.
+
+Override the temporary grace period only when needed:
+
+```bash
+FRAMESMITH_STAGING_REAP_GRACE_SECONDS=5 ddev test-framesmith-staging-smoke
+```
 
 ## Verification
 

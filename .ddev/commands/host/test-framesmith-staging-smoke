@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## Description: Run the Framesmith staging browser smoke and verify cron reaps the released warm runtime.
+## Usage: test-framesmith-staging-smoke
+## Example: ddev test-framesmith-staging-smoke
+
+BASE_URL="${FRAMESMITH_STAGING_BASE_URL:-https://bb-drupal-staging.bevansbench.com}"
+FIXTURE_PATH="${FRAMESMITH_STAGING_FIXTURE_PATH:-/var/www/html/html/framesmith-browser-smoke.mp4}"
+GRACE_SECONDS="${FRAMESMITH_STAGING_REAP_GRACE_SECONDS:-0}"
+LOGIN_FILE=".tmp-drush-probes/framesmith-staging-uli.txt"
+STATE_KEY="compute_orchestrator.vllm_pool.idle_shutdown_seconds"
+
+mkdir -p .tmp-drush-probes
+cleanup() {
+  rm -f "${LOGIN_FILE}"
+}
+trap cleanup EXIT
+
+stage_eval() {
+  ddev exec-stage "../vendor/bin/drush php:eval '$1'"
+}
+
+stage_script() {
+  local script_path="$1"
+  ddev exec-stage "cat > ${script_path} && ../vendor/bin/drush php:script ${script_path}; rm -f ${script_path}"
+}
+
+if ! [[ "${GRACE_SECONDS}" =~ ^[0-9]+$ ]]; then
+  echo "FRAMESMITH_STAGING_REAP_GRACE_SECONDS must be a non-negative integer." >&2
+  exit 1
+fi
+
+RUN_STARTED_AT="$(date +%s)"
+
+echo "== Framesmith staging smoke gate =="
+echo "base_url=${BASE_URL}"
+echo "fixture_path=${FIXTURE_PATH}"
+echo "reap_grace_seconds=${GRACE_SECONDS}"
+echo "run_started_at=${RUN_STARTED_AT}"
+
+echo "== save original staging reap grace =="
+ORIGINAL_GRACE_JSON="$(stage_eval "echo json_encode(\\Drupal::state()->get('${STATE_KEY}', NULL));")"
+echo "original_grace=${ORIGINAL_GRACE_JSON}"
+
+restore_grace() {
+  echo "== restore original staging reap grace =="
+  if [[ "${ORIGINAL_GRACE_JSON}" == "null" ]]; then
+    stage_eval "\\Drupal::state()->delete('${STATE_KEY}'); echo 'restored=null';"
+  else
+    stage_eval "\\Drupal::state()->set('${STATE_KEY}', (int) ${ORIGINAL_GRACE_JSON}); echo 'restored=' . (int) ${ORIGINAL_GRACE_JSON};"
+  fi
+}
+trap 'status=$?; cleanup; restore_grace || true; exit ${status}' EXIT
+
+echo "== set short staging reap grace =="
+stage_eval "\\Drupal::state()->set('${STATE_KEY}', ${GRACE_SECONDS}); echo 'set=${GRACE_SECONDS}';"
+
+echo "== generate one-time staging login URL, hidden =="
+ddev exec-stage "../vendor/bin/drush uli --uri=${BASE_URL}" | tail -1 > "${LOGIN_FILE}"
+chmod 600 "${LOGIN_FILE}"
+if grep -q "^${BASE_URL}/" "${LOGIN_FILE}"; then
+  echo "login-url-file=<created>"
+else
+  echo "Unexpected login URL shape." >&2
+  exit 1
+fi
+
+echo "== run black-box browser smoke =="
+ddev exec bash -lc \
+  "export FRAMESMITH_STAGING_BASE_URL='${BASE_URL}'; export FRAMESMITH_STAGING_FIXTURE_PATH='${FIXTURE_PATH}'; export FRAMESMITH_STAGING_LOGIN_URL=\"\$(cat /var/www/html/${LOGIN_FILE})\"; vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/compute_orchestrator/tests/src/ExistingSiteJavascript/FramesmithStagingBrowserSmokeTest.php"
+
+echo "== capture latest completed Framesmith contract =="
+TASK_SUMMARY="$(stage_script /tmp/framesmith_latest_task.php <<PHP
+<?php
+\$run_started_at = ${RUN_STARTED_AT};
+\$tasks = \Drupal::state()->get('compute_orchestrator.framesmith_transcription.tasks', []);
+foreach (array_reverse(\$tasks, true) as \$id => \$task) {
+  \$updated_at = (int) (\$task['updated_at'] ?? 0);
+  if (\$updated_at < \$run_started_at) {
+    continue;
+  }
+  if ((\$task['status'] ?? '') === 'completed' && trim((string) (\$task['runtime_contract_id'] ?? '')) !== '') {
+    echo json_encode([
+      'task_id' => \$id,
+      'contract_id' => (string) \$task['runtime_contract_id'],
+      'status' => (string) \$task['status'],
+      'updated_at' => \$updated_at,
+    ], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+    exit(0);
+  }
+}
+fwrite(STDERR, "No completed Framesmith task from this run with runtime_contract_id found.\n");
+exit(1);
+PHP
+)"
+echo "${TASK_SUMMARY}"
+CONTRACT_ID="$(printf '%s' "${TASK_SUMMARY}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo $j["contract_id"] ?? "";')"
+if [[ -z "${CONTRACT_ID}" ]]; then
+  echo "Unable to parse contract id from latest task summary." >&2
+  exit 1
+fi
+
+echo "== run staging Drupal cron =="
+ddev exec-stage '../vendor/bin/drush cron'
+
+echo "== verify cron reaped released runtime =="
+stage_script /tmp/framesmith_verify_reap.php <<PHP
+<?php
+\$contract_id = '${CONTRACT_ID}';
+\$repo = \Drupal::service('compute_orchestrator.vllm_pool_repository');
+\$record = \$repo->get(\$contract_id);
+if (!is_array(\$record)) {
+  fwrite(STDERR, "Pool record not found for contract {\$contract_id}.\n");
+  exit(1);
+}
+\$summary = [
+  'contract_id' => \$contract_id,
+  'lease_status' => \$record['lease_status'] ?? NULL,
+  'runtime_state' => \$record['runtime_state'] ?? NULL,
+  'last_phase' => \$record['last_phase'] ?? NULL,
+  'last_action' => \$record['last_action'] ?? NULL,
+  'last_error' => \$record['last_error'] ?? NULL,
+  'last_reap_at' => \$record['last_reap_at'] ?? NULL,
+  'last_stopped_at' => \$record['last_stopped_at'] ?? NULL,
+];
+echo json_encode(\$summary, JSON_UNESCAPED_SLASHES) . PHP_EOL;
+\$ok = (\$summary['lease_status'] === 'available')
+  && (\$summary['runtime_state'] === 'stopped')
+  && (\$summary['last_phase'] === 'idle_reap')
+  && in_array(\$summary['last_action'], ['stopped', 'already_inactive'], TRUE)
+  && trim((string) \$summary['last_error']) === '';
+if (!\$ok) {
+  fwrite(STDERR, "Cron did not persist an idle_reap stopped outcome for contract {\$contract_id}.\n");
+  exit(1);
+}
+PHP
+
+echo "== staging smoke gate passed =="

@@ -136,6 +136,8 @@ final class VllmPoolStateMachineTest extends TestCase {
     $this->assertNotNull($record);
     $this->assertSame('available', $record['lease_status']);
     $this->assertSame('stopped', $record['runtime_state']);
+    $this->assertSame('idle_reap', $record['last_phase']);
+    $this->assertSame('stopped', $record['last_action']);
     $this->assertSame(['100'], $lifecycle->stopCalls);
 
     $vast->instances['100'] = FakeVastClient::instance('100', 'stopped', 'exited', '198.53.64.194', '40537');

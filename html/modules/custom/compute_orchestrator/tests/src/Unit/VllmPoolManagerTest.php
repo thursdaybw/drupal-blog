@@ -1438,7 +1438,11 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('stopped', $results[0]['action']);
     $this->assertNotNull($record);
     $this->assertSame('available', $record['lease_status']);
+    $this->assertSame('stopped', $record['runtime_state']);
+    $this->assertSame('idle_reap', $record['last_phase']);
+    $this->assertSame('stopped', $record['last_action']);
     $this->assertArrayHasKey('last_stopped_at', $record);
+    $this->assertArrayHasKey('last_reap_at', $record);
   }
 
   /**
@@ -1495,6 +1499,8 @@ final class VllmPoolManagerTest extends TestCase {
 
     $this->assertSame('stopped', $results[0]['action']);
     $this->assertNotNull($record);
+    $this->assertSame('idle_reap', $record['last_phase']);
+    $this->assertSame('stopped', $record['last_action']);
     $this->assertArrayHasKey('last_stopped_at', $record);
   }
 

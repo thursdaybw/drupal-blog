@@ -587,6 +587,9 @@ final class VllmPoolManager {
       $record['last_seen_at'] = time();
       if (!$this->isRunningState($info)) {
         $record['runtime_state'] = 'stopped';
+        $record['last_phase'] = 'idle_reap';
+        $record['last_action'] = 'already_inactive';
+        $record['last_reap_at'] = time();
         $record['last_error'] = '';
         $this->poolRepository->save($record);
         return [
@@ -605,8 +608,12 @@ final class VllmPoolManager {
       }
 
       $this->instanceLifecycleClient->stopInstance($contractId);
+      $now = time();
       $record['runtime_state'] = 'stopped';
-      $record['last_stopped_at'] = time();
+      $record['last_phase'] = 'idle_reap';
+      $record['last_action'] = 'stopped';
+      $record['last_stopped_at'] = $now;
+      $record['last_reap_at'] = $now;
       $record['last_error'] = '';
       $this->poolRepository->save($record);
       return [
@@ -618,6 +625,8 @@ final class VllmPoolManager {
     catch (\Throwable $exception) {
       $record['lease_status'] = 'unavailable';
       $record['last_seen_at'] = time();
+      $record['last_phase'] = 'idle_reap';
+      $record['last_action'] = 'failed';
       $record['last_error'] = $exception->getMessage();
       $this->poolRepository->save($record);
       return [

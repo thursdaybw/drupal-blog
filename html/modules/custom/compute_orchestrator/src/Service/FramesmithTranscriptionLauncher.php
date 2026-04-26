@@ -58,8 +58,10 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
       throw new \RuntimeException('Failed to initialize Framesmith runner output files.');
     }
 
+    $processEnvironment = $this->buildDetachedProcessEnvironment();
     $command = sprintf(
-      'setsid %s compute:framesmith-run-transcription %s > %s 2> %s < /dev/null & echo $!',
+      '%s setsid %s compute:framesmith-run-transcription %s > %s 2> %s < /dev/null & echo $!',
+      $this->buildShellEnvironmentPrefix($processEnvironment),
       escapeshellarg($drushBinary),
       escapeshellarg($taskId),
       escapeshellarg($stdoutPath),
@@ -78,6 +80,7 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
         $outputRealDirectory,
         $stdoutPath,
         $stderrPath,
+        $processEnvironment,
       ),
     ]);
 
@@ -101,6 +104,7 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
           $outputRealDirectory,
           $stdoutPath,
           $stderrPath,
+          $processEnvironment,
         ),
       ]);
       throw new \RuntimeException('Failed to start detached Framesmith runner process.');
@@ -119,6 +123,7 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
       $outputRealDirectory,
       $stdoutPath,
       $stderrPath,
+      $processEnvironment,
       $stdout,
       $stderr,
       $exitCode,
@@ -175,6 +180,43 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
   }
 
   /**
+   * Builds a shell prefix containing environment for detached Drush.
+   *
+   * @param array<string,string> $environment
+   *   Environment variables for the child process.
+   *
+   * @return string
+   *   Shell-safe environment assignment prefix.
+   */
+  private function buildShellEnvironmentPrefix(array $environment): string {
+    $parts = [];
+    foreach ($environment as $name => $value) {
+      $parts[] = $name . '=' . escapeshellarg($value);
+    }
+    return implode(' ', $parts);
+  }
+
+  /**
+   * Builds a minimal sane environment for detached Drush.
+   *
+   * PHP-FPM may not provide HOME when launching detached processes. Drush
+   * asks Symfony's Path helper for a home directory during bootstrap, and
+   * fatals before Drupal starts if HOME cannot be resolved.
+   *
+   * @return array<string,string>
+   *   Environment variables for detached process bootstrap.
+   */
+  private function buildDetachedProcessEnvironment(): array {
+    $base = sys_get_temp_dir() . '/framesmith-drush-home';
+    return [
+      'HOME' => $base,
+      'XDG_CACHE_HOME' => $base . '/.cache',
+      'XDG_CONFIG_HOME' => $base . '/.config',
+      'XDG_DATA_HOME' => $base . '/.local/share',
+    ];
+  }
+
+  /**
    * Builds a task-visible launch debug snapshot.
    *
    * @return array<string,mixed>
@@ -187,6 +229,7 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
     string $outputDirectory,
     string $stdoutPath,
     string $stderrPath,
+    array $processEnvironment = [],
     string $procStdout = '',
     string $procStderr = '',
     int $procExitCode = 0,
@@ -200,6 +243,7 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
       'output_directory_exists' => is_dir($outputDirectory),
       'stdout_path' => $stdoutPath,
       'stderr_path' => $stderrPath,
+      'process_environment' => $processEnvironment,
       'stdout_exists' => is_file($stdoutPath),
       'stderr_exists' => is_file($stderrPath),
       'stdout_size' => is_file($stdoutPath) ? (filesize($stdoutPath) ?: 0) : 0,

@@ -186,6 +186,12 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
     $this->assertSame((string) $launch['stderr_path'], (string) $stored['runner_output']['stderr_path']);
     $this->assertSame('proc_closed', $stored['launch_debug']['stage']);
     $this->assertNotSame('', (string) $stored['launch_debug']['command']);
+    $this->assertStringContainsString('HOME=', (string) $stored['launch_debug']['command']);
+    $this->assertStringContainsString('XDG_CACHE_HOME=', (string) $stored['launch_debug']['command']);
+    $this->assertSame(
+      sys_get_temp_dir() . '/framesmith-drush-home',
+      $stored['launch_debug']['process_environment']['HOME'] ?? NULL,
+    );
     $this->assertNotSame('', (string) $stored['launch_debug']['drush_binary']);
     $this->assertArrayHasKey('output_directory_exists', $stored['launch_debug']);
     $this->assertArrayHasKey('stdout_exists', $stored['launch_debug']);

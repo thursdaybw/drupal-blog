@@ -18,8 +18,8 @@ require_once __DIR__ . '/FramesmithBrowserSmokeFlowTrait.php';
  * Required environment variables:
  * - FRAMESMITH_STAGING_BASE_URL, for example the staging site base
  *   https://bb-drupal-staging.bevansbench.com
- * - FRAMESMITH_STAGING_USERNAME
- * - FRAMESMITH_STAGING_PASSWORD
+ * - FRAMESMITH_STAGING_LOGIN_URL, preferred one-time login URL from drush uli
+ *   OR both FRAMESMITH_STAGING_USERNAME and FRAMESMITH_STAGING_PASSWORD
  * - FRAMESMITH_STAGING_FIXTURE_PATH, a local MP4 path available to the
  *   DTT/PHPUnit process; defaults to the local browser smoke MP4.
  *
@@ -35,12 +35,10 @@ final class FramesmithStagingBrowserSmokeTest extends DesktopTestBase {
    */
   public function testStagingFramesmithTranscribesFixture(): void {
     $baseUrl = $this->requiredEnv('FRAMESMITH_STAGING_BASE_URL');
-    $username = $this->requiredEnv('FRAMESMITH_STAGING_USERNAME');
-    $password = $this->requiredEnv('FRAMESMITH_STAGING_PASSWORD');
     $fixturePath = $this->fixturePath();
 
     $baseUrl = rtrim($baseUrl, '/');
-    $this->loginThroughBrowser($baseUrl, $username, $password);
+    $this->loginToStaging($baseUrl);
 
     $this->runFramesmithUploadedFileTranscriptionSmokeFlow(
       $baseUrl . '/framesmith/',
@@ -48,6 +46,22 @@ final class FramesmithStagingBrowserSmokeTest extends DesktopTestBase {
       FALSE,
       900,
     );
+  }
+
+  /**
+   * Logs in using a one-time URL or username/password credentials.
+   */
+  private function loginToStaging(string $baseUrl): void {
+    $loginUrl = getenv('FRAMESMITH_STAGING_LOGIN_URL');
+    if (is_string($loginUrl) && trim($loginUrl) !== '') {
+      $this->getSession()->visit(trim($loginUrl));
+      $this->assertSession()->waitForText('Log out', 30000);
+      return;
+    }
+
+    $username = $this->requiredEnv('FRAMESMITH_STAGING_USERNAME');
+    $password = $this->requiredEnv('FRAMESMITH_STAGING_PASSWORD');
+    $this->loginThroughBrowser($baseUrl, $username, $password);
   }
 
   /**

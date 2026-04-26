@@ -36,13 +36,27 @@ OK (1 test, 8 assertions)
 
 ## Running the staging smoke
 
-The staging test is skipped unless all required environment variables are set:
+The staging test is skipped unless all required environment variables are set.
+For local operator runs, prefer putting these in the ignored DDEV env file
+`.ddev/.env` rather than passing them inline:
+
+```dotenv
+FRAMESMITH_STAGING_BASE_URL=https://bb-drupal-staging.bevansbench.com
+# Preferred for manual smoke runs: generate a one-time login URL at runtime.
+# FRAMESMITH_STAGING_LOGIN_URL is intentionally not stored here.
+FRAMESMITH_STAGING_FIXTURE_PATH=/var/www/html/html/framesmith-browser-smoke.mp4
+
+# Fallback credential mode, if needed:
+# FRAMESMITH_STAGING_USERNAME=<user-with-framesmith-api-permission>
+# FRAMESMITH_STAGING_PASSWORD=<password>
+```
+
+After changing `.ddev/.env`, restart DDEV so the web container sees the
+updated environment:
 
 ```bash
-FRAMESMITH_STAGING_BASE_URL='https://bb-drupal-staging.bevansbench.com' \
-FRAMESMITH_STAGING_USERNAME='<user-with-framesmith-api-permission>' \
-FRAMESMITH_STAGING_PASSWORD='<password>' \
-FRAMESMITH_STAGING_FIXTURE_PATH='/var/www/html/html/framesmith-browser-smoke.mp4' \
+ddev restart
+FRAMESMITH_STAGING_LOGIN_URL="$(ddev exec-stage '../vendor/bin/drush uli --uri=https://bb-drupal-staging.bevansbench.com' | tail -1)" \
 ddev exec vendor/bin/phpunit -c phpunit.dtt.xml \
   html/modules/custom/compute_orchestrator/tests/src/ExistingSiteJavascript/FramesmithStagingBrowserSmokeTest.php
 ```
@@ -69,4 +83,5 @@ Tests: 1, Assertions: 0, Skipped: 1.
 ## Follow-up
 
 - Decide whether to generate the local MP4 fixture automatically for staging runs or keep it as an explicit operator-provided file.
-- Decide whether to keep credentials as local env vars only or add a more formal staging smoke-test account/secret flow.
+- Prefer one-time `drush uli` login URLs for manual staging runs so a real password is not stored.
+- Keep fallback staging smoke credentials in ignored local DDEV env only if needed; revisit if this becomes CI-operated.

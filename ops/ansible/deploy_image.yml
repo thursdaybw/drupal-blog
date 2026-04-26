@@ -29,6 +29,8 @@
         compose_src: "{{ playbook_dir }}/../compose/shared/docker-compose.yml"
         compose_path: /home/bevan/workspace/bb-platform-staging/docker-compose.yml
         local_env_src: "{{ playbook_dir }}/../compose/staging/.env"
+        local_vast_ssh_key_src: "{{ playbook_dir }}/../compose/prod/secrets/id_rsa_vastai"
+        vast_ssh_key_host_path: "/home/bevan/workspace/bb-platform-staging/secrets/id_rsa_vastai"
         env_path: /home/bevan/workspace/bb-platform-staging/.env
         env_example: ops/compose/staging/.env.example
         domain: bb-drupal-staging.bevansbench.com
@@ -204,33 +206,33 @@
         dest: "{{ deploy_target.env_path }}"
         mode: "0600"
 
-    - name: Check local Vast SSH key exists on control machine for production
+    - name: Check local Vast SSH key exists on control machine
       ansible.builtin.stat:
         path: "{{ deploy_target.local_vast_ssh_key_src }}"
       register: local_vast_ssh_key_stat
       delegate_to: localhost
       run_once: true
-      when: deploy_env_effective == 'prod'
+      when: deploy_target.local_vast_ssh_key_src is defined
 
-    - name: Fail when local Vast SSH key is missing for production
+    - name: Fail when local Vast SSH key is missing
       ansible.builtin.assert:
         that:
           - local_vast_ssh_key_stat.stat.exists
         fail_msg: |
-          Missing local production Vast SSH key file.
+          Missing local Vast SSH key file.
 
           Expected:
           {{ deploy_target.local_vast_ssh_key_src }}
 
           Copy your key to that path before deploy activation.
-      when: deploy_env_effective == 'prod'
+      when: deploy_target.local_vast_ssh_key_src is defined
 
-    - name: Copy local Vast SSH key to remote workspace for production
+    - name: Copy local Vast SSH key to remote workspace
       ansible.builtin.copy:
         src: "{{ deploy_target.local_vast_ssh_key_src }}"
         dest: "{{ deploy_target.vast_ssh_key_host_path }}"
         mode: "0600"
-      when: deploy_env_effective == 'prod'
+      when: deploy_target.local_vast_ssh_key_src is defined
 
     - name: Ensure environment .env exists on remote host
       ansible.builtin.stat:
@@ -287,23 +289,23 @@
         create: true
         mode: "0600"
 
-    - name: Set VAST_SSH_PRIVATE_KEY_HOST_PATH in environment .env for production
+    - name: Set VAST_SSH_PRIVATE_KEY_HOST_PATH in environment .env
       ansible.builtin.lineinfile:
         path: "{{ deploy_target.env_path }}"
         regexp: '^VAST_SSH_PRIVATE_KEY_HOST_PATH='
         line: "VAST_SSH_PRIVATE_KEY_HOST_PATH=./secrets/id_rsa_vastai"
         create: true
         mode: "0600"
-      when: deploy_env_effective == 'prod'
+      when: deploy_target.local_vast_ssh_key_src is defined
 
-    - name: Set VAST_SSH_PRIVATE_KEY_CONTAINER_PATH in environment .env for production
+    - name: Set VAST_SSH_PRIVATE_KEY_CONTAINER_PATH in environment .env
       ansible.builtin.lineinfile:
         path: "{{ deploy_target.env_path }}"
         regexp: '^VAST_SSH_PRIVATE_KEY_CONTAINER_PATH='
         line: "VAST_SSH_PRIVATE_KEY_CONTAINER_PATH=/home/http/.ssh/id_rsa_vastai"
         create: true
         mode: "0600"
-      when: deploy_env_effective == 'prod'
+      when: deploy_target.local_vast_ssh_key_src is defined
 
     - name: Read environment .env content
       ansible.builtin.slurp:

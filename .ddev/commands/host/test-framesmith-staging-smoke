@@ -18,10 +18,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-stage_eval() {
-  ddev exec-stage "../vendor/bin/drush php:eval '$1'"
-}
-
 stage_script() {
   local script_path="$1"
   ddev exec-stage "cat > ${script_path} && ../vendor/bin/drush php:script ${script_path}; rm -f ${script_path}"
@@ -41,22 +37,37 @@ echo "reap_grace_seconds=${GRACE_SECONDS}"
 echo "run_started_at=${RUN_STARTED_AT}"
 
 echo "== save original staging reap grace =="
-ORIGINAL_GRACE_JSON="$(stage_eval "echo json_encode(\\Drupal::state()->get('${STATE_KEY}', NULL));")"
+ORIGINAL_GRACE_JSON="$(stage_script /tmp/framesmith_get_reap_grace.php <<PHP
+<?php
+echo json_encode(\Drupal::state()->get('${STATE_KEY}', NULL));
+PHP
+)"
 echo "original_grace=${ORIGINAL_GRACE_JSON}"
 
 restore_grace() {
   echo "== restore original staging reap grace =="
   if [[ "${ORIGINAL_GRACE_JSON}" == "null" ]]; then
-    stage_eval "\\Drupal::state()->delete('${STATE_KEY}'); echo 'restored=null';"
+    stage_script /tmp/framesmith_restore_reap_grace.php <<PHP
+<?php
+\Drupal::state()->delete('${STATE_KEY}');
+echo "restored=null\n";
+PHP
   else
-    stage_eval "\\Drupal::state()->set('${STATE_KEY}', (int) ${ORIGINAL_GRACE_JSON}); echo 'restored=' . (int) ${ORIGINAL_GRACE_JSON};"
+    stage_script /tmp/framesmith_restore_reap_grace.php <<PHP
+<?php
+\Drupal::state()->set('${STATE_KEY}', (int) ${ORIGINAL_GRACE_JSON});
+echo "restored=" . (int) ${ORIGINAL_GRACE_JSON} . PHP_EOL;
+PHP
   fi
 }
 trap 'status=$?; cleanup; restore_grace || true; exit ${status}' EXIT
 
 echo "== set short staging reap grace =="
-stage_eval "\\Drupal::state()->set('${STATE_KEY}', ${GRACE_SECONDS}); echo 'set=${GRACE_SECONDS}';"
-
+stage_script /tmp/framesmith_set_reap_grace.php <<PHP
+<?php
+\Drupal::state()->set('${STATE_KEY}', ${GRACE_SECONDS});
+echo "set=${GRACE_SECONDS}\n";
+PHP
 echo "== generate one-time staging login URL, hidden =="
 ddev exec-stage "../vendor/bin/drush uli --uri=${BASE_URL}" | tail -1 > "${LOGIN_FILE}"
 chmod 600 "${LOGIN_FILE}"

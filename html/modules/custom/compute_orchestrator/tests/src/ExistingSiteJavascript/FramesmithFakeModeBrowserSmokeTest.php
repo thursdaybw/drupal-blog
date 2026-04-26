@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\compute_orchestrator\ExistingSiteJavascript;
 
+use Drupal\Core\State\StateInterface;
+use Drupal\user\Entity\User;
 use thursdaybw\DttMultiDeviceTestBase\DesktopTestBase;
 
 /**
@@ -14,15 +16,58 @@ use thursdaybw\DttMultiDeviceTestBase\DesktopTestBase;
 final class FramesmithFakeModeBrowserSmokeTest extends DesktopTestBase {
 
   /**
-   * Exercises the real served Framesmith UI against the fake backend mode.
+   * State key that selects fake or real Framesmith transcription execution.
    */
-  public function testFramesmithTranscribesFixtureInFakeMode(): void {
-    $this->ensureSilentFixtureVideo();
+  private const EXECUTOR_MODE_STATE_KEY = 'compute_orchestrator.framesmith_transcription_executor_mode';
 
-    $this->runShellCommand(sprintf(
-      'cd %s && ./vendor/bin/drush state:set compute_orchestrator.framesmith_transcription_executor_mode fake -y',
-      escapeshellarg($this->repoRoot()),
-    ));
+  /**
+   * Executor mode used by this smoke test.
+   *
+   * Set this to 'real' for an explicit opt-in real Vast-backed stress run.
+   * Keep the default as 'fake' so normal DTT runs never spend real compute.
+   */
+  protected string $framesmithTranscriptionExecutorMode = 'fake';
+
+  /**
+   * Previous executor mode so tearDown can restore operator state.
+   */
+  private mixed $previousFramesmithTranscriptionExecutorMode = NULL;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp(): void {
+    parent::setUp();
+
+    $user = User::load(1);
+    $this->assertNotNull($user, 'User 1 must exist for existing-site Framesmith smoke tests.');
+    $this->drupalLogin($user);
+
+    $state = $this->state();
+    $this->previousFramesmithTranscriptionExecutorMode = $state->get(self::EXECUTOR_MODE_STATE_KEY, NULL);
+    $state->set(self::EXECUTOR_MODE_STATE_KEY, $this->framesmithTranscriptionExecutorMode);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function tearDown(): void {
+    $state = $this->state();
+    if ($this->previousFramesmithTranscriptionExecutorMode === NULL) {
+      $state->delete(self::EXECUTOR_MODE_STATE_KEY);
+    }
+    else {
+      $state->set(self::EXECUTOR_MODE_STATE_KEY, $this->previousFramesmithTranscriptionExecutorMode);
+    }
+
+    parent::tearDown();
+  }
+
+  /**
+   * Exercises the real served Framesmith UI against the selected backend mode.
+   */
+  public function testFramesmithTranscribesFixtureInSelectedMode(): void {
+    $this->ensureSilentFixtureVideo();
 
     $fixtureUrl = '/framesmith-browser-smoke.mp4';
     $this->visit('/framesmith/?fixture=' . rawurlencode($fixtureUrl));
@@ -34,7 +79,7 @@ final class FramesmithFakeModeBrowserSmokeTest extends DesktopTestBase {
 
     $this->assertSession()->waitForText('Captions ready', 30000);
 
-    $deadline = time() + 30;
+    $deadline = time() + $this->transcriptionUiTimeoutSeconds();
     $transcriptButton = NULL;
     while (time() < $deadline) {
       $transcriptButton = $this->getSession()->getPage()->find('css', '#showTranscriptBtn');
@@ -54,22 +99,56 @@ final class FramesmithFakeModeBrowserSmokeTest extends DesktopTestBase {
 
     $transcriptButton->click();
 
-    $deadline = time() + 15;
+    $deadline = time() + $this->transcriptionUiTimeoutSeconds();
     $panelText = '';
     while (time() < $deadline) {
       $panelText = $this->getSession()->getPage()->find('css', '#transcriptPanelText')?->getText() ?? '';
-      if (str_contains($panelText, 'Fake Framesmith transcript for audio.wav.')) {
+      if ($this->transcriptPanelIsReady($panelText)) {
         break;
       }
       usleep(250000);
     }
 
-    $this->assertStringContainsString(
-      'Fake Framesmith transcript for audio.wav.',
-      $panelText,
-      "Transcript panel text: {$panelText}
+    if ($this->framesmithTranscriptionExecutorMode === 'fake') {
+      $this->assertStringContainsString(
+        'Fake Framesmith transcript for audio.wav.',
+        $panelText,
+        "Transcript panel text: {$panelText}
 Status text: {$statusText}",
+      );
+      return;
+    }
+
+    $this->assertNotSame(
+      '',
+      trim($panelText),
+      "Transcript panel text should not be empty. Status text: {$statusText}",
     );
+  }
+
+  /**
+   * Returns the UI wait budget for the selected backend mode.
+   */
+  private function transcriptionUiTimeoutSeconds(): int {
+    return $this->framesmithTranscriptionExecutorMode === 'fake' ? 30 : 900;
+  }
+
+  /**
+   * Returns TRUE when the transcript panel has reached expected mode output.
+   */
+  private function transcriptPanelIsReady(string $panelText): bool {
+    if ($this->framesmithTranscriptionExecutorMode === 'fake') {
+      return str_contains($panelText, 'Fake Framesmith transcript for audio.wav.');
+    }
+
+    return trim($panelText) !== '';
+  }
+
+  /**
+   * Returns Drupal state storage.
+   */
+  private function state(): StateInterface {
+    return \Drupal::state();
   }
 
   /**
@@ -111,13 +190,6 @@ Status text: {$statusText}",
     $this->assertSame(0, $exitCode, $combined);
 
     return $combined;
-  }
-
-  /**
-   * Returns the repository root path.
-   */
-  private function repoRoot(): string {
-    return dirname((string) \Drupal::root());
   }
 
 }

@@ -11,6 +11,11 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * Stores Framesmith transcription task state in Drupal state.
+ *
+ * This is intentionally lightweight smoke/dev storage for the first Framesmith
+ * integration slice. It is not intended to be the long-term durable task
+ * repository once task volume, concurrent writes, or retention requirements
+ * grow beyond local development and controlled smoke testing.
  */
 final class FramesmithTranscriptionTaskStore implements FramesmithTranscriptionTaskStoreInterface {
 
@@ -44,6 +49,33 @@ final class FramesmithTranscriptionTaskStore implements FramesmithTranscriptionT
       'local_audio_path' => '',
       'launch_ready' => FALSE,
       'launch' => [],
+      'runner_output' => [
+        'stdout_path' => '',
+        'stderr_path' => '',
+        'stdout_tail' => '',
+        'stderr_tail' => '',
+      ],
+      'launch_debug' => [
+        'stage' => '',
+        'app_root' => '',
+        'drush_binary' => '',
+        'command' => '',
+        'output_directory' => '',
+        'output_directory_exists' => FALSE,
+        'stdout_path' => '',
+        'stderr_path' => '',
+        'stdout_exists' => FALSE,
+        'stderr_exists' => FALSE,
+        'stdout_size' => 0,
+        'stderr_size' => 0,
+        'proc_stdout' => '',
+        'proc_stderr' => '',
+        'proc_exit_code' => 0,
+        'returned_pid_raw' => '',
+        'returned_pid' => 0,
+        'captured_at' => 0,
+      ],
+      'debug_events' => [],
       'runtime_contract_id' => '',
       'runtime_lease_snapshot' => [],
       'runtime_release_snapshot' => [],

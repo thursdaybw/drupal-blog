@@ -51,14 +51,16 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     $leaseManager = $this->createMock(FramesmithRuntimeLeaseManagerInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
-    $taskStore->expects($this->once())
-      ->method('get')
-      ->with($taskId)
+    $taskStore->method('get')
       ->willReturn([
         'task_id' => $taskId,
         'status' => 'uploaded',
+        'launch_ready' => TRUE,
         'local_audio_path' => $audioPath,
+        'debug_events' => [],
       ]);
+    $taskStore->method('merge')
+      ->willReturnCallback(fn (string $calledTaskId, array $values): array => ['task_id' => $calledTaskId] + $values);
 
     $executor->expects($this->once())->method('requiresRuntimeLease')->willReturn(TRUE);
     $leaseManager->expects($this->once())
@@ -85,27 +87,27 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
           case 1:
             TestCase::assertSame('running', $status);
             TestCase::assertArrayHasKey('runner_started_at', $extra);
-            TestCase::assertSame($lease, $extra['lease']);
+            TestCase::assertSame($lease, $extra['runtime_lease_snapshot']);
             TestCase::assertSame('Runner started immediately without cron.', $message);
             break;
 
           case 2:
             TestCase::assertSame('acquiring_runtime', $status);
-            TestCase::assertSame($lease, $extra['lease']);
+            TestCase::assertSame($lease, $extra['runtime_lease_snapshot']);
             TestCase::assertSame('Acquired pooled whisper runtime from compute_orchestrator.', $message);
             break;
 
           case 3:
             TestCase::assertSame('transcribing', $status);
-            TestCase::assertSame($lease, $extra['lease']);
+            TestCase::assertSame($lease, $extra['runtime_lease_snapshot']);
             TestCase::assertSame($audioPath, $extra['local_audio_path']);
             TestCase::assertSame('Submitting audio to selected transcription executor.', $message);
             break;
 
           case 4:
             TestCase::assertSame('completed', $status);
-            TestCase::assertSame($lease, $extra['lease']);
-            TestCase::assertSame($releasedLease, $extra['released_lease']);
+            TestCase::assertSame($lease, $extra['runtime_lease_snapshot']);
+            TestCase::assertSame($releasedLease, $extra['runtime_release_snapshot']);
             TestCase::assertSame($result, $extra['result']);
             TestCase::assertSame('Transcription completed and pooled runtime released.', $message);
             break;
@@ -141,10 +143,14 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     $leaseManager = $this->createMock(FramesmithRuntimeLeaseManagerInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
-    $taskStore->expects($this->once())->method('get')->with($taskId)->willReturn([
+    $taskStore->method('get')->willReturn([
       'task_id' => $taskId,
+      'launch_ready' => TRUE,
       'local_audio_path' => $audioPath,
+      'debug_events' => [],
     ]);
+    $taskStore->method('merge')
+      ->willReturnCallback(fn (string $calledTaskId, array $values): array => ['task_id' => $calledTaskId] + $values);
     $executor->expects($this->once())->method('requiresRuntimeLease')->willReturn(FALSE);
     $leaseManager->expects($this->never())->method('acquireWhisperRuntime');
     $leaseManager->expects($this->never())->method('releaseRuntime');
@@ -158,7 +164,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
         $index++;
         switch ($index) {
           case 2:
-            TestCase::assertSame([], $extra['lease']);
+            TestCase::assertSame([], $extra['runtime_lease_snapshot']);
             TestCase::assertSame('Fake transcription mode selected; skipping real runtime lease.', $message);
 
             break;
@@ -169,7 +175,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
             break;
 
           case 4:
-            TestCase::assertSame([], $extra['released_lease']);
+            TestCase::assertSame([], $extra['runtime_release_snapshot']);
             TestCase::assertSame($result, $extra['result']);
             TestCase::assertSame('Fake transcription completed without real compute.', $message);
             break;
@@ -190,10 +196,10 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     $leaseManager = $this->createMock(FramesmithRuntimeLeaseManagerInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
-    $taskStore->expects($this->once())
-      ->method('get')
-      ->with('missing-task')
+    $taskStore->method('get')
       ->willReturn(NULL);
+    $taskStore->method('merge')
+      ->willReturn([]);
     $executor->expects($this->never())->method('requiresRuntimeLease');
     $leaseManager->expects($this->never())->method('acquireWhisperRuntime');
     $executor->expects($this->never())->method('transcribe');
@@ -214,10 +220,10 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     $leaseManager = $this->createMock(FramesmithRuntimeLeaseManagerInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
-    $taskStore->expects($this->once())
-      ->method('get')
-      ->with('task-no-audio')
-      ->willReturn(['task_id' => 'task-no-audio']);
+    $taskStore->method('get')
+      ->willReturn(['task_id' => 'task-no-audio', 'debug_events' => []]);
+    $taskStore->method('merge')
+      ->willReturn([]);
     $executor->expects($this->never())->method('requiresRuntimeLease');
     $leaseManager->expects($this->never())->method('acquireWhisperRuntime');
     $executor->expects($this->never())->method('transcribe');
@@ -249,10 +255,14 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     $leaseManager = $this->createMock(FramesmithRuntimeLeaseManagerInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
-    $taskStore->method('get')->with($taskId)->willReturn([
+    $taskStore->method('get')->willReturn([
       'task_id' => $taskId,
+      'launch_ready' => TRUE,
       'local_audio_path' => $audioPath,
+      'debug_events' => [],
     ]);
+    $taskStore->method('merge')
+      ->willReturnCallback(fn (string $calledTaskId, array $values): array => ['task_id' => $calledTaskId] + $values);
     $executor->expects($this->once())->method('requiresRuntimeLease')->willReturn(TRUE);
     $leaseManager->expects($this->once())->method('acquireWhisperRuntime')->willReturn($lease);
     $executor->expects($this->once())
@@ -271,7 +281,9 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
         $taskId,
         'remote execution blew up',
         $this->callback(function (array $extra) use ($lease, $releasedLease): bool {
-          return $extra['lease'] === $lease && $extra['released_lease'] === $releasedLease;
+          return ($extra['runtime_lease_snapshot'] ?? NULL) === $lease
+            && ($extra['runtime_release_snapshot'] ?? NULL) === $releasedLease
+            && ($extra['runtime_contract_id'] ?? NULL) === 'contract-fail';
         }),
       )
       ->willReturn(['task_id' => $taskId, 'status' => 'failed']);
@@ -280,6 +292,51 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
 
     $this->expectException(\RuntimeException::class);
     $this->expectExceptionMessage('remote execution blew up');
+    $runner->run($taskId);
+  }
+
+  /**
+   * @covers ::run
+   */
+  public function testRunMarksTaskFailedWhenRuntimeAcquisitionFails(): void {
+    $taskId = 'task-acquire-fail';
+    $audioPath = 'temporary://framesmith-transcription/task-acquire-fail/audio.wav';
+
+    $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
+    $leaseManager = $this->createMock(FramesmithRuntimeLeaseManagerInterface::class);
+    $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
+
+    $taskStore->method('get')->willReturn([
+      'task_id' => $taskId,
+      'launch_ready' => TRUE,
+      'local_audio_path' => $audioPath,
+      'debug_events' => [],
+    ]);
+    $taskStore->method('merge')
+      ->willReturnCallback(fn (string $calledTaskId, array $values): array => ['task_id' => $calledTaskId] + $values);
+
+    $executor->expects($this->once())->method('requiresRuntimeLease')->willReturn(TRUE);
+    $leaseManager->expects($this->once())
+      ->method('acquireWhisperRuntime')
+      ->willThrowException(new \RuntimeException('pool unavailable'));
+    $executor->expects($this->never())->method('transcribe');
+    $leaseManager->expects($this->never())->method('releaseRuntime');
+    $taskStore->expects($this->never())->method('transition');
+    $taskStore->expects($this->once())
+      ->method('fail')
+      ->with(
+        $taskId,
+        'pool unavailable',
+        $this->callback(static fn (array $extra): bool => ($extra['runtime_contract_id'] ?? NULL) === ''
+          && ($extra['runtime_lease_snapshot'] ?? NULL) === []
+          && ($extra['runtime_release_snapshot'] ?? NULL) === []),
+      )
+      ->willReturn(['task_id' => $taskId, 'status' => 'failed']);
+
+    $runner = new FramesmithTranscriptionRunner($taskStore, $leaseManager, $executor);
+
+    $this->expectException(\RuntimeException::class);
+    $this->expectExceptionMessage('pool unavailable');
     $runner->run($taskId);
   }
 

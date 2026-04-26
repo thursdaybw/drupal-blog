@@ -7,6 +7,7 @@ namespace Drupal\Tests\compute_orchestrator\Unit;
 require_once __DIR__ . '/../../../src/Exception/AcquirePendingException.php';
 require_once __DIR__ . '/../../../src/Exception/WorkloadReadinessException.php';
 require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
+require_once __DIR__ . '/../../../src/Service/BadHostRegistry.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolManager.php';
 require_once __DIR__ . '/../../../src/Service/GenericVllmRuntimeManagerInterface.php';
 require_once __DIR__ . '/../../../src/Service/VastInstanceLifecycleClientInterface.php';
@@ -14,6 +15,7 @@ require_once __DIR__ . '/../../../src/Service/VastRestClientInterface.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolRepositoryInterface.php';
 require_once __DIR__ . '/../../../src/Service/VllmWorkloadCatalogInterface.php';
 
+use Drupal\compute_orchestrator\Service\BadHostRegistry;
 use Drupal\compute_orchestrator\Service\GenericVllmRuntimeManagerInterface;
 use Drupal\compute_orchestrator\Service\VastInstanceLifecycleClientInterface;
 use Drupal\compute_orchestrator\Service\VastRestClientInterface;
@@ -61,6 +63,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -161,6 +164,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -287,6 +291,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -296,7 +301,7 @@ final class VllmPoolManagerTest extends TestCase {
 
     $this->assertSame('999', $record['contract_id']);
     $this->assertSame('leased', $record['lease_status']);
-    $this->assertSame('rented_elsewhere', $records['123']['lease_status']);
+    $this->assertSame('available', $records['123']['lease_status']);
     $this->assertSame('fresh_fallback', $records['999']['source']);
   }
 
@@ -345,8 +350,10 @@ final class VllmPoolManagerTest extends TestCase {
         'error' => 'resources_unavailable',
         'msg' => 'Required resources are currently unavailable, state change queued.',
       ]);
-    $lifecycleClient->expects($this->never())
-      ->method('stopInstance');
+    $lifecycleClient->expects($this->once())
+      ->method('stopInstance')
+      ->with('123')
+      ->willReturn(['success' => TRUE]);
 
     $vastClient = $this->createMock(VastRestClientInterface::class);
     $vastClient->expects($this->once())
@@ -365,6 +372,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -377,7 +385,8 @@ final class VllmPoolManagerTest extends TestCase {
     finally {
       $record = $repository->get('123');
       $this->assertNotNull($record);
-      $this->assertSame('rented_elsewhere', $record['lease_status']);
+      $this->assertSame('available', $record['lease_status']);
+      $this->assertSame('stopped', $record['runtime_state']);
       $this->assertSame('Required resources are currently unavailable, state change queued.', $record['last_error']);
     }
   }
@@ -461,6 +470,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -578,6 +588,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -587,7 +598,7 @@ final class VllmPoolManagerTest extends TestCase {
 
     $this->assertSame('999', $record['contract_id']);
     $this->assertSame('leased', $record['lease_status']);
-    $this->assertSame('unavailable', $records['123']['lease_status']);
+    $this->assertSame('available', $records['123']['lease_status']);
     $this->assertStringContainsString('429 Too Many Requests', (string) $records['123']['last_error']);
   }
 
@@ -670,6 +681,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -736,6 +748,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $state,
+      new BadHostRegistry($state),
       3,
       0,
     );
@@ -829,6 +842,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $state,
+      new BadHostRegistry($state),
       3,
       0,
     );
@@ -923,6 +937,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $state,
+      new BadHostRegistry($state),
       3,
       0,
     );
@@ -932,9 +947,9 @@ final class VllmPoolManagerTest extends TestCase {
   }
 
   /**
-   * Tests acquire does not count unavailable member against pool limit.
+   * Tests acquire retries a legacy unavailable member as a normal candidate.
    */
-  public function testAcquireDoesNotCountUnavailableMemberAgainstPoolLimit(): void {
+  public function testAcquireRetriesLegacyUnavailableMember(): void {
     $repository = $this->newInMemoryRepository([
       '123' => [
         'contract_id' => '123',
@@ -948,7 +963,7 @@ final class VllmPoolManagerTest extends TestCase {
         'source' => 'manual',
         'last_seen_at' => 1,
         'last_used_at' => 1,
-        'last_error' => 'bad node',
+        'last_error' => 'transient provider contention',
       ],
     ]);
 
@@ -962,40 +977,65 @@ final class VllmPoolManagerTest extends TestCase {
         'gpu_ram_gte' => 20,
         'max_model_len' => 16384,
       ]);
-    $catalog->expects($this->once())
-      ->method('getDefaultGenericImage')
-      ->willReturn('thursdaybw/vllm-generic:2026-04-generic-node');
+    $catalog->expects($this->never())
+      ->method('getDefaultGenericImage');
 
     $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->never())
+      ->method('provisionFresh');
     $runtimeManager->expects($this->once())
-      ->method('provisionFresh')
+      ->method('waitForSshBootstrap')
+      ->with('123')
       ->willReturn([
-        'contract_id' => '999',
-        'instance_info' => [
-          'ssh_host' => 'ssh3.vast.ai',
-          'ssh_port' => 14999,
-          'ssh_user' => 'root',
+        'id' => '123',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+        'public_ipaddr' => '1.2.3.4',
+        'ports' => [
+          '8000/tcp' => [
+            ['HostPort' => '22097'],
+          ],
         ],
       ]);
     $runtimeManager->expects($this->once())
       ->method('startWorkload');
     $runtimeManager->expects($this->once())
       ->method('waitForWorkloadReady')
-      ->with('999')
+      ->with('123')
       ->willReturn([
-        'id' => '999',
+        'id' => '123',
         'cur_state' => 'running',
         'actual_status' => 'running',
-        'public_ipaddr' => '5.6.7.8',
+        'public_ipaddr' => '1.2.3.4',
         'ports' => [
           '8000/tcp' => [
-            ['HostPort' => '23001'],
+            ['HostPort' => '22097'],
           ],
         ],
       ]);
 
     $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->once())
+      ->method('startInstance')
+      ->with('123')
+      ->willReturn(['success' => TRUE]);
+
     $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->exactly(2))
+      ->method('showInstance')
+      ->with('123')
+      ->willReturnOnConsecutiveCalls(
+        [
+          'id' => '123',
+          'cur_state' => 'stopped',
+          'actual_status' => 'stopped',
+        ],
+        [
+          'id' => '123',
+          'cur_state' => 'running',
+          'actual_status' => 'running',
+        ],
+      );
     $state = $this->createMock(StateInterface::class);
     $state->method('get')
       ->willReturnCallback(static function (string $key, mixed $default = NULL): mixed {
@@ -1012,12 +1052,14 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $state,
+      new BadHostRegistry($state),
       3,
       0,
     );
 
     $record = $manager->acquire('qwen-vl');
-    $this->assertSame('999', $record['contract_id']);
+    $this->assertSame('123', $record['contract_id']);
+    $this->assertSame('leased', $record['lease_status']);
   }
 
   /**
@@ -1046,6 +1088,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -1108,6 +1151,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -1168,6 +1212,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -1248,6 +1293,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -1310,6 +1356,7 @@ final class VllmPoolManagerTest extends TestCase {
       $this->createMock(VastInstanceLifecycleClientInterface::class),
       $this->createMock(VastRestClientInterface::class),
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -1380,6 +1427,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -1437,6 +1485,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -1491,6 +1540,7 @@ final class VllmPoolManagerTest extends TestCase {
       $lifecycleClient,
       $vastClient,
       $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
       3,
       0,
     );
@@ -1501,6 +1551,79 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('would_stop', $results[0]['action']);
     $this->assertNotNull($record);
     $this->assertArrayNotHasKey('last_stopped_at', $record);
+  }
+
+  /**
+   * Tests acquire treats provider readback failure as transient.
+   */
+  public function testAcquireTreatsProviderReadbackFailureAsTransientObservation(): void {
+    $repository = $this->newInMemoryRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'qwen-vl',
+        'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'lease_status' => 'available',
+        'host' => '',
+        'port' => '',
+        'url' => '',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => '',
+      ],
+    ]);
+
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('qwen-vl', NULL)
+      ->willReturn([
+        'mode' => 'qwen-vl',
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->never())->method('waitForWorkloadReady');
+    $runtimeManager->expects($this->never())->method('provisionFresh');
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->never())->method('startInstance');
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('123')
+      ->willThrowException(new \RuntimeException('Vast readback unavailable'));
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
+      3,
+      0,
+    );
+
+    $this->expectException(\RuntimeException::class);
+    $this->expectExceptionMessage('No pooled instances available. Fresh provisioning is disabled.');
+    try {
+      $manager->acquire('qwen-vl', NULL, FALSE);
+    }
+    finally {
+      $record = $repository->get('123');
+      $this->assertNotNull($record);
+      $this->assertSame('available', $record['lease_status']);
+      $this->assertSame('provider_readback', $record['last_phase']);
+      $this->assertSame('show Vast instance', $record['last_action']);
+      $this->assertSame('Vast readback unavailable', $record['last_error']);
+      $this->assertArrayHasKey('last_provider_unavailable_at', $record);
+    }
   }
 
   /**

@@ -43,6 +43,7 @@ final class VllmPoolManager {
     private readonly VastInstanceLifecycleClientInterface $instanceLifecycleClient,
     private readonly VastRestClientInterface $vastClient,
     private readonly StateInterface $state,
+    private readonly BadHostRegistry $badHostRegistry,
     private readonly int $wakeSchedulingProbeAttempts = 3,
     private readonly int $wakeSchedulingProbeDelaySeconds = 10,
     LoggerChannelFactoryInterface|LoggerInterface|null $logger = NULL,
@@ -136,8 +137,11 @@ final class VllmPoolManager {
     ]);
 
     foreach ($this->sortCandidates($this->poolRepository->all(), $definition) as $record) {
-      if (($record['lease_status'] ?? '') === 'unavailable') {
+      if (($record['lease_status'] ?? '') === 'destroyed') {
         continue;
+      }
+      if (in_array(($record['lease_status'] ?? ''), ['unavailable', 'rented_elsewhere'], TRUE)) {
+        $record['lease_status'] = 'available';
       }
       if (($record['lease_status'] ?? '') === 'leased') {
         $recovered = $this->recoverStaleLeasedRecord($record);
@@ -650,15 +654,14 @@ final class VllmPoolManager {
       return NULL;
     }
     $wakeAttempted = FALSE;
+    $phase = 'provider_readback';
+    $action = 'show Vast instance';
 
     try {
       $info = $this->vastClient->showInstance($contractId);
     }
     catch (\Throwable $exception) {
-      $record['lease_status'] = 'unavailable';
-      $record['last_error'] = $exception->getMessage();
-      $record['last_seen_at'] = time();
-      $this->poolRepository->save($record);
+      $this->recordTransientAcquireObservation($record, $phase, $action, $exception->getMessage());
       return NULL;
     }
 
@@ -697,7 +700,7 @@ final class VllmPoolManager {
           throw AcquirePendingException::fromProgress($status, $contractId, $progress, $exception);
         }
 
-        $this->recordAcquireFailure($record, 'unavailable', $phase, $action, $exception);
+        $this->recordTransientAcquireObservation($record, $phase, $action, $exception->getMessage());
         return NULL;
       }
     }
@@ -711,22 +714,19 @@ final class VllmPoolManager {
       $startResponse = $this->instanceLifecycleClient->startInstance($contractId);
       $record['runtime_state'] = 'starting';
       if ($this->isQueuedExternalLeaseResponse($startResponse)) {
-        $record['lease_status'] = 'rented_elsewhere';
-        $record['runtime_state'] = 'unknown';
-        $record['last_error'] = trim((string) ($startResponse['msg'] ?? 'Wake attempt was queued because required resources are unavailable.'));
-        $record['last_seen_at'] = time();
-        $this->poolRepository->save($record);
-        return NULL;
+        return $this->handleExternalLeaseWakeFailure(
+          $record,
+          $contractId,
+          trim((string) ($startResponse['msg'] ?? 'Wake attempt was queued because required resources are unavailable.')),
+        );
       }
 
       if ($this->isWakeBlockedByExternalLease($contractId)) {
-        $this->instanceLifecycleClient->stopInstance($contractId);
-        $record['lease_status'] = 'rented_elsewhere';
-        $record['runtime_state'] = 'unknown';
-        $record['last_error'] = 'Wake attempt stayed in scheduling; instance is likely rented by another user.';
-        $record['last_seen_at'] = time();
-        $this->poolRepository->save($record);
-        return NULL;
+        return $this->handleExternalLeaseWakeFailure(
+          $record,
+          $contractId,
+          'Wake attempt stayed in scheduling; instance is likely rented by another user.',
+        );
       }
 
       $phase = 'ssh_bootstrap';
@@ -759,32 +759,18 @@ final class VllmPoolManager {
         throw AcquirePendingException::fromProgress($status, $contractId, $progress, $exception);
       }
       if ($wakeAttempted && !$bootstrapCompleted && !$workloadStartIssued) {
-        try {
-          $this->instanceLifecycleClient->stopInstance($contractId);
-          $record['runtime_state'] = 'stopped';
-          $record['last_stopped_at'] = time();
-        }
-        catch (\Throwable) {
-          // Preserve original startup failure below.
-        }
-      }
-      $this->recordAcquireFailure(
-        $record,
-        $this->isExternalLeaseFailure($exception->getMessage()) ? 'rented_elsewhere' : 'unavailable',
-        $phase,
-        $action,
-        $exception,
-      );
-      if ($wakeAttempted && !$bootstrapCompleted && !$workloadStartIssued) {
-        throw new \RuntimeException(
-          'Wake/start failed for pooled instance '
-          . $contractId
-          . '; aborting acquire to avoid duplicate provisioning: '
-          . $exception->getMessage(),
-          0,
-          $exception
+        return $this->handleBootstrapFailureRetry(
+          $record,
+          $contractId,
+          $phase,
+          $action,
+          $exception,
+          $definition,
+          $bootstrapTimeoutSeconds,
+          $workloadTimeoutSeconds,
         );
       }
+      $this->recordTransientAcquireObservation($record, $phase, $action, $exception->getMessage());
       throw new \RuntimeException(
         'Workload readiness failed for pooled instance '
         . $contractId
@@ -805,11 +791,18 @@ final class VllmPoolManager {
    *   SSH bootstrap timeout used for this acquire attempt.
    * @param int $workloadTimeoutSeconds
    *   Workload readiness timeout used for this acquire attempt.
+   * @param int $freshBootstrapRetriesRemaining
+   *   Number of fresh bootstrap retries still allowed after cleanup.
    *
    * @return array<string,mixed>
    *   Fresh leased pool record.
    */
-  private function acquireFreshInstance(array $definition, int $bootstrapTimeoutSeconds, int $workloadTimeoutSeconds): array {
+  private function acquireFreshInstance(
+    array $definition,
+    int $bootstrapTimeoutSeconds,
+    int $workloadTimeoutSeconds,
+    int $freshBootstrapRetriesRemaining = 1,
+  ): array {
     $image = $this->workloadCatalog->getDefaultGenericImage();
     $fresh = $this->runtimeManager->provisionFresh($definition, $image);
     $contractId = (string) ($fresh['contract_id'] ?? '');
@@ -863,6 +856,20 @@ final class VllmPoolManager {
         $record['last_seen_at'] = time();
         $this->poolRepository->save($record);
         throw AcquirePendingException::fromProgress($status, $contractId, $progress, $exception);
+      }
+
+      if (!$bootstrapCompleted && !$workloadStartIssued && $freshBootstrapRetriesRemaining > 0) {
+        return $this->handleBootstrapFailureRetry(
+          $record,
+          $contractId,
+          $phase,
+          $action,
+          $exception,
+          $definition,
+          $bootstrapTimeoutSeconds,
+          $workloadTimeoutSeconds,
+          $freshBootstrapRetriesRemaining - 1,
+        );
       }
 
       $record['lease_status'] = 'unavailable';
@@ -932,6 +939,170 @@ final class VllmPoolManager {
         'message' => $exception->getMessage(),
       ],
     );
+  }
+
+  /**
+   * Records a transient provider observation without tombstoning the candidate.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param string $phase
+   *   Acquire phase that observed the transient provider condition.
+   * @param string $action
+   *   Acquire action that observed the transient provider condition.
+   * @param string $message
+   *   Operator-facing diagnostic message.
+   */
+  private function recordTransientAcquireObservation(
+    array &$record,
+    string $phase,
+    string $action,
+    string $message,
+  ): void {
+    $record['lease_status'] = 'available';
+    $record['last_error'] = $message;
+    $record['last_phase'] = $phase;
+    $record['last_action'] = $action;
+    $record['last_seen_at'] = time();
+    $record['last_provider_unavailable_at'] = time();
+    $this->poolRepository->save($record);
+    $this->logger->warning(
+      'POOL transient provider observation contract={contract} phase={phase} action={action} message={message}',
+      [
+        'contract' => (string) ($record['contract_id'] ?? ''),
+        'phase' => $phase,
+        'action' => $action,
+        'message' => $message,
+      ],
+    );
+  }
+
+  /**
+   * Cleans up a bootstrap-failed instance, records bad-host data, and retries.
+   *
+   * @param array<string,mixed> $record
+   *   Failed pool record.
+   * @param string $contractId
+   *   Vast contract ID.
+   * @param string $phase
+   *   Acquire phase that failed.
+   * @param string $action
+   *   Acquire action that failed.
+   * @param \Throwable $exception
+   *   Bootstrap failure.
+   * @param array<string,int|string> $definition
+   *   Requested workload definition.
+   * @param int $bootstrapTimeoutSeconds
+   *   SSH bootstrap timeout in seconds for the replacement acquire.
+   * @param int $workloadTimeoutSeconds
+   *   Workload readiness timeout in seconds for the replacement acquire.
+   * @param int $freshBootstrapRetriesRemaining
+   *   Number of additional fresh bootstrap retries after this cleanup.
+   *
+   * @return array<string,mixed>
+   *   Replacement acquired record.
+   */
+  private function handleBootstrapFailureRetry(
+    array $record,
+    string $contractId,
+    string $phase,
+    string $action,
+    \Throwable $exception,
+    array $definition,
+    int $bootstrapTimeoutSeconds,
+    int $workloadTimeoutSeconds,
+    int $freshBootstrapRetriesRemaining = 1,
+  ): array {
+    try {
+      $this->instanceLifecycleClient->stopInstance($contractId);
+      $record['runtime_state'] = 'stopped';
+      $record['last_stopped_at'] = time();
+    }
+    catch (\Throwable) {
+      // Preserve original bootstrap failure handling below.
+    }
+
+    $hostId = trim((string) ($this->extractHostIdFromRecordOrProvider($record, $contractId) ?? ''));
+    if ($hostId !== '') {
+      $this->badHostRegistry->add($hostId);
+      $this->recordWorkloadBadHost((string) ($definition['mode'] ?? ''), $hostId);
+      $this->recordGlobalBadHost($hostId);
+      $record['bad_host_id'] = $hostId;
+    }
+
+    $this->recordAcquireFailure($record, 'unavailable', $phase, $action, $exception);
+    $cleanup = $this->destroyFreshFailedContract($contractId, $record);
+    $record = $cleanup['record'];
+    $record['last_error'] = $exception->getMessage() . ' Cleanup: ' . $cleanup['message'];
+    $record['last_seen_at'] = time();
+    $this->poolRepository->save($record);
+
+    return $this->acquireFreshInstance(
+      $definition,
+      $bootstrapTimeoutSeconds,
+      $workloadTimeoutSeconds,
+      $freshBootstrapRetriesRemaining,
+    );
+  }
+
+  /**
+   * Extracts a host ID from the record or current provider readback.
+   */
+  private function extractHostIdFromRecordOrProvider(array $record, string $contractId): ?string {
+    $hostId = trim((string) ($record['host_id'] ?? ''));
+    if ($hostId !== '') {
+      return $hostId;
+    }
+
+    try {
+      $info = $this->vastClient->showInstance($contractId);
+      $providerHostId = trim((string) ($info['host_id'] ?? ''));
+      if ($providerHostId !== '') {
+        return $providerHostId;
+      }
+    }
+    catch (\Throwable) {
+      // Ignore provider readback failure here; cleanup continues.
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Records a host as bad for all workloads.
+   */
+  private function recordGlobalBadHost(string $hostId): void {
+    $current = $this->state->get('compute_orchestrator.global_bad_hosts', []);
+    if (!is_array($current)) {
+      $current = [];
+    }
+    if (!in_array($hostId, $current, TRUE)) {
+      $current[] = $hostId;
+      $this->state->set('compute_orchestrator.global_bad_hosts', array_values(array_unique(array_map('strval', $current))));
+    }
+  }
+
+  /**
+   * Records a host as bad for the specific workload.
+   */
+  private function recordWorkloadBadHost(string $workload, string $hostId): void {
+    $workload = trim($workload);
+    if ($workload === '') {
+      return;
+    }
+    $all = $this->state->get('compute_orchestrator.workload_bad_hosts', []);
+    if (!is_array($all)) {
+      $all = [];
+    }
+    $current = $all[$workload] ?? [];
+    if (!is_array($current)) {
+      $current = [];
+    }
+    if (!in_array($hostId, $current, TRUE)) {
+      $current[] = $hostId;
+      $all[$workload] = array_values(array_unique(array_map('strval', $current)));
+      $this->state->set('compute_orchestrator.workload_bad_hosts', $all);
+    }
   }
 
   /**
@@ -1219,6 +1390,38 @@ final class VllmPoolManager {
   }
 
   /**
+   * Stops and marks a wake candidate that is no longer actually reusable.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record to update.
+   * @param string $contractId
+   *   Vast contract ID.
+   * @param string $message
+   *   Operator-facing status message.
+   *
+   * @return null
+   *   Always NULL so acquire can continue to the next candidate.
+   */
+  private function handleExternalLeaseWakeFailure(array $record, string $contractId, string $message): ?array {
+    try {
+      $this->instanceLifecycleClient->stopInstance($contractId);
+      $record['runtime_state'] = 'stopped';
+      $record['last_stopped_at'] = time();
+    }
+    catch (\Throwable) {
+      $record['runtime_state'] = 'unknown';
+    }
+
+    $this->recordTransientAcquireObservation(
+      $record,
+      'wake_instance',
+      'request Vast start',
+      $message,
+    );
+    return NULL;
+  }
+
+  /**
    * Falls through to the next acquire candidate after a wake rate limit.
    */
   private function handleWakeRateLimitFallback(
@@ -1238,19 +1441,18 @@ final class VllmPoolManager {
         catch (\Throwable) {
           // Preserve the original wake-rate-limit observation below.
         }
-        $record['lease_status'] = 'rented_elsewhere';
-      }
-      else {
-        $record['lease_status'] = 'unavailable';
       }
     }
     catch (\Throwable) {
-      $record['lease_status'] = 'unavailable';
+      // Preserve the original wake-rate-limit observation below.
     }
 
-    $record['last_error'] = $exception->getMessage();
-    $record['last_seen_at'] = time();
-    $this->poolRepository->save($record);
+    $this->recordTransientAcquireObservation(
+      $record,
+      'wake_instance',
+      'request Vast start',
+      $exception->getMessage(),
+    );
     return NULL;
   }
 

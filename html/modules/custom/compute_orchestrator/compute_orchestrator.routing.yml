@@ -20,7 +20,7 @@ compute_orchestrator.framesmith_transcription_start:
     _controller: '\Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController::start'
     _title: 'Framesmith transcription start'
   requirements:
-    _permission: 'access content'
+    _permission: 'use framesmith transcription api'
   methods: [POST]
 
 compute_orchestrator.framesmith_transcription_upload:
@@ -29,7 +29,7 @@ compute_orchestrator.framesmith_transcription_upload:
     _controller: '\Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController::upload'
     _title: 'Framesmith transcription upload'
   requirements:
-    _permission: 'access content'
+    _permission: 'use framesmith transcription api'
   methods: [POST]
 
 compute_orchestrator.framesmith_transcription_status:
@@ -38,7 +38,7 @@ compute_orchestrator.framesmith_transcription_status:
     _controller: '\Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController::status'
     _title: 'Framesmith transcription status'
   requirements:
-    _permission: 'access content'
+    _permission: 'use framesmith transcription api'
   methods: [GET]
 
 compute_orchestrator.framesmith_transcription_result:
@@ -47,5 +47,5 @@ compute_orchestrator.framesmith_transcription_result:
     _controller: '\Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController::result'
     _title: 'Framesmith transcription result'
   requirements:
-    _permission: 'access content'
+    _permission: 'use framesmith transcription api'
   methods: [GET]

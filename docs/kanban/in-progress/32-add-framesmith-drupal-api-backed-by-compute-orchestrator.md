@@ -482,6 +482,98 @@ Planning implication:
 
 The important thing now is not to decide too early, but to avoid making later clarification expensive.
 
+### New pool-state hazard: stopped instance may be rented elsewhere while locally considered reusable
+
+A new real-world failure mode has now been observed and must be treated as a first-class backlog/design concern.
+
+Observed situation during Framesmith detached-runner probing:
+- expected reusable stopped instance `35456908` had, in reality, been rented by someone else while stopped
+- local pool state still treated it as if it were ours/reusable and scheduled it
+- acquire then created a fresh fallback instance `35557834`, which became the actually running cost-incurring instance
+- this leaves two concurrent hazards:
+  - stale scheduled state on `35456908`, meaning it may auto-start later when the external renter releases it
+  - fresh fallback instance `35557834` running now and burning money
+
+Why this matters:
+- “stopped” is not a safe local proxy for “still available to us later” in Vast.ai
+- a local reusable/stopped record can go stale while externally changing ownership/rental status
+- that stale state can produce delayed surprise starts and unexpected spend
+- fallback acquisition can therefore stack on top of stale scheduled state instead of cleanly replacing it
+
+Implications for design and backlog:
+- acquire must explicitly detect and reject instances that are no longer actually ours to reuse, even if local state still says stopped/available/scheduled
+- reconcile must be able to clear, quarantine, or otherwise neutralize stale scheduled records for instances rented elsewhere
+- local scheduled state must not be allowed to remain a landmine that later auto-starts when remote conditions change
+- dev/probe workflows should assume that a stopped Vast instance may be claimed by others before reuse
+
+This is now a distinct operational/state-synchronization problem in addition to the SSH-readiness problem surfaced in the latest probe.
+
+### Operational semantics must be the source of truth
+
+A further design correction is now explicit and should govern follow-up work.
+
+The problem is not merely that some names are a bit unclear. The deeper problem is allowing any gap at all between:
+- what an operator means
+- what a command says
+- what the system state claims
+- what the implementation actually does
+
+Required principle:
+- operational semantics are the source of truth
+- implementation should reflect those semantics as directly as possible
+- words must mean what they say
+- the system must do what the operator asked, not something “nearby” in implementation space
+
+Concrete implications:
+- `stop` must mean stop
+- `destroy` must mean destroy
+- `remove from pool` must mean forget the local inventory record only
+- `reconcile` must mean compare local belief to provider reality and correct local belief
+- local state must never be treated as authoritative reality; it is at most cached belief pending provider verification
+
+Why this matters:
+- the recent incident was not just a one-off execution mistake; it exposed how easy it is for action names, local state, and real provider state to drift apart
+- that drift pulled work away from the primary goal of getting orchestration working and into redesign/firefighting
+- this must be corrected so the system supports direct, literal operation rather than interpretation
+
+Planning consequence:
+- follow-up design and implementation work should reduce semantic distance, not merely add more explanatory wording
+- command names, UI labels, state labels, confirmations, and code paths should be reviewed under the test: “does this do exactly what it says?”
+- this is not optional polish; it is required to make orchestration trustworthy under pressure
+
+### Bad-host bootstrap failure handling is not complete
+
+A further real-world requirement is now explicit.
+
+Observed live failure mode:
+- acquire selected or provisioned an instance
+- Vast reported the instance as running
+- SSH/bootstrap never became usable
+- direct SSH checks also failed (`Connection closed by ... port ...`)
+- the smoke therefore failed before transcription could complete
+- the instance was left running until manually stopped
+
+This shows that bad-host / bad-instance management is not actually complete for the acquire/bootstrap path, even if some related bad-host machinery already exists elsewhere.
+
+Required behavior:
+- if acquire proves an instance is a bad bootstrap target (for example repeated SSH bootstrap/login failure on an ostensibly running instance)
+- the system must treat that instance as bad for this acquisition attempt
+- stop and/or destroy it according to the operational policy for unusable fresh capacity
+- record the bad host / bad instance so it is not immediately selected again
+- then retry acquisition with another candidate or another fresh instance
+- continue until success or a bounded, explicit retry threshold is reached
+
+Operationally important consequence:
+- a failed bootstrap on a paid fresh instance must not leave the orchestration flow dead-ended after one attempt
+- and must not leave the failed instance running and burning money
+
+Smoke-test consequence:
+- a live smoke must only count as successful if it either:
+  - completes transcription and verifies the instance is later stopped/reaped, or
+  - fails after bounded retries while also verifying every bad/failed instance has been stopped or destroyed according to policy
+
+This requirement should now be treated as part of the core orchestration contract, not as optional robustness work.
+
 ## Links
 
 - Product execution card: `/home/bevan/workspace/bevans-bench-product/docs/kanban/backlog/15-make-framesmith-functional-using-compute-orchestrator.md`
@@ -491,4 +583,4 @@ The important thing now is not to decide too early, but to avoid making later cl
 
 ## Next action
 
-Resolve the Framesmith detached-runner/async execution blocker with explicit launcher-seam instrumentation and without deepening accidental coupling to Drush. In parallel planning, keep both the launcher seam and the task CRUD/storage seam explicitly swappable so unsettled ownership and portability questions remain cheap to resolve later.
+Get orchestration working again with the shortest trustworthy path while carrying forward the semantic corrections already exposed: fix the runtime-acquisition SSH/bootstrap blocker, implement real bad-host bootstrap handling (mark bad, stop/destroy unusable instances, retry another acquisition up to a bounded threshold), harden provider-truth verification during acquire/reuse, and reduce semantic drift so commands/actions/state do exactly what they say under operational pressure. Avoid further accidental coupling to Drush while keeping the launcher seam and task CRUD/storage seam explicitly swappable.

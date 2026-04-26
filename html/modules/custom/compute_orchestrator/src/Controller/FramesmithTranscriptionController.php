@@ -213,7 +213,27 @@ final class FramesmithTranscriptionController extends ControllerBase {
   private function buildTaskPayload(array $task): array {
     unset($task['lease'], $task['released_lease']);
     unset($task['runtime_lease_snapshot'], $task['runtime_release_snapshot']);
+    if (isset($task['runner_output']) && is_array($task['runner_output'])) {
+      $task['runner_output'] = [
+        'stdout_tail' => $this->readRunnerTail((string) ($task['runner_output']['stdout_path'] ?? '')),
+        'stderr_tail' => $this->readRunnerTail((string) ($task['runner_output']['stderr_path'] ?? '')),
+      ];
+    }
     return $task;
+  }
+
+  /**
+   * Reads a short tail from a task-scoped runner output file.
+   */
+  private function readRunnerTail(string $path): string {
+    if ($path === '' || !is_file($path) || !is_readable($path)) {
+      return '';
+    }
+    $contents = trim((string) file_get_contents($path));
+    if ($contents === '') {
+      return '';
+    }
+    return substr($contents, -4000);
   }
 
 }

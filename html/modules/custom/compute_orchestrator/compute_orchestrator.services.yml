@@ -81,6 +81,7 @@ services:
       - '@compute_orchestrator.vast_instance_lifecycle_client'
       - '@compute_orchestrator.vast_rest_client'
       - '@state'
+      - '@compute_orchestrator.bad_host_registry'
       - 3
       - 10
       - '@logger.factory'
@@ -100,6 +101,7 @@ services:
       - '@compute_orchestrator.framesmith_transcription_task_store'
       - '@logger.factory'
       - '%app.root%'
+      - '@file_system'
 
   Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncherInterface: '@compute_orchestrator.framesmith_transcription_launcher'
 

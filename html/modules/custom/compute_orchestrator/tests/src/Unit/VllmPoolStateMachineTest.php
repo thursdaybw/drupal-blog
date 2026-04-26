@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
 use Drupal\compute_orchestrator\Exception\AcquirePendingException;
+use Drupal\compute_orchestrator\Service\BadHostRegistry;
 use Drupal\compute_orchestrator\Service\GenericVllmRuntimeManagerInterface;
 use Drupal\compute_orchestrator\Service\VastInstanceLifecycleClientInterface;
 use Drupal\compute_orchestrator\Service\VastRestClientInterface;
@@ -23,6 +24,7 @@ require_once __DIR__ . '/../../../src/Service/VllmWorkloadCatalogInterface.php';
 require_once __DIR__ . '/../../../src/Exception/AcquirePendingException.php';
 require_once __DIR__ . '/../../../src/Exception/WorkloadReadinessException.php';
 require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
+require_once __DIR__ . '/../../../src/Service/BadHostRegistry.php';
 
 /**
  * Deterministic state-machine tests for pooled acquire behavior.
@@ -68,6 +70,7 @@ final class VllmPoolStateMachineTest extends TestCase {
       $lifecycle,
       $vast,
       $state,
+      new BadHostRegistry($state),
       1,
       0,
     );
@@ -120,6 +123,7 @@ final class VllmPoolStateMachineTest extends TestCase {
       $lifecycle,
       $vast,
       $state,
+      new BadHostRegistry($state),
       1,
       0,
     );
@@ -180,6 +184,7 @@ final class VllmPoolStateMachineTest extends TestCase {
       $lifecycle,
       $vast,
       $state,
+      new BadHostRegistry($state),
       1,
       0,
     );
@@ -192,6 +197,131 @@ final class VllmPoolStateMachineTest extends TestCase {
     $this->assertSame(0, $runtime->freshProvisionCalls);
     $this->assertSame(['100'], $lifecycle->startCalls);
     $this->assertSame([], $vast->destroyCalls);
+  }
+
+  /**
+   * Tests external-lease fallback from a stopped reusable instance.
+   */
+  public function testStoppedInstanceQueuedAsExternalLeaseStopsAndFallsBackFresh(): void {
+    $repository = new StateMachinePoolRepository([
+      '100' => [
+        'contract_id' => '100',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'whisper',
+        'current_model' => 'openai/whisper-large-v3-turbo',
+        'lease_status' => 'available',
+        'runtime_state' => 'stopped',
+        'host' => '198.53.64.194',
+        'port' => '40537',
+        'url' => 'http://198.53.64.194:40537',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => '',
+      ],
+    ]);
+
+    $catalog = new FakeWorkloadCatalog();
+    $state = $this->createMock(StateInterface::class);
+    $vast = new FakeVastClient([
+      '100' => FakeVastClient::instance('100', 'stopped', 'exited', '198.53.64.194', '40537'),
+    ]);
+    $lifecycle = new FakeLifecycleClient($vast);
+    $lifecycle->startResponses['100'] = [
+      'success' => FALSE,
+      'error' => 'resources_unavailable',
+      'msg' => 'Required resources are currently unavailable, state change queued.',
+    ];
+    $runtime = new FakeRuntimeManager($vast);
+    $runtime->freshProvisionResponse = [
+      'contract_id' => '999',
+      'instance_info' => FakeVastClient::instance('999', 'running', 'running', '203.0.113.10', '40800'),
+    ];
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtime,
+      $lifecycle,
+      $vast,
+      $state,
+      new BadHostRegistry($state),
+      2,
+      0,
+    );
+
+    $record = $manager->acquire('qwen-vl');
+    $stale = $repository->get('100');
+    $fresh = $repository->get('999');
+
+    $this->assertSame('999', $record['contract_id']);
+    $this->assertSame('leased', $record['lease_status']);
+    $this->assertSame(1, $runtime->freshProvisionCalls);
+    $this->assertSame(['100'], $lifecycle->startCalls);
+    $this->assertSame(['100'], $lifecycle->stopCalls);
+    $this->assertNotNull($stale);
+    $this->assertSame('available', $stale['lease_status']);
+    $this->assertSame('stopped', $stale['runtime_state']);
+    $this->assertStringContainsString('state change queued', $stale['last_error']);
+    $this->assertNotNull($fresh);
+    $this->assertSame('fresh_fallback', $fresh['source']);
+    $this->assertSame('leased', $fresh['lease_status']);
+  }
+
+  /**
+   * Tests bad fresh bootstrap host is destroyed, recorded bad, and retried.
+   */
+  public function testBadBootstrapFreshInstanceIsDestroyedAndRetried(): void {
+    $repository = new StateMachinePoolRepository([]);
+
+    $catalog = new FakeWorkloadCatalog();
+    $state = new StateMachineState([
+      'compute_orchestrator.global_bad_hosts' => [],
+      'compute_orchestrator.workload_bad_hosts' => [],
+    ]);
+    $vast = new FakeVastClient([]);
+    $lifecycle = new FakeLifecycleClient($vast);
+    $runtime = new FakeRuntimeManager($vast);
+    $runtime->freshProvisionQueue = [
+      [
+        'contract_id' => '200',
+        'instance_info' => FakeVastClient::instance('200', 'running', 'running', '198.53.64.200', '40600', '349045'),
+      ],
+      [
+        'contract_id' => '201',
+        'instance_info' => FakeVastClient::instance('201', 'running', 'running', '198.53.64.201', '40601', '349046'),
+      ],
+    ];
+    $runtime->bootstrapFailures['200'] = 'kex_exchange_identification: Connection closed by remote host';
+    $badHosts = new BadHostRegistry($state);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtime,
+      $lifecycle,
+      $vast,
+      $state,
+      $badHosts,
+      1,
+      0,
+    );
+
+    $record = $manager->acquire('whisper');
+
+    $this->assertSame('201', $record['contract_id']);
+    $this->assertSame('leased', $record['lease_status']);
+    $this->assertSame(2, $runtime->freshProvisionCalls);
+    $this->assertSame(['200'], $lifecycle->stopCalls);
+    $this->assertSame(['200'], $vast->destroyCalls);
+    $this->assertSame(['349045'], $badHosts->all());
+    $this->assertSame(['349045'], $state->get('compute_orchestrator.global_bad_hosts', []));
+    $this->assertSame(['349045'], $state->get('compute_orchestrator.workload_bad_hosts', [])['whisper'] ?? []);
+    $failed = $repository->get('200');
+    $this->assertNotNull($failed);
+    $this->assertSame('destroyed', $failed['lease_status']);
+    $this->assertSame('349045', $failed['bad_host_id']);
+    $this->assertNotNull($repository->get('201'));
   }
 
   /**
@@ -224,6 +354,10 @@ final class VllmPoolStateMachineTest extends TestCase {
     $lifecycle = new FakeLifecycleClient($vast);
     $runtime = new FakeRuntimeManager($vast);
     $runtime->bootstrapFailures['100'] = 'simulated bootstrap failure';
+    $runtime->freshProvisionResponse = [
+      'contract_id' => '999',
+      'instance_info' => FakeVastClient::instance('999', 'running', 'running', '203.0.113.10', '40800'),
+    ];
 
     $manager = new VllmPoolManager(
       $repository,
@@ -232,24 +366,22 @@ final class VllmPoolStateMachineTest extends TestCase {
       $lifecycle,
       $vast,
       $state,
+      new BadHostRegistry($state),
       1,
       0,
     );
 
-    $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('aborting acquire to avoid duplicate provisioning');
+    $record = $manager->acquire('qwen-vl');
+    $failed = $repository->get('100');
 
-    try {
-      $manager->acquire('qwen-vl');
-    }
-    finally {
-      $this->assertSame(0, $runtime->freshProvisionCalls);
-      $this->assertSame(['100'], $lifecycle->startCalls);
-      $this->assertSame(['100'], $lifecycle->stopCalls);
-      $record = $repository->get('100');
-      $this->assertNotNull($record);
-      $this->assertSame('unavailable', $record['lease_status']);
-    }
+    $this->assertSame('999', $record['contract_id']);
+    $this->assertSame(1, $runtime->freshProvisionCalls);
+    $this->assertSame(['100'], $lifecycle->startCalls);
+    $this->assertSame(['100'], $lifecycle->stopCalls);
+    $this->assertSame(['100'], $vast->destroyCalls);
+    $this->assertNotNull($failed);
+    $this->assertSame('destroyed', $failed['lease_status']);
+    $this->assertStringContainsString('simulated bootstrap failure', $failed['last_error']);
   }
 
   /**
@@ -290,6 +422,7 @@ final class VllmPoolStateMachineTest extends TestCase {
       $lifecycle,
       $vast,
       $state,
+      new BadHostRegistry($state),
       1,
       0,
     );
@@ -315,25 +448,22 @@ final class VllmPoolStateMachineTest extends TestCase {
     $vast->instances['100']['status_msg'] = 'Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: could not apply required modification to OCI specification: error modifying OCI spec: failed to inject CDI devices: unresolvable CDI devices D.fake/gpu=3
 failed to start containers: C.100';
     $runtime->bootstrapFromStatusMessage['100'] = TRUE;
+    $runtime->freshProvisionResponse = [
+      'contract_id' => '999',
+      'instance_info' => FakeVastClient::instance('999', 'running', 'running', '203.0.113.10', '40800'),
+    ];
 
-    $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('aborting acquire to avoid duplicate provisioning');
+    $record = $manager->acquire('qwen-vl');
+    $failed = $repository->get('100');
 
-    try {
-      $manager->acquire('qwen-vl');
-    }
-    finally {
-      $this->assertSame(0, $runtime->freshProvisionCalls);
-      $this->assertSame(['100', '100'], $lifecycle->startCalls);
-      $this->assertSame(['100'], $lifecycle->stopCalls);
-      $record = $repository->get('100');
-      $this->assertNotNull($record);
-      $this->assertSame('unavailable', $record['lease_status']);
-      $this->assertStringContainsString(
-      'failed to start containers',
-      (string) $record['last_error'],
-      );
-    }
+    $this->assertSame('999', $record['contract_id']);
+    $this->assertSame(1, $runtime->freshProvisionCalls);
+    $this->assertSame(['100', '100'], $lifecycle->startCalls);
+    $this->assertSame(['100'], $lifecycle->stopCalls);
+    $this->assertSame(['100'], $vast->destroyCalls);
+    $this->assertNotNull($failed);
+    $this->assertSame('destroyed', $failed['lease_status']);
+    $this->assertStringContainsString('failed to start containers', $failed['last_error']);
   }
 
 }
@@ -451,9 +581,11 @@ final class FakeVastClient implements VastRestClientInterface {
     string $actualStatus,
     string $ip,
     string $hostPort,
+    string $hostId = '',
   ): array {
     return [
       'id' => $id,
+      'host_id' => $hostId,
       'cur_state' => $curState,
       'actual_status' => $actualStatus,
       'public_ipaddr' => $ip,
@@ -577,6 +709,13 @@ final class FakeLifecycleClient implements VastInstanceLifecycleClientInterface 
    */
   public array $stopCalls = [];
 
+  /**
+   * Start responses keyed by contract ID.
+   *
+   * @var array<string,array<string,mixed>>
+   */
+  public array $startResponses = [];
+
   public function __construct(
     private readonly FakeVastClient $vast,
   ) {}
@@ -588,6 +727,9 @@ final class FakeLifecycleClient implements VastInstanceLifecycleClientInterface 
     $this->startCalls[] = $instanceId;
     if (!isset($this->vast->instances[$instanceId])) {
       throw new \RuntimeException('instance missing: ' . $instanceId);
+    }
+    if (isset($this->startResponses[$instanceId])) {
+      return $this->startResponses[$instanceId];
     }
     $this->vast->instances[$instanceId]['cur_state'] = 'running';
     $this->vast->instances[$instanceId]['actual_status'] = 'loading';
@@ -617,6 +759,20 @@ final class FakeRuntimeManager implements GenericVllmRuntimeManagerInterface {
    * Number of fresh provision attempts.
    */
   public int $freshProvisionCalls = 0;
+
+  /**
+   * Fresh provision payload to return.
+   *
+   * @var array<string,mixed>
+   */
+  public array $freshProvisionResponse = [];
+
+  /**
+   * Queue of fresh provision payloads to return in order.
+   *
+   * @var array<int,array<string,mixed>>
+   */
+  public array $freshProvisionQueue = [];
 
   /**
    * Contract IDs that should fail bootstrap.
@@ -651,6 +807,23 @@ final class FakeRuntimeManager implements GenericVllmRuntimeManagerInterface {
    */
   public function provisionFresh(array $workloadDefinition, string $image): array {
     $this->freshProvisionCalls++;
+    if ($this->freshProvisionQueue !== []) {
+      $next = array_shift($this->freshProvisionQueue);
+      $contractId = (string) ($next['contract_id'] ?? '');
+      $instanceInfo = (array) ($next['instance_info'] ?? []);
+      if ($contractId !== '' && $instanceInfo !== []) {
+        $this->vast->instances[$contractId] = $instanceInfo;
+      }
+      return $next;
+    }
+    if ($this->freshProvisionResponse !== []) {
+      $contractId = (string) ($this->freshProvisionResponse['contract_id'] ?? '');
+      $instanceInfo = (array) ($this->freshProvisionResponse['instance_info'] ?? []);
+      if ($contractId !== '' && $instanceInfo !== []) {
+        $this->vast->instances[$contractId] = $instanceInfo;
+      }
+      return $this->freshProvisionResponse;
+    }
     throw new \RuntimeException('unexpected fresh provision');
   }
 
@@ -703,6 +876,81 @@ final class FakeRuntimeManager implements GenericVllmRuntimeManagerInterface {
     $info['actual_status'] = 'running';
     $this->vast->instances[$contractId] = $info;
     return $info;
+  }
+
+}
+
+
+/**
+ * Minimal in-memory Drupal state implementation for state-machine tests.
+ */
+final class StateMachineState implements StateInterface {
+
+  public function __construct(
+    private array $values = [],
+  ) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public function get($key, $default = NULL) {
+    return $this->values[$key] ?? $default;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getMultiple(array $keys) {
+    $out = [];
+    foreach ($keys as $key) {
+      if (array_key_exists($key, $this->values)) {
+        $out[$key] = $this->values[$key];
+      }
+    }
+    return $out;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function set($key, $value) {
+    $this->values[$key] = $value;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setMultiple(array $data) {
+    foreach ($data as $key => $value) {
+      $this->values[$key] = $value;
+    }
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function delete($key) {
+    unset($this->values[$key]);
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function deleteMultiple(array $keys) {
+    foreach ($keys as $key) {
+      unset($this->values[$key]);
+    }
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function resetCache() {
+    return $this;
   }
 
 }

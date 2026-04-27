@@ -20,5 +20,8 @@ if [ -f "$VAST_KEY_SOURCE" ]; then
   chown www-data:www-data "$VAST_KEY_RUNTIME"
 fi
 
-#exec runuser -u www-data -- apache2-foreground
-exec apache2-foreground
+if [ "$#" -eq 0 ]; then
+  set -- apache2-foreground
+fi
+
+exec "$@"

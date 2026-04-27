@@ -97,3 +97,4 @@ RUN chmod +x /entrypoint.sh
 
 USER root
 ENTRYPOINT ["/entrypoint.sh"]
+CMD ["apache2-foreground"]

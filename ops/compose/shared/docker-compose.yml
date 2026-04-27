@@ -23,6 +23,37 @@ services:
       db:
         condition: service_healthy
 
+  cron:
+    # Run Drupal cron from the same release image/env/mounts as appserver so
+    # staging and prod stay identical and host crontabs do not drift.
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    restart: unless-stopped
+    env_file:
+      - .env
+    command:
+      - sh
+      - -lc
+      - |
+        while true; do
+          cd /var/www/html
+          ../vendor/bin/drush cron -q || true
+          sleep 60
+        done
+    volumes:
+      # Mount environment-specific Drupal settings managed on the host.
+      - ./html/sites/default/settings.php:/var/www/html/sites/default/settings.php
+      # Persist Drupal files across container/image updates.
+      - ./html/sites/default/files:/var/www/html/sites/default/files
+      # Mount Vast SSH private key as a read-only source file. The entrypoint
+      # copies it into /home/http/.ssh with runtime-safe ownership/permissions.
+      - ${VAST_SSH_PRIVATE_KEY_HOST_PATH}:/run/secrets/id_rsa_vastai:ro
+      # Stage content-sync payloads once on the host and expose them directly
+      # to Drupal for import, avoiding a second copied container-local payload.
+      - ./content/sync:/var/www/content/sync
+    depends_on:
+      db:
+        condition: service_healthy
+
   db:
     image: mysql:5.7
     restart: unless-stopped

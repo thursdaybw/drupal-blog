@@ -3,6 +3,8 @@
 Date opened: 2026-04-28
 Owner: bevan
 Status: Backlog
+Capture state: Groomed
+Grooming priority: Now
 
 ## Context
 
@@ -48,6 +50,32 @@ Keep the working Drupal-hosted production path, but make the core orchestration 
   - pool record canonical state.
 - Provider-specific code should sit behind explicit provider interfaces/adapters rather than leaking Vast.ai semantics everywhere.
 - Drush should remain an implementation adapter for the current host, not the long-term async execution contract.
+
+
+## Grooming decision - 2026-04-28
+
+Promote this card to the groomed `Now` theme as the umbrella architecture review for compute_orchestrator freedom, portability, and maintainability.
+
+Reason:
+
+- `compute_orchestrator` is now production-proven for both Framesmith/Whisper and AI listing/Qwen runtime control.
+- That makes its architecture important debt, not optional polish.
+- The immediate goal is not to extract or rewrite everything; it is to identify seams, name boundaries, and decide the smallest refactors that keep the working production path from becoming a trap.
+
+Keep these as related child/seam cards rather than merging them away immediately:
+
+- `64-split-compute-orchestrator-admin-ui-into-optional-ui-layer-if-needed.md`
+  - Treat as a possible outcome of this review, not a default immediate implementation.
+- `72-define-drush-launcher-as-swappable-worker-adapter.md`
+  - Keep as a separate launcher/worker seam because Drush must stay an adapter, not the conceptual job contract.
+- `73-define-compute-provider-boundary-beyond-vast-ai.md`
+  - Keep as a provider seam because Vast.ai assumptions can fossilize the pool model if left unnamed.
+- `74-review-compute-task-crud-and-storage-ownership-boundary.md`
+  - Keep as a task/storage ownership seam and review alongside durable Framesmith task persistence.
+- `75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`
+  - Keep visible as an operator-semantics seam; semantic mismatch creates traps and incidents.
+
+This card should produce an architecture note/ADR plus focused implementation cards. It should not become a vague umbrella that hides concrete work.
 
 ## Acceptance criteria
 

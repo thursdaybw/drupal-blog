@@ -3,7 +3,8 @@
 Date opened: 2026-04-28
 Owner: bevan
 Status: Backlog
-Capture state: Capture
+Capture state: Candidate
+Grooming priority: Later
 Source: html/modules/custom/compute_orchestrator/README.md
 Confidence: medium
 Size guess: unknown
@@ -13,6 +14,20 @@ Product area: compute_orchestrator
 ## Context
 
 The compute_orchestrator README says admin UI routes, forms, and Drupal Batch wrappers currently live in the module for convenience, but a future refactor may move the UI into an optional submodule.
+
+## Grooming decision - 2026-04-28
+
+Keep as `Candidate / Later`, not `Now` implementation work.
+
+Reason:
+
+- The UI split may be the correct long-term shape, but doing it immediately could create churn before the architecture review names the core/adapters boundary.
+- Treat this as a possible outcome of card `42`, not as a pre-decided refactor.
+- The near-term requirement is to keep core orchestration services understandable and separable; an actual optional UI submodule can wait until there is evidence it buys freedom rather than ceremony.
+
+Related card:
+
+- Umbrella architecture review: `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
 
 ## Acceptance criteria
 

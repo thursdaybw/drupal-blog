@@ -3,7 +3,8 @@
 Date opened: 2026-04-28
 Owner: bevan
 Status: Backlog
-Capture state: Capture
+Capture state: Groomed
+Grooming priority: Next
 Source: docs/kanban/in-progress/32-add-framesmith-drupal-api-backed-by-compute-orchestrator.md
 Confidence: medium
 Size guess: unknown
@@ -13,6 +14,20 @@ Product area: compute_orchestrator
 ## Context
 
 Framesmith notes explicitly say Drush is acceptable as a temporary worker entrypoint while compute_orchestrator lives in Drupal, but Drush must not become the conceptual async job contract.
+
+## Grooming decision - 2026-04-28
+
+Promote to `Groomed / Next` as a launcher/worker seam under card `42`.
+
+Reason:
+
+- Drush is acceptable as the current Drupal-hosted adapter.
+- It should not become the conceptual async execution contract.
+- This is important, but probably follows the architecture review and task ownership decision unless current implementation pressure makes it urgent.
+
+Related card:
+
+- Umbrella architecture review: `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
 
 ## Acceptance criteria
 

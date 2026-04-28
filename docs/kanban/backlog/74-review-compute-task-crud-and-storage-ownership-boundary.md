@@ -3,7 +3,8 @@
 Date opened: 2026-04-28
 Owner: bevan
 Status: Backlog
-Capture state: Capture
+Capture state: Groomed
+Grooming priority: Now
 Source: docs/kanban/in-progress/32-add-framesmith-drupal-api-backed-by-compute-orchestrator.md
 Confidence: medium
 Size guess: unknown
@@ -13,6 +14,21 @@ Product area: compute_orchestrator
 ## Context
 
 Framesmith notes identify task CRUD/storage ownership as unresolved: Framesmith has a task store inside compute_orchestrator, while video_forge has entity-backed task concepts elsewhere.
+
+## Grooming decision - 2026-04-28
+
+Promote to `Groomed / Now` as a concrete child workstream under card `42`.
+
+Reason:
+
+- Task ownership is a high-leverage architecture seam.
+- Framesmith task state currently lives inside `compute_orchestrator`; that may be fine temporarily, but the ownership boundary must be named before extraction pressure grows.
+- This should be reviewed together with durable Framesmith task persistence, but not merged away because generic compute job state and product-specific Framesmith task state may diverge.
+
+Related cards:
+
+- Umbrella architecture review: `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
+- Durable Framesmith persistence decision: `41-decide-durable-framesmith-task-persistence-model.md`
 
 ## Acceptance criteria
 

@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## Description: Run a staging browser smoke for bulk image intake through the UI.
+## Usage: test-bulk-image-intake-staging-smoke
+## Example: ddev test-bulk-image-intake-staging-smoke
+
+BASE_URL="${AI_LISTING_STAGING_BASE_URL:-https://bb-drupal-staging.bevansbench.com}"
+FILES_PER_SET="${BULK_INTAKE_STAGING_FILES_PER_SET:-3}"
+RUN_ID="smoke_$(date +%Y%m%d_%H%M%S)_$RANDOM"
+LOGIN_FILE=".tmp-drush-probes/bulk-intake-staging-uli-${RUN_ID}.txt"
+FIXTURE_DIR=".tmp-fixtures/bulk-intake-${RUN_ID}"
+BEFORE_FILE="/tmp/bulk_intake_before_${RUN_ID}.json"
+AFTER_FILE="/tmp/bulk_intake_after_${RUN_ID}.json"
+
+mkdir -p .tmp-drush-probes "${FIXTURE_DIR}"
+
+stage_script() {
+  local script_path="$1"
+  ddev exec-stage "cat > ${script_path} && ../vendor/bin/drush php:script ${script_path}; rm -f ${script_path}"
+}
+
+cleanup_local() {
+  rm -f "${LOGIN_FILE}"
+  rm -rf "${FIXTURE_DIR}"
+}
+trap cleanup_local EXIT
+
+if ! [[ "${FILES_PER_SET}" =~ ^[0-9]+$ ]] || [[ "${FILES_PER_SET}" -lt 1 ]]; then
+  echo "BULK_INTAKE_STAGING_FILES_PER_SET must be a positive integer." >&2
+  exit 1
+fi
+
+echo "== Bulk image intake staging UI smoke =="
+echo "run_id=${RUN_ID}"
+echo "base_url=${BASE_URL}"
+echo "files_per_set=${FILES_PER_SET}"
+
+echo "== create local browser-upload fixtures =="
+python3 - <<PY
+from pathlib import Path
+import base64
+root = Path('${FIXTURE_DIR}')
+root.mkdir(parents=True, exist_ok=True)
+# Small valid JPEG, enough for upload/intake plumbing. The inference smoke uses real photos separately.
+jpeg = base64.b64decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/Aaf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/Aaf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EFBQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QH//EFBQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QH//EFBABAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QH//Z')
+for i in range(1, int('${FILES_PER_SET}') + 1):
+    (root / f'bulk-smoke-{i:03d}.jpg').write_bytes(jpeg)
+print(','.join('/var/www/html/' + str(p) for p in sorted(root.glob('*.jpg'))))
+PY
+FIXTURES="$(python3 - <<PY
+from pathlib import Path
+print(','.join('/var/www/html/' + str(p) for p in sorted(Path('${FIXTURE_DIR}').glob('*.jpg'))))
+PY
+)"
+echo "fixtures=<${FILES_PER_SET} files>"
+
+echo "== capture staging listing ids before UI run =="
+stage_script /tmp/bulk_intake_before.php <<PHP
+<?php
+\$ids = array_values(array_map('intval', \Drupal::entityTypeManager()->getStorage('bb_ai_listing')->getQuery()->accessCheck(FALSE)->condition('listing_type', 'book')->execute()));
+file_put_contents('${BEFORE_FILE}', json_encode(\$ids));
+echo 'before_count=' . count(\$ids) . PHP_EOL;
+PHP
+
+echo "== generate one-time staging login URL, hidden =="
+ddev exec-stage "../vendor/bin/drush uli --uri=${BASE_URL}" | tail -1 > "${LOGIN_FILE}"
+chmod 600 "${LOGIN_FILE}"
+if grep -q "^${BASE_URL}/" "${LOGIN_FILE}"; then
+  echo "login-url-file=<created>"
+else
+  echo "Unexpected login URL shape." >&2
+  exit 1
+fi
+
+echo "== run browser bulk intake UI smoke =="
+ddev exec bash -lc \
+  "export AI_LISTING_STAGING_BASE_URL='${BASE_URL}'; export AI_LISTING_STAGING_LOGIN_URL=\"\$(cat /var/www/html/${LOGIN_FILE})\"; export BULK_IMAGE_INTAKE_STAGING_FIXTURES='${FIXTURES}'; vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/ai_listing/tests/src/ExistingSiteJavascript/BulkImageIntakeStagingBrowserSmokeTest.php"
+
+echo "== verify and clean up staging listing created by UI =="
+stage_script /tmp/bulk_intake_after_cleanup.php <<PHP
+<?php
+\$entityTypeManager = \Drupal::entityTypeManager();
+\$listingStorage = \$entityTypeManager->getStorage('bb_ai_listing');
+\$imageStorage = \$entityTypeManager->getStorage('listing_image');
+\$fileStorage = \$entityTypeManager->getStorage('file');
+\$before = is_file('${BEFORE_FILE}') ? json_decode((string) file_get_contents('${BEFORE_FILE}'), TRUE) : [];
+\$before = is_array(\$before) ? array_map('intval', \$before) : [];
+\$after = array_values(array_map('intval', \$listingStorage->getQuery()->accessCheck(FALSE)->condition('listing_type', 'book')->execute()));
+\$new = array_values(array_diff(\$after, \$before));
+sort(\$new);
+\$summaries = [];
+\$fileIds = [];
+foreach (\$new as \$listingId) {
+  \$imageIds = array_values(\$imageStorage->getQuery()->accessCheck(FALSE)
+    ->condition('owner.target_type', 'bb_ai_listing')
+    ->condition('owner.target_id', \$listingId)
+    ->sort('weight', 'ASC')
+    ->execute());
+  foreach (\$imageStorage->loadMultiple(\$imageIds) as \$image) {
+    \$fid = (int) (\$image->get('file')->target_id ?? 0);
+    if (\$fid > 0) { \$fileIds[] = \$fid; }
+  }
+  \$listing = \$listingStorage->load(\$listingId);
+  \$summaries[] = [
+    'listing_id' => \$listingId,
+    'status' => (string) (\$listing?->get('status')->value ?? ''),
+    'image_count' => count(\$imageIds),
+  ];
+  \$images = \$imageStorage->loadMultiple(\$imageIds);
+  if (\$images !== []) { \$imageStorage->delete(\$images); }
+  if (\$listing) { \$listing->delete(); }
+}
+\$files = \$fileStorage->loadMultiple(array_values(array_unique(\$fileIds)));
+if (\$files !== []) { \$fileStorage->delete(\$files); }
+@unlink('${BEFORE_FILE}');
+file_put_contents('${AFTER_FILE}', json_encode(\$summaries));
+if (count(\$new) < 1) {
+  fwrite(STDERR, "Bulk intake UI smoke did not create a new book listing.\n");
+  exit(1);
+}
+foreach (\$summaries as \$summary) {
+  if ((int) \$summary['image_count'] < 1) {
+    fwrite(STDERR, "Created listing had no listing_image rows: " . json_encode(\$summary) . "\n");
+    exit(1);
+  }
+}
+echo json_encode(['new_listings' => \$summaries, 'deleted_file_count' => count(\$files)], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+PHP
+
+echo "== bulk image intake staging UI smoke passed =="

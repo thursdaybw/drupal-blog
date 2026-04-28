@@ -250,6 +250,79 @@ This keeps stock-age analysis out of write workflows and makes the cull surface 
 
 `/admin/ai-listings/reports/stock-cull/picker` is the operational shelf-walking companion to the stock cull report.
 
+## Staging UI Smoke Tests
+
+These smoke gates exercise production-style AI listing operator workflows against staging through the browser. They are deliberately different from kernel/unit tests: the point is to prove that the real UI, Drupal batch pages, staging data, and pooled AI runtime path work together.
+
+Run them from the host with DDEV:
+
+```bash
+ddev test-bulk-image-intake-staging-smoke
+ddev test-ai-listing-inference-staging-smoke
+```
+
+### Bulk image intake staging smoke
+
+Command:
+
+```bash
+ddev test-bulk-image-intake-staging-smoke
+```
+
+What it proves:
+
+- generates disposable local upload fixtures;
+- logs into staging with a one-time `drush uli` URL;
+- uploads images through the real browser file input;
+- clicks the bulk-intake UI controls to stage and process uploaded sets;
+- verifies that staging created a book listing with `listing_image` rows;
+- removes the created listing/images/files afterward.
+
+The fixture images are intentionally tiny upload fixtures. They prove intake plumbing, not AI inference quality. Real-photo inference is covered by the separate inference smoke.
+
+Useful environment overrides:
+
+```bash
+AI_LISTING_STAGING_BASE_URL=https://bb-drupal-staging.bevansbench.com
+BULK_INTAKE_STAGING_FILES_PER_SET=3
+```
+
+### AI listing inference staging smoke
+
+Command:
+
+```bash
+ddev test-ai-listing-inference-staging-smoke
+```
+
+What it proves:
+
+- chooses existing staging book/book-bundle listings with real listing photos;
+- backs up and resets selected inferred fields to `ready_for_inference`;
+- logs into staging with a one-time `drush uli` URL;
+- drives the real Workbench UI and Drupal batch flow in the browser;
+- waits for inference completion through the UI path;
+- verifies inferred metadata/condition fields were populated;
+- preserves a backup payload so staging data can be restored or inspected if needed.
+
+The wrapper uses Drush only for staging setup, one-time login URL generation, verification, and cleanup/backup mechanics. The workflow under test is the browser Workbench batch UI, not a Drush shortcut.
+
+Useful environment overrides:
+
+```bash
+AI_LISTING_STAGING_BASE_URL=https://bb-drupal-staging.bevansbench.com
+AI_INFERENCE_STAGING_LIMIT=1
+AI_INFERENCE_STAGING_LISTING_IDS=2318,2317
+AI_INFERENCE_STAGING_ALLOW_EXISTING_READY=1
+```
+
+### Safety notes
+
+- The browser tests skip when their required environment variables are absent.
+- The DDEV wrappers generate one-time login URLs and keep them in temporary ignored files; passwords are not stored in the tests.
+- These are staging/operator assurance tests, not routine fast tests.
+- The inference smoke uses real staging listings and can spend Vast runtime while exercising pooled AI inference.
+
 ## Existing-Site DTT Coverage
 
 For existing-site Selenium coverage against your real DDEV database, use `phpunit.dtt.xml`.

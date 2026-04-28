@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## Description: Run a staging browser smoke/stress for AI listing inference through the Workbench UI.
+## Usage: test-ai-listing-inference-staging-smoke
+## Example: AI_INFERENCE_STAGING_COUNT=10 ddev test-ai-listing-inference-staging-smoke
+
+BASE_URL="${AI_LISTING_STAGING_BASE_URL:-https://bb-drupal-staging.bevansbench.com}"
+REQUESTED_LISTING_ID="${AI_INFERENCE_STAGING_LISTING_ID:-}"
+COUNT="${AI_INFERENCE_STAGING_COUNT:-1}"
+ALLOW_EXISTING_READY="${AI_INFERENCE_STAGING_ALLOW_EXISTING_READY:-0}"
+RESTORE_LISTING="${AI_INFERENCE_STAGING_RESTORE:-1}"
+RUN_ID="smoke_$(date +%Y%m%d_%H%M%S)_$RANDOM"
+LOGIN_FILE=".tmp-drush-probes/ai-inference-staging-uli-${RUN_ID}.txt"
+BACKUP_PATH="/tmp/ai_listing_inference_ui_smoke_${RUN_ID}.json"
+STATE_KEY="compute_orchestrator.vllm_pool.idle_shutdown_seconds"
+
+mkdir -p .tmp-drush-probes
+
+stage_script() {
+  local script_path="$1"
+  ddev exec-stage "cat > ${script_path} && ../vendor/bin/drush php:script ${script_path}; rm -f ${script_path}"
+}
+
+cleanup_local() { rm -f "${LOGIN_FILE}"; }
+
+restore_listing() {
+  echo "== restore inference candidate(s) =="
+  if [[ "${RESTORE_LISTING}" == "0" ]]; then
+    echo "restore=skipped disabled_by_AI_INFERENCE_STAGING_RESTORE"
+    return
+  fi
+  stage_script /tmp/ai_listing_inference_ui_restore.php <<PHP || true
+<?php
+\$backup_path = '${BACKUP_PATH}';
+if (!is_file(\$backup_path)) { echo "restore=skipped backup_missing\n"; return; }
+\$backup = json_decode((string) file_get_contents(\$backup_path), TRUE);
+if (!is_array(\$backup) || empty(\$backup['listings']) || !is_array(\$backup['listings'])) { echo "restore=skipped backup_invalid\n"; return; }
+\$storage = \Drupal::entityTypeManager()->getStorage('bb_ai_listing');
+\$restored = [];
+foreach (\$backup['listings'] as \$item) {
+  if (!is_array(\$item) || empty(\$item['listing_id']) || !isset(\$item['fields']) || !is_array(\$item['fields'])) { continue; }
+  \$listing = \$storage->load((int) \$item['listing_id']);
+  if (!\$listing) { continue; }
+  foreach (\$item['fields'] as \$field => \$value) {
+    if (\$listing->hasField(\$field)) { \$listing->set(\$field, \$value); }
+  }
+  \$listing->save();
+  \$restored[] = (int) \$item['listing_id'];
+}
+@unlink(\$backup_path);
+echo json_encode(['restore' => 'ok', 'count' => count(\$restored), 'listing_ids' => \$restored], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+PHP
+}
+
+reap_released_runtime() {
+  echo "== reap released qwen runtime via staging cron =="
+  stage_script /tmp/ai_listing_inference_ui_reap.php <<PHP || true
+<?php
+\$key = '${STATE_KEY}';
+\$state = \Drupal::state();
+\$original = \$state->get(\$key, NULL);
+\$state->set(\$key, 0);
+file_put_contents('/tmp/ai_listing_inference_ui_original_grace_${RUN_ID}.json', json_encode(\$original));
+echo "set_idle_shutdown_seconds=0 original=" . json_encode(\$original) . PHP_EOL;
+PHP
+  ddev exec-stage '../vendor/bin/drush cron' || true
+  stage_script /tmp/ai_listing_inference_ui_reap_restore.php <<PHP || true
+<?php
+\$key = '${STATE_KEY}';
+\$path = '/tmp/ai_listing_inference_ui_original_grace_${RUN_ID}.json';
+\$state = \Drupal::state();
+\$original = is_file(\$path) ? json_decode((string) file_get_contents(\$path), TRUE) : NULL;
+if (\$original === NULL) { \$state->delete(\$key); echo "restored_idle_shutdown_seconds=null\n"; }
+else { \$state->set(\$key, (int) \$original); echo "restored_idle_shutdown_seconds=" . (int) \$original . PHP_EOL; }
+@unlink(\$path);
+\$repo = \Drupal::service('compute_orchestrator.vllm_pool_repository');
+foreach (\$repo->all() as \$record) {
+  if ((\$record['current_workload_mode'] ?? '') === 'qwen-vl') {
+    echo json_encode([
+      'contract_id' => \$record['contract_id'] ?? NULL,
+      'lease_status' => \$record['lease_status'] ?? NULL,
+      'runtime_state' => \$record['runtime_state'] ?? NULL,
+      'last_phase' => \$record['last_phase'] ?? NULL,
+      'last_action' => \$record['last_action'] ?? NULL,
+      'last_error' => \$record['last_error'] ?? NULL,
+    ], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+  }
+}
+PHP
+}
+
+trap 'status=$?; restore_listing; reap_released_runtime; cleanup_local; exit ${status}' EXIT
+
+if ! [[ "${COUNT}" =~ ^[0-9]+$ ]] || [[ "${COUNT}" -lt 1 ]]; then
+  echo "AI_INFERENCE_STAGING_COUNT must be a positive integer." >&2
+  exit 1
+fi
+if [[ -n "${REQUESTED_LISTING_ID}" && "${COUNT}" != "1" ]]; then
+  echo "AI_INFERENCE_STAGING_LISTING_ID may only be used with AI_INFERENCE_STAGING_COUNT=1." >&2
+  exit 1
+fi
+
+echo "== AI listing inference staging UI smoke =="
+echo "run_id=${RUN_ID}"
+echo "base_url=${BASE_URL}"
+echo "requested_listing_id=${REQUESTED_LISTING_ID:-auto}"
+echo "count=${COUNT}"
+echo "allow_existing_ready=${ALLOW_EXISTING_READY}"
+echo "restore_listing=${RESTORE_LISTING}"
+
+echo "== prepare real-photo staging listing(s) for UI inference =="
+PREP_SUMMARY="$(stage_script /tmp/ai_listing_inference_ui_prepare.php <<PHP
+<?php
+\$requested_id = trim('${REQUESTED_LISTING_ID}');
+\$count = (int) '${COUNT}';
+\$allow_existing_ready = '${ALLOW_EXISTING_READY}' === '1';
+\$backup_path = '${BACKUP_PATH}';
+\$entityTypeManager = \Drupal::entityTypeManager();
+\$listingStorage = \$entityTypeManager->getStorage('bb_ai_listing');
+\$imageStorage = \$entityTypeManager->getStorage('listing_image');
+\$fileStorage = \$entityTypeManager->getStorage('file');
+\$fileSystem = \Drupal::service('file_system');
+
+function smoke_image_ids(\$imageStorage, int \$listing_id): array {
+  return array_values(\$imageStorage->getQuery()->accessCheck(FALSE)
+    ->condition('owner.target_type', 'bb_ai_listing')->condition('owner.target_id', \$listing_id)->sort('weight', 'ASC')->execute());
+}
+function smoke_image_file_stats(\$imageStorage, \$fileStorage, \$fileSystem, array \$image_ids): array {
+  \$total = count(\$image_ids); \$existing = 0; \$metadataSources = 0; \$metadataExisting = 0;
+  foreach (\$imageStorage->loadMultiple(\$image_ids) as \$image) {
+    \$fileId = (int) (\$image->get('file')->target_id ?? 0);
+    \$file = \$fileId > 0 ? \$fileStorage->load(\$fileId) : NULL;
+    \$exists = FALSE;
+    if (\$file) { \$real = \$fileSystem->realpath((string) \$file->getFileUri()); \$exists = is_string(\$real) && is_file(\$real); }
+    if (\$exists) { \$existing++; }
+    if ((bool) (\$image->get('is_metadata_source')->value ?? FALSE)) { \$metadataSources++; if (\$exists) { \$metadataExisting++; } }
+  }
+  return [\$total, \$existing, \$metadataSources, \$metadataExisting];
+}
+function smoke_is_candidate(\$imageStorage, \$fileStorage, \$fileSystem, int \$listing_id): ?array {
+  \$imageIds = smoke_image_ids(\$imageStorage, \$listing_id);
+  if (\$imageIds === []) { return NULL; }
+  [\$total, \$existing, \$metadataSources, \$metadataExisting] = smoke_image_file_stats(\$imageStorage, \$fileStorage, \$fileSystem, \$imageIds);
+  if (\$total > 0 && \$existing === \$total && \$metadataSources > 0 && \$metadataExisting === \$metadataSources) {
+    return ['image_count' => \$total, 'metadata_sources' => \$metadataSources];
+  }
+  return NULL;
+}
+
+\$candidateInfo = [];
+if (\$requested_id !== '') {
+  \$listing = \$listingStorage->load((int) \$requested_id);
+  if (!\$listing) { fwrite(STDERR, "Requested listing {\$requested_id} was not found.\n"); exit(1); }
+  \$info = smoke_is_candidate(\$imageStorage, \$fileStorage, \$fileSystem, (int) \$listing->id());
+  if (\$info === NULL) { fwrite(STDERR, "Requested listing {\$requested_id} does not have existing real image files and metadata sources.\n"); exit(1); }
+  \$candidateInfo[(int) \$listing->id()] = \$info;
+}
+else {
+  \$ids = \$listingStorage->getQuery()->accessCheck(FALSE)->condition('listing_type', 'book')->sort('id', 'DESC')->range(0, 2000)->execute();
+  foreach (\$listingStorage->loadMultiple(\$ids) as \$candidate) {
+    \$id = (int) \$candidate->id();
+    \$info = smoke_is_candidate(\$imageStorage, \$fileStorage, \$fileSystem, \$id);
+    if (\$info !== NULL) { \$candidateInfo[\$id] = \$info; }
+    if (count(\$candidateInfo) >= \$count) { break; }
+  }
+}
+if (count(\$candidateInfo) < \$count) {
+  fwrite(STDERR, "Only found " . count(\$candidateInfo) . " usable candidate(s), need {\$count}.\n"); exit(1);
+}
+\$listingIds = array_slice(array_keys(\$candidateInfo), 0, \$count);
+\$readyIds = array_values(array_map('intval', \$listingStorage->getQuery()->accessCheck(FALSE)
+  ->condition('status', 'ready_for_inference')->condition('listing_type', ['book', 'book_bundle'], 'IN')->execute()));
+\$otherReadyIds = array_values(array_diff(\$readyIds, \$listingIds));
+if (\$otherReadyIds !== [] && !\$allow_existing_ready) {
+  fwrite(STDERR, "Other listings are already ready_for_inference: " . implode(',', \$otherReadyIds) . ". Set AI_INFERENCE_STAGING_ALLOW_EXISTING_READY=1 to override.\n"); exit(1);
+}
+\$fields = ['status','metadata_json','condition_json','ebay_title','description','condition_grade','field_title','field_subtitle','field_full_title','field_author','field_isbn','field_publisher','field_publication_year','field_format','field_language','field_genre','field_narrative_type','field_country_printed','field_edition','field_series','field_features','field_condition_issues'];
+\$backup = ['listings' => []];
+\$summaries = [];
+foreach (\$listingIds as \$listingId) {
+  \$listing = \$listingStorage->load((int) \$listingId);
+  \$backupFields = [];
+  foreach (\$fields as \$field) { if (\$listing->hasField(\$field)) { \$backupFields[\$field] = \$listing->get(\$field)->getValue(); } }
+  \$backup['listings'][] = ['listing_id' => (int) \$listingId, 'fields' => \$backupFields];
+  foreach (\$fields as \$field) {
+    if (!\$listing->hasField(\$field) || \$field === 'status') { continue; }
+    if (in_array(\$field, ['field_features', 'field_condition_issues'], TRUE)) { \$listing->set(\$field, []); }
+    elseif (\$field === 'description') { \$listing->set(\$field, ['value' => '', 'format' => 'basic_html']); }
+    else { \$listing->set(\$field, ''); }
+  }
+  \$listing->set('status', 'ready_for_inference');
+  \$listing->save();
+  \$summaries[] = [
+    'listing_id' => (int) \$listingId,
+    'previous_status' => \$backupFields['status'][0]['value'] ?? '',
+    'image_count' => \$candidateInfo[(int) \$listingId]['image_count'],
+    'metadata_sources' => \$candidateInfo[(int) \$listingId]['metadata_sources'],
+  ];
+}
+file_put_contents(\$backup_path, json_encode(\$backup, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+echo json_encode(['count' => count(\$listingIds), 'listing_ids' => array_values(array_map('intval', \$listingIds)), 'listings' => \$summaries, 'backup_path' => \$backup_path], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+PHP
+)"
+echo "${PREP_SUMMARY}"
+LISTING_IDS="$(printf '%s' "${PREP_SUMMARY}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo implode(",", $j["listing_ids"] ?? []);')"
+if [[ -z "${LISTING_IDS}" ]]; then echo "Could not parse prepared listing ids." >&2; exit 1; fi
+
+echo "== generate one-time staging login URL, hidden =="
+ddev exec-stage "../vendor/bin/drush uli --uri=${BASE_URL}" | tail -1 > "${LOGIN_FILE}"
+chmod 600 "${LOGIN_FILE}"
+if grep -q "^${BASE_URL}/" "${LOGIN_FILE}"; then echo "login-url-file=<created>"; else echo "Unexpected login URL shape." >&2; exit 1; fi
+
+echo "== run browser Workbench inference UI smoke =="
+ddev exec bash -lc \
+  "export AI_LISTING_STAGING_BASE_URL='${BASE_URL}'; export AI_LISTING_STAGING_LOGIN_URL=\"\$(cat /var/www/html/${LOGIN_FILE})\"; export AI_LISTING_STAGING_INFERENCE_LISTING_ID='${LISTING_IDS}'; vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/ai_listing/tests/src/ExistingSiteJavascript/AiListingInferenceStagingBrowserSmokeTest.php"
+
+echo "== verify inferred fields after UI batch =="
+stage_script /tmp/ai_listing_inference_ui_verify.php <<PHP
+<?php
+\$listing_ids = array_values(array_filter(array_map('intval', explode(',', '${LISTING_IDS}'))));
+\$storage = \Drupal::entityTypeManager()->getStorage('bb_ai_listing');
+\$summaries = [];
+\$failed = [];
+foreach (\$listing_ids as \$listing_id) {
+  \$listing = \$storage->load(\$listing_id);
+  if (!\$listing) { \$failed[] = ['listing_id' => \$listing_id, 'error' => 'missing']; continue; }
+  \$metadataJson = trim((string) (\$listing->get('metadata_json')->value ?? ''));
+  \$conditionJson = trim((string) (\$listing->get('condition_json')->value ?? ''));
+  \$title = \$listing->hasField('field_title') ? trim((string) (\$listing->get('field_title')->value ?? '')) : '';
+  \$ebayTitle = trim((string) (\$listing->get('ebay_title')->value ?? ''));
+  \$status = (string) (\$listing->get('status')->value ?? '');
+  \$ok = \$status === 'ready_for_review' && \$metadataJson !== '' && \$conditionJson !== '' && (\$title !== '' || \$ebayTitle !== '');
+  \$summary = ['listing_id' => \$listing_id, 'status' => \$status, 'title_present' => \$title !== '', 'ebay_title_present' => \$ebayTitle !== '', 'metadata_json_bytes' => strlen(\$metadataJson), 'condition_json_bytes' => strlen(\$conditionJson)];
+  \$summaries[] = \$summary;
+  if (!\$ok) { \$failed[] = \$summary; }
+}
+echo json_encode(['count' => count(\$summaries), 'failed_count' => count(\$failed), 'sample' => array_slice(\$summaries, 0, 10)], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+if (\$failed !== []) { fwrite(STDERR, "Inference UI smoke assertions failed: " . json_encode(\$failed, JSON_UNESCAPED_SLASHES) . "\n"); exit(1); }
+PHP
+
+echo "== AI listing inference staging UI smoke passed =="

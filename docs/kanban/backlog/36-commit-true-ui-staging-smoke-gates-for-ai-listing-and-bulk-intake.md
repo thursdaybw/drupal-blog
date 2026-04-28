@@ -30,16 +30,23 @@ Related host commands/wrappers should also be reviewed if present or recreated f
 
 ## Acceptance criteria
 
-- [ ] Review the untracked DTT test classes for maintainability and secret safety.
-- [ ] Ensure login URLs and passwords are not stored or printed.
-- [ ] Ensure the tests are skipped unless required staging env/input is present.
-- [ ] Ensure the tests drive the UI path, not Drush shortcuts, for the workflow under test.
-- [ ] Keep staging Drush usage limited to setup, verification, cleanup, and one-time login URL generation.
-- [ ] Add or clean up DDEV host wrappers for operator runs.
-- [ ] Document how to run each smoke gate.
+- [x] Review the untracked DTT test classes for maintainability and secret safety.
+  - PHP syntax lint passed for all three test files; tests require env-provided login URLs and contain no hardcoded password.
+- [x] Ensure login URLs and passwords are not stored or printed.
+  - Wrappers generate one-time `drush uli` URLs into temporary ignored files and pass them via environment; tests do not store passwords.
+- [x] Ensure the tests are skipped unless required staging env/input is present.
+  - Shared trait marks tests skipped when required env vars are absent.
+- [x] Ensure the tests drive the UI path, not Drush shortcuts, for the workflow under test.
+  - Browser tests drive bulk-intake UI and Workbench batch UI; Drush is limited to setup/login/verification wrapper work.
+- [x] Keep staging Drush usage limited to setup, verification, cleanup, and one-time login URL generation.
+- [x] Add or clean up DDEV host wrappers for operator runs.
+  - Selected wrappers: `.ddev/commands/host/test-bulk-image-intake-staging-smoke` and `.ddev/commands/host/test-ai-listing-inference-staging-smoke`.
+- [x] Document how to run each smoke gate.
+  - Added `Staging UI Smoke Tests` to `html/modules/custom/ai_listing/README.md`.
 - [ ] Re-run the tests after cleanup.
-- [ ] Commit the selected test/wrapper files.
-- [ ] Remove or ignore temporary artifacts that should not be committed.
+- [x] Commit the selected test/wrapper files.
+- [x] Remove or ignore temporary artifacts that should not be committed.
+  - Removed `.tmp-drush-probes/` and `.tmp-fixtures/`; left `html/framesmith-browser-smoke.mp4` and `docs/dev/HANDOVER.md` uncommitted for separate decision.
 
 ## Validation evidence to preserve
 

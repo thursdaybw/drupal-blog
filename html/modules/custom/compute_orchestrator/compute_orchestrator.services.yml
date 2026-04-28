@@ -72,6 +72,10 @@ services:
     arguments:
       - '@state'
 
+
+  compute_orchestrator.runtime_lease_response_mapper:
+    class: Drupal\compute_orchestrator\Service\RuntimeLeaseResponseMapper
+
   compute_orchestrator.vllm_pool_manager:
     class: Drupal\compute_orchestrator\Service\VllmPoolManager
     arguments:

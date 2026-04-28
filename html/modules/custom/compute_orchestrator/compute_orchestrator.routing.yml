@@ -49,3 +49,41 @@ compute_orchestrator.framesmith_transcription_result:
   requirements:
     _permission: 'use framesmith transcription api'
   methods: [GET]
+
+
+compute_orchestrator.runtime_lease_acquire:
+  path: '/api/compute-orchestrator/runtime-leases'
+  defaults:
+    _controller: '\Drupal\compute_orchestrator\Controller\RuntimeLeaseController::acquire'
+    _title: 'Acquire compute runtime lease'
+  requirements:
+    _permission: 'use compute runtime leases'
+  methods: [POST]
+
+compute_orchestrator.runtime_lease_inspect:
+  path: '/api/compute-orchestrator/runtime-leases/{lease_id}'
+  defaults:
+    _controller: '\Drupal\compute_orchestrator\Controller\RuntimeLeaseController::inspect'
+    _title: 'Inspect compute runtime lease'
+  requirements:
+    _permission: 'use compute runtime leases'
+  methods: [GET]
+
+compute_orchestrator.runtime_lease_renew:
+  path: '/api/compute-orchestrator/runtime-leases/{lease_id}/renew'
+  defaults:
+    _controller: '\Drupal\compute_orchestrator\Controller\RuntimeLeaseController::renew'
+    _title: 'Renew compute runtime lease'
+  requirements:
+    _permission: 'use compute runtime leases'
+  methods: [POST]
+
+compute_orchestrator.runtime_lease_release:
+  path: '/api/compute-orchestrator/runtime-leases/{lease_id}/release'
+  defaults:
+    _controller: '\Drupal\compute_orchestrator\Controller\RuntimeLeaseController::release'
+    _title: 'Release compute runtime lease'
+  requirements:
+    _permission: 'use compute runtime leases'
+  methods: [POST]
+

@@ -27,7 +27,7 @@ Reason:
 
 Related cards:
 
-- Umbrella architecture review: `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
+- Umbrella architecture review: `../done/2026-04-28-review-compute-orchestrator-architecture-and-drupal-coupling.md`
 - Durable Framesmith persistence decision: `41-decide-durable-framesmith-task-persistence-model.md`
 
 ## Ownership decision - 2026-04-28

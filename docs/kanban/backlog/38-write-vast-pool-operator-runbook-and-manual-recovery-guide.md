@@ -32,4 +32,4 @@ The knowledge for diagnosing and recovering pool issues currently lives in chat 
 
 - Milestone: `docs/kanban/done/2026-04-28-stabilize-framesmith-and-ai-listing-on-compute-orchestrator.md`
 - Cron verification: `docs/kanban/backlog/37-verify-cron-sidecar-idle-reap-after-real-production-workload.md`
-- Pool state follow-up: `docs/kanban/backlog/normalize-vllm-pool-record-state-fields.md`
+- Pool state follow-up: `docs/kanban/in-progress/normalize-vllm-pool-record-state-fields.md`

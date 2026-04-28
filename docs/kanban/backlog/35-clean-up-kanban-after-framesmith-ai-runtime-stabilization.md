@@ -94,7 +94,7 @@ Keep these, but update their context if needed:
   - Still valid.
 - [ ] `docs/kanban/backlog/24-fix-bulk-intake-post-stage-operator-clarity-and-table-semantics.md`
   - Still valid.
-- [ ] `docs/kanban/backlog/normalize-vllm-pool-record-state-fields.md`
+- [ ] `docs/kanban/in-progress/normalize-vllm-pool-record-state-fields.md`
   - Still valid and likely important after the reap/display-state duplication smell.
 
 ### 4. Review and decide on untracked smoke-test assets

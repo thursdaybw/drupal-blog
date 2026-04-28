@@ -39,5 +39,5 @@ The split is directionally clear but not yet specified enough to execute safely.
 - Framesmith extraction: `docs/kanban/backlog/25-extract-framesmith-runtime-out-of-bevansbench-monolith.md`
 - AI listing dev environment: `docs/kanban/backlog/17-define-a-separate-dev-environment-for-the-bb-ai-listing-product.md`
 - Standalone AI listing env: `docs/kanban/backlog/18-stand-up-a-standalone-bb-ai-listing-dev-environment-with-docker-compose.md`
-- Pool state model: `docs/kanban/backlog/normalize-vllm-pool-record-state-fields.md`
-- Compute architecture/coupling review: `docs/kanban/backlog/42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
+- Pool state model: `docs/kanban/in-progress/normalize-vllm-pool-record-state-fields.md`
+- Compute architecture/coupling review: `docs/kanban/done/2026-04-28-review-compute-orchestrator-architecture-and-drupal-coupling.md`

@@ -32,4 +32,4 @@ The manual cron proof showed that reaping works when cron is invoked. The remain
 ## Links
 
 - Milestone: `docs/kanban/done/2026-04-28-stabilize-framesmith-and-ai-listing-on-compute-orchestrator.md`
-- Pool state follow-up: `docs/kanban/backlog/normalize-vllm-pool-record-state-fields.md`
+- Pool state follow-up: `docs/kanban/in-progress/normalize-vllm-pool-record-state-fields.md`

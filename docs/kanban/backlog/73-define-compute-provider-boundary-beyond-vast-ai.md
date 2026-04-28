@@ -27,7 +27,7 @@ Reason:
 
 Related cards:
 
-- Umbrella architecture review: `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
+- Umbrella architecture review: `../done/2026-04-28-review-compute-orchestrator-architecture-and-drupal-coupling.md`
 - Price/provider selection safety rail: `30-cap-generic-vllm-vast-offer-selection-by-max-hourly-price.md`
 
 ## Acceptance criteria

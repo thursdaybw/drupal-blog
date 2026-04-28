@@ -58,11 +58,11 @@ Although the production Framesmith path now works, the card contains major unres
 
 Candidate follow-up cards already drafted or existing:
 
-- `docs/kanban/backlog/42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
+- `docs/kanban/done/2026-04-28-review-compute-orchestrator-architecture-and-drupal-coupling.md`
 - `docs/kanban/backlog/41-decide-durable-framesmith-task-persistence-model.md`
 - `docs/kanban/backlog/37-verify-cron-sidecar-idle-reap-after-real-production-workload.md`
 - `docs/kanban/backlog/38-write-vast-pool-operator-runbook-and-manual-recovery-guide.md`
-- `docs/kanban/backlog/normalize-vllm-pool-record-state-fields.md`
+- `docs/kanban/in-progress/normalize-vllm-pool-record-state-fields.md`
 - `docs/kanban/in-progress/31-capture-compute-orchestrator-ssh-probe-history-to-local-jsonl-log.md`
 
 Missing or still-needs-explicit-card candidates from `32`:
@@ -140,7 +140,7 @@ These remain valid and should not be moved merely because related production wor
 - `25-extract-framesmith-runtime-out-of-bevansbench-monolith.md`
 - `26-harden-framesmith-provisioning-observability-and-preflight-guards.md`
 - `28-normalize-ai-inference-publication-year-before-saving-to-listing-fields.md`
-- `normalize-vllm-pool-record-state-fields.md`
+- `../in-progress/normalize-vllm-pool-record-state-fields.md`
 - `30-cap-generic-vllm-vast-offer-selection-by-max-hourly-price.md`
 - `31-capture-compute-orchestrator-ssh-probe-history-to-local-jsonl-log.md`
 

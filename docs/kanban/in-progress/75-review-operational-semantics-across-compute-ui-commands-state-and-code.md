@@ -27,8 +27,8 @@ Reason:
 
 Related cards:
 
-- Umbrella architecture review: `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
-- Pool state normalization: `normalize-vllm-pool-record-state-fields.md`
+- Umbrella architecture review: `../done/2026-04-28-review-compute-orchestrator-architecture-and-drupal-coupling.md`
+- Pool state normalization: `../in-progress/normalize-vllm-pool-record-state-fields.md`
 
 
 ## Implementation progress - 2026-04-28

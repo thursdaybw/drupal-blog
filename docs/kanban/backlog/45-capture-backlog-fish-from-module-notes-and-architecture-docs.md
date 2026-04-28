@@ -51,7 +51,7 @@ This card is now an index/audit note. The captured fish were split into individu
 - `72-define-drush-launcher-as-swappable-worker-adapter.md`
 - `73-define-compute-provider-boundary-beyond-vast-ai.md`
 - `74-review-compute-task-crud-and-storage-ownership-boundary.md`
-- `75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`
+- `../in-progress/75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`
 - `76-decide-framesmith-fake-runtime-and-fake-lease-strategy.md`
 - `77-finish-framesmith-fake-browser-automation-final-state-assertions-if-still-needed.md`
 

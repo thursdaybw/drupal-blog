@@ -46,7 +46,7 @@ Framesmith should own its transcription tasks and call this contract as a client
 
 ## Related cards
 
-- `docs/kanban/backlog/42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
+- `docs/kanban/done/2026-04-28-review-compute-orchestrator-architecture-and-drupal-coupling.md`
 - `docs/kanban/backlog/72-define-drush-launcher-as-swappable-worker-adapter.md`
 - `docs/kanban/backlog/73-define-compute-provider-boundary-beyond-vast-ai.md`
 - `docs/kanban/backlog/74-review-compute-task-crud-and-storage-ownership-boundary.md`

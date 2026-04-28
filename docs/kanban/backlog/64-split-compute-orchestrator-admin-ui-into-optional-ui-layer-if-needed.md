@@ -27,7 +27,7 @@ Reason:
 
 Related card:
 
-- Umbrella architecture review: `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
+- Umbrella architecture review: `../done/2026-04-28-review-compute-orchestrator-architecture-and-drupal-coupling.md`
 
 ## Acceptance criteria
 

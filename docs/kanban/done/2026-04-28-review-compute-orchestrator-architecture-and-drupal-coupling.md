@@ -72,7 +72,7 @@ Keep these as related child/seam cards rather than merging them away immediately
   - Keep as a provider seam because Vast.ai assumptions can fossilize the pool model if left unnamed.
 - `74-review-compute-task-crud-and-storage-ownership-boundary.md`
   - Keep as a task/storage ownership seam and review alongside durable Framesmith task persistence.
-- `75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`
+- `../in-progress/75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`
   - Keep visible as an operator-semantics seam; semantic mismatch creates traps and incidents.
 
 This card should produce an architecture note/ADR plus focused implementation cards. It should not become a vague umbrella that hides concrete work.
@@ -103,7 +103,7 @@ This card should produce an architecture note/ADR plus focused implementation ca
 - [x] Produce a short architecture note.
   - Added dated architecture review section to `html/modules/custom/compute_orchestrator/ARCHITECTURE.md`.
 - [x] Create focused implementation cards for any approved refactors.
-  - Existing cards: `normalize-vllm-pool-record-state-fields.md`, `75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`, `74-review-compute-task-crud-and-storage-ownership-boundary.md`, `72-define-drush-launcher-as-swappable-worker-adapter.md`, `73-define-compute-provider-boundary-beyond-vast-ai.md`.
+  - Existing cards: `../in-progress/normalize-vllm-pool-record-state-fields.md`, `../in-progress/75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`, `74-review-compute-task-crud-and-storage-ownership-boundary.md`, `72-define-drush-launcher-as-swappable-worker-adapter.md`, `73-define-compute-provider-boundary-beyond-vast-ai.md`.
   - New cards: `79-define-remote-runtime-orchestration-contract-for-external-clients.md`, `80-extract-framesmith-task-tracking-out-of-compute-orchestrator.md`.
 
 ## Initial seam inventory prompts
@@ -127,7 +127,7 @@ Review at least these areas:
 
 ## Related follow-ups
 
-- Pool state semantics: `docs/kanban/backlog/normalize-vllm-pool-record-state-fields.md`
+- Pool state semantics: `docs/kanban/in-progress/normalize-vllm-pool-record-state-fields.md`
 - Durable Framesmith task persistence: `docs/kanban/backlog/41-decide-durable-framesmith-task-persistence-model.md`
 - Project split boundaries: `docs/kanban/backlog/40-define-long-term-project-boundaries-for-compute-framesmith-and-ai-listing.md`
 - Vast pool operator runbook: `docs/kanban/backlog/38-write-vast-pool-operator-runbook-and-manual-recovery-guide.md`

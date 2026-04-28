@@ -66,3 +66,7 @@ dtt_multi_device_test_base/
 html/sites/simpletest/
 pre-migration.backup.sql
 html/modules/custom/bevansbench_test/tests/fixtures/
+
+# Local/transient project notes and generated smoke-test artifacts.
+docs/dev/HANDOVER.md
+html/framesmith-browser-smoke.mp4

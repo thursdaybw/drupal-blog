@@ -48,7 +48,8 @@ Safety notes:
 - This is a staging/operator assurance test, not a routine fast test.
 - The wrapper temporarily shortens the staging idle-reap grace period and restores the previous value on exit.
 - The one-time login URL is written to a temporary ignored file and removed after the run.
-- The video fixture itself should be treated as a local/test artifact unless deliberately committed separately.
+- The default video fixture path is `html/framesmith-browser-smoke.mp4`.
+- That fixture is gitignored as a local/generated artifact; recreate it or override `FRAMESMITH_STAGING_FIXTURE_PATH` in a fresh dev environment.
 
 ## Roadmap note: UI submodule
 

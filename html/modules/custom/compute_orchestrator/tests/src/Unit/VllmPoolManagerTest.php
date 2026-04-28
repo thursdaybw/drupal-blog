@@ -1315,6 +1315,62 @@ final class VllmPoolManagerTest extends TestCase {
   }
 
   /**
+   * Tests release and renew persist coherent lease operation metadata.
+   */
+  public function testReleaseAndRenewPersistLeaseOperationMetadata(): void {
+    $repository = $this->newInMemoryRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'qwen-vl',
+        'current_model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'lease_status' => 'leased',
+        'lease_token' => 'token-123',
+        'leased_at' => 100,
+        'last_heartbeat_at' => 100,
+        'lease_expires_at' => 200,
+        'host' => '1.2.3.4',
+        'port' => '22097',
+        'url' => 'http://1.2.3.4:22097',
+        'source' => 'manual',
+        'runtime_state' => 'running',
+        'last_seen_at' => 1,
+        'last_used_at' => 1,
+        'last_error' => 'old error',
+      ],
+    ]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->createMock(VllmWorkloadCatalogInterface::class),
+      $this->createMock(GenericVllmRuntimeManagerInterface::class),
+      $this->createMock(VastInstanceLifecycleClientInterface::class),
+      $this->createMock(VastRestClientInterface::class),
+      $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
+      3,
+      0,
+    );
+
+    $renewed = $manager->renewLease('123', 'token-123', 300);
+    $this->assertSame('leased', $renewed['lease_status']);
+    $this->assertSame('lease', $renewed['last_phase']);
+    $this->assertSame('renewed', $renewed['last_action']);
+    $this->assertSame('', $renewed['last_error']);
+    $this->assertGreaterThan(time(), $renewed['lease_expires_at']);
+
+    $released = $manager->release('123');
+    $this->assertSame('available', $released['lease_status']);
+    $this->assertSame('lease', $released['last_phase']);
+    $this->assertSame('released', $released['last_action']);
+    $this->assertSame('', $released['last_error']);
+    $this->assertSame('', $released['lease_token']);
+    $this->assertSame(0, $released['leased_at']);
+    $this->assertSame(0, $released['last_heartbeat_at']);
+    $this->assertSame(0, $released['lease_expires_at']);
+  }
+
+  /**
    * Tests remove and clear delete tracked inventory.
    */
   public function testRemoveAndClearDeleteTrackedInventory(): void {

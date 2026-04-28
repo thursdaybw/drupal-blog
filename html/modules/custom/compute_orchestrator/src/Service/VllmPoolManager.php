@@ -275,10 +275,7 @@ final class VllmPoolManager {
       throw new \RuntimeException('Unknown pooled instance: ' . $contractId);
     }
 
-    $record['lease_status'] = 'available';
-    $this->clearLeaseMetadata($record);
-    $record['last_used_at'] = time();
-    $this->poolRepository->save($record);
+    $record = $this->markLeaseReleased($record, time());
     $this->clearActivePoolContractIfMatches($contractId);
     return $record;
   }
@@ -311,11 +308,7 @@ final class VllmPoolManager {
 
     $ttl = max(60, $ttlSeconds ?? $this->getLeaseTtlSeconds());
     $now = time();
-    $record['last_heartbeat_at'] = $now;
-    $record['lease_expires_at'] = $now + $ttl;
-    $record['last_seen_at'] = $now;
-    $record['last_error'] = '';
-    $this->poolRepository->save($record);
+    $record = $this->markLeaseRenewed($record, $now, $ttl);
     return $record;
   }
 
@@ -500,12 +493,7 @@ final class VllmPoolManager {
    *   Updated reclaimed record.
    */
   private function reclaimExpiredLease(array $record, int $now): array {
-    $record['lease_status'] = 'available';
-    $record['last_error'] = '';
-    $record['last_seen_at'] = $now;
-    $record['last_used_at'] = $now;
-    $this->clearLeaseMetadata($record);
-    $this->poolRepository->save($record);
+    $record = $this->markLeaseReclaimed($record, $now);
     $contractId = trim((string) ($record['contract_id'] ?? ''));
     if ($contractId !== '') {
       $this->clearActivePoolContractIfMatches($contractId);
@@ -586,12 +574,7 @@ final class VllmPoolManager {
       $info = $this->vastClient->showInstance($contractId);
       $record['last_seen_at'] = time();
       if (!$this->isRunningState($info)) {
-        $record['runtime_state'] = 'stopped';
-        $record['last_phase'] = 'idle_reap';
-        $record['last_action'] = 'already_inactive';
-        $record['last_reap_at'] = time();
-        $record['last_error'] = '';
-        $this->poolRepository->save($record);
+        $record = $this->markReapedAlreadyInactive($record, time());
         return [
           'contract_id' => $contractId,
           'action' => 'already_inactive',
@@ -609,13 +592,7 @@ final class VllmPoolManager {
 
       $this->instanceLifecycleClient->stopInstance($contractId);
       $now = time();
-      $record['runtime_state'] = 'stopped';
-      $record['last_phase'] = 'idle_reap';
-      $record['last_action'] = 'stopped';
-      $record['last_stopped_at'] = $now;
-      $record['last_reap_at'] = $now;
-      $record['last_error'] = '';
-      $this->poolRepository->save($record);
+      $record = $this->markReapedStopped($record, $now);
       return [
         'contract_id' => $contractId,
         'action' => 'stopped',
@@ -623,12 +600,7 @@ final class VllmPoolManager {
       ];
     }
     catch (\Throwable $exception) {
-      $record['lease_status'] = 'unavailable';
-      $record['last_seen_at'] = time();
-      $record['last_phase'] = 'idle_reap';
-      $record['last_action'] = 'failed';
-      $record['last_error'] = $exception->getMessage();
-      $this->poolRepository->save($record);
+      $record = $this->markReapFailed($record, time(), $exception->getMessage());
       return [
         'contract_id' => $contractId,
         'action' => 'failed',
@@ -700,12 +672,7 @@ final class VllmPoolManager {
         if ($this->shouldKeepInstanceBootstrapping($exception, TRUE, $workloadStartIssued)) {
           $progress = $this->buildRetryableProgressSnapshot($phase, $action, $exception);
           $status = $this->formatRetryableStatusLine($contractId, $progress);
-          $record['lease_status'] = 'bootstrapping';
-          $record['last_error'] = $status;
-          $record['last_phase'] = $phase;
-          $record['last_action'] = $action;
-          $record['last_seen_at'] = time();
-          $this->poolRepository->save($record);
+          $record = $this->markAcquirePending($record, time(), $phase, $action, $status);
           throw AcquirePendingException::fromProgress($status, $contractId, $progress, $exception);
         }
 
@@ -758,13 +725,7 @@ final class VllmPoolManager {
       if ($this->shouldKeepInstanceBootstrapping($exception, $bootstrapCompleted, $workloadStartIssued)) {
         $progress = $this->buildRetryableProgressSnapshot($phase, $action, $exception);
         $status = $this->formatRetryableStatusLine($contractId, $progress);
-        $record['lease_status'] = 'bootstrapping';
-        $record['runtime_state'] = 'starting';
-        $record['last_error'] = $status;
-        $record['last_phase'] = $phase;
-        $record['last_action'] = $action;
-        $record['last_seen_at'] = time();
-        $this->poolRepository->save($record);
+        $record = $this->markAcquirePending($record, time(), $phase, $action, $status, 'starting');
         throw AcquirePendingException::fromProgress($status, $contractId, $progress, $exception);
       }
       if ($wakeAttempted && !$bootstrapCompleted && !$workloadStartIssued) {
@@ -857,13 +818,7 @@ final class VllmPoolManager {
       if ($this->shouldKeepInstanceBootstrapping($exception, $bootstrapCompleted, $workloadStartIssued)) {
         $progress = $this->buildRetryableProgressSnapshot($phase, $action, $exception);
         $status = $this->formatRetryableStatusLine($contractId, $progress);
-        $record['lease_status'] = 'bootstrapping';
-        $record['runtime_state'] = 'starting';
-        $record['last_error'] = $status;
-        $record['last_phase'] = $phase;
-        $record['last_action'] = $action;
-        $record['last_seen_at'] = time();
-        $this->poolRepository->save($record);
+        $record = $this->markAcquirePending($record, time(), $phase, $action, $status, 'starting');
         throw AcquirePendingException::fromProgress($status, $contractId, $progress, $exception);
       }
 
@@ -932,12 +887,7 @@ final class VllmPoolManager {
     string $action,
     \Throwable $exception,
   ): void {
-    $record['lease_status'] = $leaseStatus;
-    $record['last_error'] = $exception->getMessage();
-    $record['last_phase'] = $phase;
-    $record['last_action'] = $action;
-    $record['last_seen_at'] = time();
-    $this->poolRepository->save($record);
+    $record = $this->markAcquireFailed($record, $leaseStatus, time(), $phase, $action, $exception->getMessage());
     $this->logger->error(
       'POOL acquire failure contract={contract} lease_status={lease_status} phase={phase} action={action} message={message}',
       [
@@ -968,13 +918,7 @@ final class VllmPoolManager {
     string $action,
     string $message,
   ): void {
-    $record['lease_status'] = 'available';
-    $record['last_error'] = $message;
-    $record['last_phase'] = $phase;
-    $record['last_action'] = $action;
-    $record['last_seen_at'] = time();
-    $record['last_provider_unavailable_at'] = time();
-    $this->poolRepository->save($record);
+    $record = $this->markTransientProviderObservation($record, time(), $phase, $action, $message);
     $this->logger->warning(
       'POOL transient provider observation contract={contract} phase={phase} action={action} message={message}',
       [
@@ -1506,19 +1450,7 @@ final class VllmPoolManager {
     $ttl = $this->getLeaseTtlSeconds();
     $record['current_workload_mode'] = (string) ($definition['mode'] ?? '');
     $record['current_model'] = (string) ($definition['model'] ?? '');
-    $record['lease_status'] = 'leased';
-    $record['runtime_state'] = 'running';
-    $record['lease_token'] = $this->generateLeaseToken();
-    $record['leased_at'] = $now;
-    $record['last_heartbeat_at'] = $now;
-    $record['lease_expires_at'] = $now + $ttl;
-    $record['host'] = trim((string) ($readyInfo['public_ipaddr'] ?? ''));
-    $record['port'] = $this->extractPublicPort($readyInfo);
-    $record['url'] = $this->buildPublicUrl($readyInfo);
-    $record['last_seen_at'] = $now;
-    $record['last_used_at'] = $now;
-    $record['last_error'] = '';
-    $this->poolRepository->save($record);
+    $record = $this->markLeasedReady($record, $readyInfo, $now, $ttl);
     $contractId = trim((string) ($record['contract_id'] ?? ''));
     if ($contractId !== '') {
       $this->state->set(self::STATE_ACTIVE_POOL_CONTRACT, $contractId);
@@ -1739,6 +1671,267 @@ final class VllmPoolManager {
     $host = trim((string) ($info['public_ipaddr'] ?? ''));
     $port = $this->extractPublicPort($info);
     return ($host !== '' && $port !== '') ? 'http://' . $host . ':' . $port : '';
+  }
+
+  /**
+   * Marks a leased record as released and available for later reuse/reap.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param int $now
+   *   Current unix timestamp.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markLeaseReleased(array $record, int $now): array {
+    $record['lease_status'] = 'available';
+    $record['last_phase'] = 'lease';
+    $record['last_action'] = 'released';
+    $record['last_error'] = '';
+    $record['last_seen_at'] = $now;
+    $record['last_used_at'] = $now;
+    $this->clearLeaseMetadata($record);
+    $this->poolRepository->save($record);
+    return $record;
+  }
+
+  /**
+   * Marks an expired leased record as available again.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param int $now
+   *   Current unix timestamp.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markLeaseReclaimed(array $record, int $now): array {
+    $record['lease_status'] = 'available';
+    $record['last_phase'] = 'lease';
+    $record['last_action'] = 'expired_reclaimed';
+    $record['last_error'] = '';
+    $record['last_seen_at'] = $now;
+    $record['last_used_at'] = $now;
+    $this->clearLeaseMetadata($record);
+    $this->poolRepository->save($record);
+    return $record;
+  }
+
+  /**
+   * Marks an active lease as renewed.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param int $now
+   *   Current unix timestamp.
+   * @param int $ttl
+   *   Lease time-to-live in seconds.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markLeaseRenewed(array $record, int $now, int $ttl): array {
+    $record['last_heartbeat_at'] = $now;
+    $record['lease_expires_at'] = $now + $ttl;
+    $record['last_phase'] = 'lease';
+    $record['last_action'] = 'renewed';
+    $record['last_seen_at'] = $now;
+    $record['last_error'] = '';
+    $this->poolRepository->save($record);
+    return $record;
+  }
+
+  /**
+   * Marks a record as leased after runtime/workload readiness succeeds.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param array<string,mixed> $readyInfo
+   *   Ready instance metadata.
+   * @param int $now
+   *   Current unix timestamp.
+   * @param int $ttl
+   *   Lease time-to-live in seconds.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markLeasedReady(array $record, array $readyInfo, int $now, int $ttl): array {
+    $record['lease_status'] = 'leased';
+    $record['runtime_state'] = 'running';
+    $record['lease_token'] = $this->generateLeaseToken();
+    $record['leased_at'] = $now;
+    $record['last_heartbeat_at'] = $now;
+    $record['lease_expires_at'] = $now + $ttl;
+    $record['host'] = trim((string) ($readyInfo['public_ipaddr'] ?? ''));
+    $record['port'] = $this->extractPublicPort($readyInfo);
+    $record['url'] = $this->buildPublicUrl($readyInfo);
+    $record['last_phase'] = 'lease';
+    $record['last_action'] = 'leased';
+    $record['last_seen_at'] = $now;
+    $record['last_used_at'] = $now;
+    $record['last_error'] = '';
+    $this->poolRepository->save($record);
+    return $record;
+  }
+
+  /**
+   * Marks an acquire flow as still pending/retryable.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param int $now
+   *   Current unix timestamp.
+   * @param string $phase
+   *   Current acquire phase.
+   * @param string $action
+   *   Current acquire action.
+   * @param string $message
+   *   Operator-facing status message.
+   * @param string|null $runtimeState
+   *   Optional runtime state to persist.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markAcquirePending(array $record, int $now, string $phase, string $action, string $message, ?string $runtimeState = NULL): array {
+    $record['lease_status'] = 'bootstrapping';
+    if ($runtimeState !== NULL) {
+      $record['runtime_state'] = $runtimeState;
+    }
+    $record['last_error'] = $message;
+    $record['last_phase'] = $phase;
+    $record['last_action'] = $action;
+    $record['last_seen_at'] = $now;
+    $this->poolRepository->save($record);
+    return $record;
+  }
+
+  /**
+   * Marks a non-retryable acquire failure.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param string $leaseStatus
+   *   Lease status to persist.
+   * @param int $now
+   *   Current unix timestamp.
+   * @param string $phase
+   *   Failed phase.
+   * @param string $action
+   *   Failed action.
+   * @param string $message
+   *   Failure message.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markAcquireFailed(array $record, string $leaseStatus, int $now, string $phase, string $action, string $message): array {
+    $record['lease_status'] = $leaseStatus;
+    $record['last_error'] = $message;
+    $record['last_phase'] = $phase;
+    $record['last_action'] = $action;
+    $record['last_seen_at'] = $now;
+    $this->poolRepository->save($record);
+    return $record;
+  }
+
+  /**
+   * Marks a transient provider observation while keeping candidate reusable.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param int $now
+   *   Current unix timestamp.
+   * @param string $phase
+   *   Observation phase.
+   * @param string $action
+   *   Observation action.
+   * @param string $message
+   *   Operator-facing diagnostic.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markTransientProviderObservation(array $record, int $now, string $phase, string $action, string $message): array {
+    $record['lease_status'] = 'available';
+    $record['last_error'] = $message;
+    $record['last_phase'] = $phase;
+    $record['last_action'] = $action;
+    $record['last_seen_at'] = $now;
+    $record['last_provider_unavailable_at'] = $now;
+    $this->poolRepository->save($record);
+    return $record;
+  }
+
+  /**
+   * Marks an idle-reap target as already inactive.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param int $now
+   *   Current unix timestamp.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markReapedAlreadyInactive(array $record, int $now): array {
+    $record['runtime_state'] = 'stopped';
+    $record['last_phase'] = 'idle_reap';
+    $record['last_action'] = 'already_inactive';
+    $record['last_seen_at'] = $now;
+    $record['last_reap_at'] = $now;
+    $record['last_error'] = '';
+    $this->poolRepository->save($record);
+    return $record;
+  }
+
+  /**
+   * Marks an idle-reap target as stopped.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param int $now
+   *   Current unix timestamp.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markReapedStopped(array $record, int $now): array {
+    $record['runtime_state'] = 'stopped';
+    $record['last_phase'] = 'idle_reap';
+    $record['last_action'] = 'stopped';
+    $record['last_seen_at'] = $now;
+    $record['last_stopped_at'] = $now;
+    $record['last_reap_at'] = $now;
+    $record['last_error'] = '';
+    $this->poolRepository->save($record);
+    return $record;
+  }
+
+  /**
+   * Marks an idle-reap failure.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param int $now
+   *   Current unix timestamp.
+   * @param string $message
+   *   Failure message.
+   *
+   * @return array<string,mixed>
+   *   Persisted pool record.
+   */
+  private function markReapFailed(array $record, int $now, string $message): array {
+    $record['lease_status'] = 'unavailable';
+    $record['last_seen_at'] = $now;
+    $record['last_phase'] = 'idle_reap';
+    $record['last_action'] = 'failed';
+    $record['last_error'] = $message;
+    $this->poolRepository->save($record);
+    return $record;
   }
 
   /**

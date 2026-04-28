@@ -76,6 +76,27 @@ If richer auditability is useful, keep a bounded `history[]` or `events[]` list 
 - Keep backwards compatibility for existing records during the transition.
 - Add tests that assert persisted state and admin/operator summary stay consistent for each mutation path.
 
+
+## Implementation progress - 2026-04-28
+
+First implementation slice:
+
+- added explicit `VllmPoolManager` helper methods for common state transitions:
+  - lease release;
+  - expired lease reclaim;
+  - lease renewal;
+  - lease acquired after runtime readiness;
+  - retryable acquire pending;
+  - acquire failure;
+  - transient provider observation;
+  - idle reap already inactive;
+  - idle reap stopped;
+  - idle reap failed;
+- routed release, renew, acquire pending/failure, transient provider observation, leased-ready, and idle-reap paths through those helpers;
+- added unit coverage that release and renew persist coherent lease operation metadata.
+
+This is not the full card yet. Remaining work includes documenting final field semantics, deciding the long-term replacement/meaning of `last_phase` and `last_action`, and continuing to reduce direct state mutation in reconcile/fresh-failure/wake-fallback paths.
+
 ## Acceptance criteria
 
 - Documented pool record field semantics.

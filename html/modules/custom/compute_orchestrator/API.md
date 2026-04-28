@@ -1,5 +1,11 @@
 # Compute Orchestrator API Reference
 
+## Remote runtime contract
+
+External clients such as extracted Framesmith and AI listings should depend on the remote runtime orchestration contract, not on Drupal state, Drush commands, Drupal Batch, or provider-specific Vast.ai details.
+
+See `REMOTE_RUNTIME_CONTRACT.md` for the draft client-facing lease contract.
+
 ## Services
 ### `Drupal\compute_orchestrator\Service\VastRestClient`
 Encapsulates Vast.ai REST calls with added orchestration logic.

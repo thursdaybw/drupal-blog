@@ -58,6 +58,8 @@ compute_orchestrator.runtime_lease_acquire:
     _title: 'Acquire compute runtime lease'
   requirements:
     _permission: 'use compute runtime leases'
+  options:
+    _auth: ['oauth2']
   methods: [POST]
 
 compute_orchestrator.runtime_lease_inspect:
@@ -67,6 +69,8 @@ compute_orchestrator.runtime_lease_inspect:
     _title: 'Inspect compute runtime lease'
   requirements:
     _permission: 'use compute runtime leases'
+  options:
+    _auth: ['oauth2']
   methods: [GET]
 
 compute_orchestrator.runtime_lease_renew:
@@ -76,6 +80,8 @@ compute_orchestrator.runtime_lease_renew:
     _title: 'Renew compute runtime lease'
   requirements:
     _permission: 'use compute runtime leases'
+  options:
+    _auth: ['oauth2']
   methods: [POST]
 
 compute_orchestrator.runtime_lease_release:
@@ -85,5 +91,7 @@ compute_orchestrator.runtime_lease_release:
     _title: 'Release compute runtime lease'
   requirements:
     _permission: 'use compute runtime leases'
+  options:
+    _auth: ['oauth2']
   methods: [POST]
 

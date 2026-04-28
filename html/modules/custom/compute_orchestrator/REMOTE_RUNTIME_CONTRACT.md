@@ -281,16 +281,35 @@ Initial error codes:
 
 ## Authentication and authorization
 
-Initial implementation should use Drupal permissions and authenticated service clients.
+Service-to-service clients must authenticate with OAuth bearer tokens through the existing Drupal `simple_oauth` / `consumers` stack.
 
-Minimum direction:
+Runtime lease routes must opt into OAuth route authentication:
 
-- create a permission separate from the existing Framesmith transcription permission, for example `use compute runtime leases`;
-- use a service account or token-based authentication for extracted clients;
-- do not expose lease acquisition to anonymous users;
-- keep operator-only diagnostics behind a stronger permission than basic lease use.
+```yaml
+options:
+  _auth: ['oauth2']
+```
 
-Authentication mechanism is not fully decided in this draft. It must be decided before external clients depend on the contract.
+The authenticated service user or client must also have the Drupal permission:
+
+```text
+use compute runtime leases
+```
+
+This keeps authentication and authorization separate:
+
+- OAuth authenticates the backend service client;
+- the Drupal permission authorizes access to runtime lease operations;
+- browser clients do not receive compute service credentials;
+- compute lease tokens remain backend-owned task metadata;
+- operator-only diagnostics should stay behind a stronger permission if diagnostic routes expand.
+
+Initial service clients:
+
+- Framesmith backend, for `whisper` runtime leases;
+- AI listing backend, for `qwen-vl` runtime leases.
+
+Future hardening may split authorization by workload, for example `use compute runtime leases for whisper` and `use compute runtime leases for qwen-vl`, if one shared permission becomes too broad.
 
 ## Compatibility with current implementation
 

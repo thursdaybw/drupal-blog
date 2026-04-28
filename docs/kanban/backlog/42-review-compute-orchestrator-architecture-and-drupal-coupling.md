@@ -94,13 +94,17 @@ This card should produce an architecture note/ADR plus focused implementation ca
   - workload adapters;
   - task/job storage adapters;
   - launcher/worker adapters.
-- [ ] Identify which existing interfaces are already good seams and which need extraction or renaming.
+- [x] Identify which existing interfaces are already good seams and which need extraction or renaming.
+  - Recorded in `ARCHITECTURE.md` under `Interface seam review`.
 - [x] Identify the minimum refactors that reduce coupling without destabilizing the working prod path.
   - Initial direction: normalize pool record state, review operational semantics, move Framesmith-specific task tracking toward Framesmith-owned code, and name provider and launcher boundaries explicitly.
-- [ ] Decide which Drupal-admin flows may continue using Batch API for now and which headless flows should avoid Batch API.
+- [x] Decide which Drupal-admin flows may continue using Drupal Batch for now and which headless flows should avoid Drupal Batch.
+  - Decision recorded in `ARCHITECTURE.md`: Drupal Batch is acceptable for admin/operator browser flows; external clients need a remote runtime orchestration contract.
 - [x] Produce a short architecture note.
   - Added dated architecture review section to `html/modules/custom/compute_orchestrator/ARCHITECTURE.md`.
-- [ ] Create focused implementation cards for any approved refactors.
+- [x] Create focused implementation cards for any approved refactors.
+  - Existing cards: `normalize-vllm-pool-record-state-fields.md`, `75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`, `74-review-compute-task-crud-and-storage-ownership-boundary.md`, `72-define-drush-launcher-as-swappable-worker-adapter.md`, `73-define-compute-provider-boundary-beyond-vast-ai.md`.
+  - New cards: `79-define-remote-runtime-orchestration-contract-for-external-clients.md`, `80-extract-framesmith-task-tracking-out-of-compute-orchestrator.md`.
 
 ## Initial seam inventory prompts
 

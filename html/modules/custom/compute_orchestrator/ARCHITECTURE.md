@@ -707,6 +707,62 @@ Start with small clarity refactors that pay debt without destabilizing productio
 
 The optional admin user interface submodule remains a later candidate. It should only be done when the core/adapters boundary is clearer and the split buys freedom rather than ceremony.
 
+### Interface seam review
+
+Current useful seams:
+
+- `VllmPoolRepositoryInterface` is a useful storage seam, although the record shape is still untyped array data and needs clearer field semantics.
+- `VllmWorkloadCatalogInterface` is a useful workload catalog seam.
+- `GenericVllmRuntimeManagerInterface` is a useful runtime manager seam, but the name is still tied to vLLM rather than generic runtime orchestration.
+- `WorkloadReadinessAdapterInterface` is a useful readiness seam, but it currently extends Drupal plugin inspection. A future framework-light core should keep a plain readiness contract separate from Drupal plugin discovery.
+- `FramesmithRuntimeLeaseManagerInterface` is a useful product adapter seam for the current in-process integration, but the long-term equivalent should be a remote runtime orchestration client from Framesmith to `compute_orchestrator`.
+- `SshConnectionContext` and `SshProbeRequest` are good small value objects.
+
+Provider-specific seams:
+
+- `VastApiClientInterface`, `VastRestClientInterface`, `VastInstanceLifecycleClientInterface`, and `VastCredentialProviderInterface` are valid Vast provider adapter seams.
+- They should remain Vast-named if they are provider-specific.
+- A future provider-neutral boundary should sit above them and translate Vast concepts into generic runtime/provider lifecycle concepts.
+
+Product-specific seams:
+
+- `FramesmithTranscriptionTaskStoreInterface`, `FramesmithTranscriptionLauncherInterface`, and `FramesmithTranscriptionExecutorInterface` are Framesmith product seams, not generic compute orchestration seams.
+- These should move toward Framesmith-owned code during extraction unless a deliberately designed generic job facility replaces them later.
+
+Missing or weak seams:
+
+- There is no explicit provider-neutral runtime provider interface above the Vast-specific clients.
+- There is no explicit remote runtime orchestration contract for external clients.
+- There is no explicit canonical pool record/state object; pool records are still arrays with overlapping state and display fields.
+- There is no explicit task/job ownership boundary beyond the newly recorded Framesmith decision.
+- `VllmPoolManager` is currently the main behaviour hub and may need smaller collaborators after state semantics and provider boundaries are clarified.
+
+### Drupal Batch and admin boundary
+
+Drupal Batch is acceptable for Drupal admin/operator flows that are inherently browser-driven and long-running, especially manual acquire from the pool admin page.
+
+Drupal Batch should not become the contract for external clients or headless flows.
+
+Boundary rule:
+
+- Drupal admin forms may use Drupal Batch as a host adapter.
+- External clients such as extracted Framesmith should call a remote runtime orchestration contract.
+- Command-line tools may remain operator/debug adapters.
+- Shared orchestration behaviour should live below these adapters so admin page, command-line tool, cron, and future remote clients do not drift into different code paths.
+
+Current acceptable Batch usage:
+
+- `VllmPoolAdminForm` starting a manual acquire batch through `VllmPoolBatch`.
+
+Current non-Batch shared service paths that should remain composable:
+
+- release lease;
+- renew lease;
+- reap idle available instances;
+- destroy/remove selected instance;
+- refresh provider status.
+
+
 ### First implementation candidates
 
 The first implementation work should come from these groomed cards:

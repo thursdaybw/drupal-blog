@@ -59,13 +59,21 @@ Reason:
 
 ### Now candidates
 
-- `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
-  - Grooming intent: promote to `Groomed` as the umbrella architecture review.
-  - Why now: identifies whether Drupal is a host adapter or becoming the conceptual center.
+### Current Now progress - 2026-04-28
 
-- `75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`
-  - Grooming intent: promote to `Groomed` or merge into the architecture review as a concrete workstream.
+- Architecture review card `42` is complete and moved to done.
+- Operational semantics card `75` is active in progress; first operator-language slice is committed.
+- Pool state normalization is active in progress; first state mutation helper slice is committed.
+- Do not close `75` or pool state normalization until their remaining checklist items are resolved or explicitly moved to linked follow-up cards.
+
+- `../done/2026-04-28-review-compute-orchestrator-architecture-and-drupal-coupling.md`
+  - Status: done.
+  - Outcome: architecture seams, Drupal Batch boundary, interface seam review, Framesmith task ownership, and follow-up implementation cards were recorded.
+
+- `../in-progress/75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`
+  - Status: in progress.
   - Why now: semantic mismatch creates operator traps and future incidents.
+  - Current remaining work: review code paths for hidden divergence and create focused follow-up cards for any mismatches discovered.
 
 - `74-review-compute-task-crud-and-storage-ownership-boundary.md`
   - Grooming intent: review alongside `41-decide-durable-framesmith-task-persistence-model.md`.
@@ -91,7 +99,7 @@ Reason:
 - `69-add-stale-leased-job-recovery-with-explicit-heartbeats.md`
 - `70-verify-stopped-instance-reuse-after-idle-reap.md`
 - `71-add-detached-runner-task-log-visibility.md`
-- `normalize-vllm-pool-record-state-fields.md`
+- `../in-progress/normalize-vllm-pool-record-state-fields.md`
 - `38-write-vast-pool-operator-runbook-and-manual-recovery-guide.md`
 
 These are probably not all `Now`, but they are part of the same freedom/operability debt field.
@@ -104,7 +112,7 @@ After the architecture/freedom slice is groomed, the next likely slice is operat
   - Most of this is now committed; remaining question is whether to re-run after cleanup and then close/supersede.
 - `37-verify-cron-sidecar-idle-reap-after-real-production-workload.md`
 - `38-write-vast-pool-operator-runbook-and-manual-recovery-guide.md`
-- `normalize-vllm-pool-record-state-fields.md`
+- `../in-progress/normalize-vllm-pool-record-state-fields.md`
 
 Reason:
 

@@ -2,7 +2,7 @@
 
 Date opened: 2026-04-28
 Owner: bevan
-Status: Backlog
+Status: In progress
 Capture state: Groomed
 Grooming priority: Now
 Source: docs/kanban/in-progress/32-add-framesmith-drupal-api-backed-by-compute-orchestrator.md

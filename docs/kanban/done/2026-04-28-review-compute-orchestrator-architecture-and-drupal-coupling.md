@@ -2,9 +2,9 @@
 
 Date opened: 2026-04-28
 Owner: bevan
-Status: Backlog
+Status: Done
 Capture state: Groomed
-Grooming priority: Now
+Grooming priority: Done
 
 ## Context
 

@@ -36,11 +36,11 @@ Full method signatures are defined in `VastRestClientInterface` (`src/Service/Va
   - wake sleeping pooled instances before creating fresh ones
   - skip/mark `rented_elsewhere` when Vast wake stays stuck in scheduling
   - provision a fresh generic instance only when the pool has no usable member
-- `release()` – marks a leased instance available again
+- `release()` – releases the runtime lease and marks the record available again without stopping or destroying it
 - `getIdleShutdownSeconds()` – returns the configured idle shutdown threshold, defaulting to 600 seconds
 - `getMaxInstancesPerWorkload()` – returns the configured per-workload pool-size limit, defaulting to `5` with `0` meaning unlimited
-- `reapIdleAvailableInstances()` – stops available running instances that have exceeded the idle threshold
-- `remove()` / `clear()` – lets operators reset the pool inventory to exercise explicit empty-pool and single-candidate scenarios
+- `reapIdleAvailableInstances()` – stops running instances whose lease state is `available` and whose post-lease grace period has elapsed
+- `remove()` / `clear()` – lets operators reset Drupal pool records without destroying Vast instances
 
 Client applications should treat `acquire()` / `release()` as the public lease boundary. They should not write pool timestamps or lease state directly. `release()` records `last_used_at`, which starts the idle shutdown timer used by `reapIdleAvailableInstances()`.
 
@@ -73,18 +73,18 @@ Client applications should treat `acquire()` / `release()` as the public lease b
 - Uses the sleeping-instance-first lease policy with fresh provisioning only as a final fallback.
 
 ### `compute:vllm-pool-release`
-- Marks an acquired pooled instance available again without destroying it.
+- Releases the runtime lease and marks the record available again without stopping or destroying it.
 
 ### `compute:vllm-pool-reap-idle`
-- Stops available pooled instances that have been idle for the configured threshold.
+- Stops running pooled instances whose lease state is `available` and whose configured post-lease grace period has elapsed.
 - Defaults to `compute_orchestrator.vllm_pool.idle_shutdown_seconds`, or 600 seconds when unset.
 - Supports `--idle-seconds` and `--dry-run`.
 
 ### `compute:vllm-pool-remove`
-- Removes one tracked pooled instance from Drupal state.
+- Removes one tracked pooled instance from Drupal state without destroying the Vast instance.
 
 ### `compute:vllm-pool-clear`
-- Clears the entire tracked pool inventory so the empty-pool fallback can be tested deterministically.
+- Clears the tracked Drupal pool inventory without destroying Vast instances, so the empty-pool fallback can be tested deterministically.
 
 ### `compute:bad-hosts [--clear]`
 - Lists or clears the persistent bad host list.

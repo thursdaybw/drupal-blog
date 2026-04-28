@@ -27,6 +27,17 @@ drush compute:provision-vllm-generic --workload=qwen-vl --image=thursdaybw/vllm-
 - `--image` can override the workload default without changing code.
 - `compute:provision-vllm-generic` is the separate operator path for the generic pooled-node image. It boots the node idle, starts the selected runtime over SSH, then waits for vLLM readiness.
 
+
+## Pool operator vocabulary
+
+- `lease_status` says whether a client may acquire the record. `available` means reusable; it does not mean running.
+- `runtime_state` says whether the provider runtime is running, stopped, starting, destroyed, or unknown.
+- `release` returns a lease to the pool. It does not stop or destroy the instance.
+- `reap` stops an idle `available` runtime after the post-lease grace period. The pool record remains available for future acquire/restart.
+- `remove` forgets a pool record in Drupal state. It does not destroy the Vast instance.
+- `destroy` deletes the Vast instance at the provider and removes the pool record.
+- `last_phase` and `last_action` are transitional last-operation fields for operator diagnostics. They should agree with the canonical `lease_status` and `runtime_state` fields.
+
 ## Managing the state-backed pool
 ```
 ddev drush compute:vllm-pool-clear
@@ -40,16 +51,16 @@ ddev drush compute:vllm-pool-remove 34414828
 ```
 - `compute:vllm-pool-clear` resets the pool inventory so the "nothing leased" scenario can be tested deterministically.
 - `compute:vllm-pool-register` records an already-leased Vast contract in the pool inventory without requiring it to be the current active Drupal runtime. This is the operator path for testing "sleeping pooled instance" and "already-running pooled instance" scenarios against real contracts.
-- `compute:vllm-pool-list` reads the Drupal-state inventory instead of a JSON file on disk.
+- `compute:vllm-pool-list` reads the Drupal-state inventory and prints explicit lease/runtime fields.
 - `compute:vllm-pool-acquire` applies the pool lease policy:
   - reuse already-known pooled instances first
   - prefer waking a sleeping pooled instance over creating a fresh one
   - if waking a sleeping instance stalls in Vast scheduling, mark it `rented_elsewhere`, stop it again, and continue to the next candidate
   - only provision a fresh generic instance when no pooled candidate is usable
-- `compute:vllm-pool-release` marks an acquired instance available again without destroying it.
-- `compute:vllm-pool-reap-idle` stops available running instances after the idle shutdown window. The default is 600 seconds and can be changed with `drush state:set compute_orchestrator.vllm_pool.idle_shutdown_seconds 900`.
+- `compute:vllm-pool-release` releases the runtime lease and marks the record available again. It does not stop or destroy the instance.
+- `compute:vllm-pool-reap-idle` stops running instances whose lease state is `available` after the idle shutdown window. The default is 600 seconds and can be changed with `drush state:set compute_orchestrator.vllm_pool.idle_shutdown_seconds 900`.
 - Pool scale-out is now limited by `compute_orchestrator.vllm_pool.max_instances_per_workload` (default `5`). Set it to `0` for unlimited. When all matching instances are leased, acquire may provision another one until this limit is reached. You can change it with `drush state:set compute_orchestrator.vllm_pool.max_instances_per_workload 2`.
-- `compute:vllm-pool-remove` deletes one tracked contract from the inventory after a targeted scenario run.
+- `compute:vllm-pool-remove` deletes one tracked record from Drupal state without destroying the Vast instance.
 
 ## Client lease contract
 Applications that use the GPU pool must not mutate pool timestamps directly.

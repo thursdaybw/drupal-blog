@@ -30,11 +30,27 @@ Related cards:
 - Umbrella architecture review: `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
 - Pool state normalization: `normalize-vllm-pool-record-state-fields.md`
 
+
+## Implementation progress - 2026-04-28
+
+First operator-semantics slice:
+
+- aligned command output around explicit `lease_status` and `runtime_state` wording;
+- clarified release/reap/remove/destroy semantics in pool command output;
+- clarified the pool admin glossary and table labels;
+- added a table formatter for transitional `last_phase` / `last_action` as a single last-operation display;
+- documented the operator vocabulary in compute_orchestrator usage/API docs.
+
+This is not the full card yet. Remaining work includes reviewing all command names, state labels, and implementation paths for deeper mismatches after the first wording cleanup.
+
 ## Acceptance criteria
 
-- [ ] Review command names and behaviour for semantic mismatch.
-- [ ] Review UI labels/help text for semantic mismatch.
-- [ ] Review state labels and lifecycle fields for semantic mismatch.
+- [x] Review command names and behaviour for semantic mismatch.
+  - First pass completed for vLLM pool commands; command output now uses explicit lease/runtime wording.
+- [x] Review UI labels/help text for semantic mismatch.
+  - First pass completed for pool admin glossary/table labels and release/reap/remove/destroy wording.
+- [x] Review state labels and lifecycle fields for semantic mismatch.
+  - First pass documented `lease_status`, `runtime_state`, `last_phase`, and `last_action` vocabulary; deeper normalization remains in the pool state card.
 - [ ] Review code paths for hidden divergence.
 - [ ] Create focused implementation cards for any mismatches discovered.
 

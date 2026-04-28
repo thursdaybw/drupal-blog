@@ -65,7 +65,7 @@ final class VllmPoolAdminForm extends FormBase {
 
     $form['intro'] = [
       '#type' => 'markup',
-      '#markup' => '<p>View and control the pooled Vast instances used for vLLM workloads. Client applications should call acquire/release and should not mutate pool timestamps directly.</p>',
+      '#markup' => '<p>View and control the reusable Vast instances used for runtime workloads. Client applications should acquire and release runtime leases, and should not mutate pool timestamps or lease state directly.</p>',
     ];
 
     $form['how_it_works'] = [
@@ -94,10 +94,10 @@ final class VllmPoolAdminForm extends FormBase {
         '<dt><strong>Lease</strong></dt><dd>A temporary claim on an instance while a client is using it.</dd>',
         '<dt><strong>Lease expires</strong></dt><dd>The time when Drupal will treat that lease as stale unless it is renewed.</dd>',
         '<dt><strong>Release lease</strong></dt><dd>Changes an instance back to <strong>available</strong> without stopping or destroying it.</dd>',
-        '<dt><strong>Available</strong></dt><dd>An instance that can be acquired. It may already be running or it may be stopped and need to be restarted.</dd>',
-        '<dt><strong>Leased</strong></dt><dd>An instance that has already been handed out and is not available for another acquire.</dd>',
-        '<dt><strong>Reap</strong></dt><dd>Stop an instance that is in <strong>available</strong> status after the post-lease grace period has passed. Reap does not make the instance unavailable for future acquire.</dd>',
-        '<dt><strong>Destroy</strong></dt><dd>Permanently delete the Vast instance and remove it from pool tracking.</dd>',
+        '<dt><strong>Available</strong></dt><dd>Lease state: the instance can be acquired. It may already be running, or it may be stopped and need to be restarted.</dd>',
+        '<dt><strong>Leased</strong></dt><dd>Lease state: the instance has been handed out to a client and must not be reaped.</dd>',
+        '<dt><strong>Reap</strong></dt><dd>Runtime action: stop an instance that is in <strong>available</strong> lease state after the post-lease grace period has passed. Reap keeps the record available for future acquire.</dd>',
+        '<dt><strong>Destroy</strong></dt><dd>Provider action: permanently delete the Vast instance and remove it from pool tracking.</dd>',
         '</dl>',
       ]),
     ];
@@ -417,7 +417,7 @@ final class VllmPoolAdminForm extends FormBase {
   public function submitReapDryRun(array &$form, FormStateInterface $form_state): void {
     $results = $this->poolManager->reapIdleAvailableInstances(NULL, TRUE);
     if ($results === []) {
-      $this->messenger()->addStatus($this->t('No available pooled instances exceeded the post-lease grace period.'));
+      $this->messenger()->addStatus($this->t('No reusable available pooled instances exceeded the post-lease grace period.'));
     }
     else {
       foreach ($results as $result) {
@@ -437,7 +437,7 @@ final class VllmPoolAdminForm extends FormBase {
   public function submitReapNow(array &$form, FormStateInterface $form_state): void {
     $results = $this->poolManager->reapIdleAvailableInstances(NULL, FALSE);
     if ($results === []) {
-      $this->messenger()->addStatus($this->t('No available pooled instances exceeded the post-lease grace period.'));
+      $this->messenger()->addStatus($this->t('No reusable available pooled instances exceeded the post-lease grace period.'));
     }
     else {
       foreach ($results as $result) {
@@ -524,7 +524,7 @@ final class VllmPoolAdminForm extends FormBase {
     }
 
     $this->poolManager->release($instanceId);
-    $this->messenger()->addStatus($this->t('Released pooled instance @id.', ['@id' => $instanceId]));
+    $this->messenger()->addStatus($this->t('Released runtime lease for @id. The instance remains reusable; release does not stop or destroy it.', ['@id' => $instanceId]));
     $form_state->setRedirectUrl(Url::fromRoute('compute_orchestrator.vllm_pool_admin'));
   }
 
@@ -568,7 +568,7 @@ final class VllmPoolAdminForm extends FormBase {
     }
 
     $this->poolManager->remove($instanceId);
-    $this->messenger()->addStatus($this->t('Removed pooled instance @id.', ['@id' => $instanceId]));
+    $this->messenger()->addStatus($this->t('Removed pool record @id. The Vast instance was not destroyed.', ['@id' => $instanceId]));
     $form_state->setRedirectUrl(Url::fromRoute('compute_orchestrator.vllm_pool_admin'));
   }
 
@@ -715,7 +715,7 @@ final class VllmPoolAdminForm extends FormBase {
   private function buildPoolTableHeader(): array {
     return [
       (string) $this->t('Contract'),
-      (string) $this->t('Lease'),
+      (string) $this->t('Lease state'),
       (string) $this->t('Lease expires'),
       (string) $this->t('Lease countdown'),
       (string) $this->t('Last heartbeat'),
@@ -723,12 +723,13 @@ final class VllmPoolAdminForm extends FormBase {
       (string) $this->t('Model'),
       (string) $this->t('URL'),
       (string) $this->t('Vast cur_state'),
+      (string) $this->t('Runtime state'),
       (string) $this->t('Vast status'),
       (string) $this->t('Last used'),
       (string) $this->t('Last seen'),
       (string) $this->t('Last stopped'),
       (string) $this->t('Reap status'),
-      (string) $this->t('Last status'),
+      (string) $this->t('Last operation'),
       (string) $this->t('Last error'),
     ];
   }
@@ -753,7 +754,7 @@ final class VllmPoolAdminForm extends FormBase {
 
       $leaseStatus = (string) ($record['lease_status'] ?? '');
       $message = (string) ($record['last_error'] ?? '');
-      $lastStatus = '';
+      $lastOperation = $this->formatLastOperation($record);
       $lastError = '';
 
       if ($message !== '') {
@@ -767,7 +768,7 @@ final class VllmPoolAdminForm extends FormBase {
           $lastError = $message;
         }
         else {
-          $lastStatus = $message;
+          $lastOperation = trim($lastOperation . ' — ' . $message, ' —');
         }
       }
 
@@ -785,16 +786,38 @@ final class VllmPoolAdminForm extends FormBase {
         (string) ($record['current_model'] ?? ''),
         (string) ($record['url'] ?? ''),
         (string) ($record['vast_cur_state'] ?? ''),
+        (string) ($record['runtime_state'] ?? ''),
         (string) ($record['vast_actual_status'] ?? ''),
         $this->formatTimestamp($lastUsedAt),
         $this->formatTimestamp((int) ($record['last_seen_at'] ?? 0)),
         $this->formatTimestamp((int) ($record['last_stopped_at'] ?? 0)),
         $this->describeReapStatus($record, $now, $idleSeconds),
-        $lastStatus,
+        $lastOperation,
         $lastError,
       ];
     }
     return $rows;
+  }
+
+  /**
+   * Formats the last operation snapshot from transitional phase/action fields.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   */
+  private function formatLastOperation(array $record): string {
+    $phase = trim((string) ($record['last_phase'] ?? ''));
+    $action = trim((string) ($record['last_action'] ?? ''));
+    if ($phase === '' && $action === '') {
+      return '';
+    }
+    if ($phase === '') {
+      return $action;
+    }
+    if ($action === '') {
+      return $phase;
+    }
+    return $phase . ': ' . $action;
   }
 
   /**

@@ -52,11 +52,15 @@ final class VllmInstancePoolCommand extends DrushCommands {
       (string) ($options['model'] ?? ''),
       (string) ($options['source'] ?? 'manual'),
     );
-    $this->output()->writeln('Registered pooled instance ' . (string) $record['contract_id'] . '.');
+    $this->output()->writeln(
+      'Registered pooled instance ' . (string) $record['contract_id'] . '.',
+    );
   }
 
   /**
    * Lists the current state-backed pool inventory.
+   *
+   * Output uses explicit lease/runtime wording.
    *
    * @command compute:vllm-pool-list
    */
@@ -73,13 +77,16 @@ final class VllmInstancePoolCommand extends DrushCommands {
       }
 
       $this->output()->writeln(sprintf(
-        '%s status=%s workload=%s model=%s url=%s source=%s',
+        '%s lease_status=%s runtime_state=%s workload=%s model=%s url=%s source=%s last_phase=%s last_action=%s',
         $contractId,
         (string) ($record['lease_status'] ?? ''),
+        (string) ($record['runtime_state'] ?? ''),
         (string) ($record['current_workload_mode'] ?? ''),
         (string) ($record['current_model'] ?? ''),
         (string) ($record['url'] ?? ''),
-        (string) ($record['source'] ?? '')
+        (string) ($record['source'] ?? ''),
+        (string) ($record['last_phase'] ?? ''),
+        (string) ($record['last_action'] ?? '')
       ));
     }
   }
@@ -106,9 +113,10 @@ final class VllmInstancePoolCommand extends DrushCommands {
     );
 
     $this->output()->writeln(sprintf(
-      'Acquired %s status=%s workload=%s model=%s url=%s',
+      'Acquired runtime lease contract=%s lease_status=%s runtime_state=%s workload=%s model=%s url=%s',
       (string) ($record['contract_id'] ?? ''),
       (string) ($record['lease_status'] ?? ''),
+      (string) ($record['runtime_state'] ?? ''),
       (string) ($record['current_workload_mode'] ?? ''),
       (string) ($record['current_model'] ?? ''),
       (string) ($record['url'] ?? '')
@@ -125,11 +133,20 @@ final class VllmInstancePoolCommand extends DrushCommands {
    */
   public function release(string $instanceId): void {
     $record = $this->poolManager->release($instanceId);
-    $this->output()->writeln('Released pooled instance ' . (string) $record['contract_id'] . '.');
+    $this->output()->writeln(sprintf(
+      'Released runtime lease contract=%s lease_status=%s runtime_state=%s message=%s',
+      (string) ($record['contract_id'] ?? ''),
+      (string) ($record['lease_status'] ?? ''),
+      (string) ($record['runtime_state'] ?? ''),
+      'instance remains reusable; release does not stop or destroy it',
+    ));
   }
 
   /**
-   * Stops available pooled instances after the post-lease grace period.
+   * Stops reusable available pooled instances.
+   *
+   * The post-lease grace period decides whether an available runtime is old
+   * enough to stop.
    *
    * @param array<string,mixed> $options
    *   Command options keyed by idle-seconds and dry-run.
@@ -157,7 +174,10 @@ final class VllmInstancePoolCommand extends DrushCommands {
       : $this->poolManager->getIdleShutdownSeconds();
     $results = $this->poolManager->reapIdleAvailableInstances($idleSeconds, (bool) ($options['dry-run'] ?? FALSE));
     if ($results === []) {
-      $this->output()->writeln(sprintf('No available pooled instances exceeded the %d second post-lease grace period.', $idleSeconds));
+      $this->output()->writeln(sprintf(
+        'No reusable available pooled instances exceeded the %d second post-lease grace period.',
+        $idleSeconds,
+      ));
       return;
     }
 
@@ -199,7 +219,9 @@ final class VllmInstancePoolCommand extends DrushCommands {
   }
 
   /**
-   * Removes one instance from the pool inventory.
+   * Removes one tracked record from the pool inventory.
+   *
+   * This does not destroy the Vast instance.
    *
    * @param string $instanceId
    *   Contract ID to remove.
@@ -208,7 +230,7 @@ final class VllmInstancePoolCommand extends DrushCommands {
    */
   public function remove(string $instanceId): void {
     $this->poolManager->remove($instanceId);
-    $this->output()->writeln('Removed pooled instance ' . $instanceId . '.');
+    $this->output()->writeln('Removed pool record ' . $instanceId . ' without destroying the Vast instance.');
   }
 
   /**
@@ -253,11 +275,15 @@ final class VllmInstancePoolCommand extends DrushCommands {
   /**
    * Clears the entire state-backed pool inventory.
    *
+   * This does not destroy Vast instances.
+   *
    * @command compute:vllm-pool-clear
    */
   public function clear(): void {
     $this->poolManager->clear();
-    $this->output()->writeln('Cleared pooled instance inventory.');
+    $this->output()->writeln(
+      'Cleared pooled instance inventory. Vast instances were not destroyed.',
+    );
   }
 
 }

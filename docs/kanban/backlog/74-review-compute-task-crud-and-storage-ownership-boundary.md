@@ -30,11 +30,26 @@ Related cards:
 - Umbrella architecture review: `42-review-compute-orchestrator-architecture-and-drupal-coupling.md`
 - Durable Framesmith persistence decision: `41-decide-durable-framesmith-task-persistence-model.md`
 
+## Ownership decision - 2026-04-28
+
+Framesmith transcription task tracking is Framesmith-owned, not `compute_orchestrator`-owned long term.
+
+Decision:
+
+- Framesmith should own transcription task identity, uploaded media relationship, user-facing task status, transcript result, retry/user history, and product-specific task lifecycle.
+- `compute_orchestrator` should own runtime lease acquisition/release, workload preparation, readiness, provider lifecycle, pool state, diagnostics, and idle reap behaviour.
+- The current `FramesmithTranscriptionTaskStore` inside `compute_orchestrator` is transitional plumbing and should be extracted into Framesmith-owned code when Framesmith moves to its own project/module.
+- A generic compute job/task facility may be built later, but it should be designed deliberately from shared needs rather than by promoting the current Framesmith task store by accident.
+
+This card remains useful to define the extraction/refactor steps and the remote runtime orchestration contract.
+
 ## Acceptance criteria
 
-- [ ] Decide whether task records are Framesmith-owned, generic compute-job-owned, or host-app-owned.
+- [x] Decide whether task records are Framesmith-owned, generic compute-job-owned, or host-app-owned.
+  - Decision: Framesmith transcription task records are Framesmith-owned. Generic compute job records are a possible later feature, not the current default.
 - [ ] Define the persistence boundary and adapter interface.
-- [ ] Align with durable Framesmith task persistence card if needed.
+- [x] Align with durable Framesmith task persistence card if needed.
+  - Durable Framesmith persistence should be designed in Framesmith-owned code, not as a generic compute_orchestrator task store by default.
 - [ ] Avoid hard-wiring to Drupal state or a single module-owned storage mechanism.
 
 ## Grooming questions

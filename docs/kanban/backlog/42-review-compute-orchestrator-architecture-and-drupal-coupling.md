@@ -79,11 +79,15 @@ This card should produce an architecture note/ADR plus focused implementation ca
 
 ## Acceptance criteria
 
-- [ ] Inventory current Drupal-coupled seams in `html/modules/custom/compute_orchestrator`.
-- [ ] Inventory current Vast.ai-coupled seams.
-- [ ] Inventory task/job ownership seams, especially Framesmith task storage versus generic compute job state.
-- [ ] Inventory launcher/worker seams, especially Drush-launched child processes.
-- [ ] Define a target architecture split:
+- [x] Inventory current Drupal-coupled seams in `html/modules/custom/compute_orchestrator`.
+  - Recorded in `html/modules/custom/compute_orchestrator/ARCHITECTURE.md` under `Architecture review: framework-light orchestration seams`.
+- [x] Inventory current Vast.ai-coupled seams.
+  - Provider adapter seam recorded in `ARCHITECTURE.md`.
+- [x] Inventory task/job ownership seams, especially Framesmith task storage versus generic compute job state.
+  - Task and job storage seam recorded in `ARCHITECTURE.md`.
+- [x] Inventory launcher/worker seams, especially Drush-launched child processes.
+  - Worker launcher seam recorded in `ARCHITECTURE.md`.
+- [x] Define a target architecture split:
   - framework-light orchestration core;
   - Drupal adapters;
   - provider adapters;
@@ -91,9 +95,11 @@ This card should produce an architecture note/ADR plus focused implementation ca
   - task/job storage adapters;
   - launcher/worker adapters.
 - [ ] Identify which existing interfaces are already good seams and which need extraction or renaming.
-- [ ] Identify the minimum refactors that reduce coupling without destabilizing the working prod path.
+- [x] Identify the minimum refactors that reduce coupling without destabilizing the working prod path.
+  - Initial direction: normalize pool record state, review operational semantics, move Framesmith-specific task tracking toward Framesmith-owned code, and name provider and launcher boundaries explicitly.
 - [ ] Decide which Drupal-admin flows may continue using Batch API for now and which headless flows should avoid Batch API.
-- [ ] Produce a short architecture note or ADR.
+- [x] Produce a short architecture note.
+  - Added dated architecture review section to `html/modules/custom/compute_orchestrator/ARCHITECTURE.md`.
 - [ ] Create focused implementation cards for any approved refactors.
 
 ## Initial seam inventory prompts
@@ -133,3 +139,7 @@ This card extracts the architecture concerns from the completed Framesmith Phase
 - `Vast.ai coupling boundary`
 - `Drush launcher / worker boundary`
 - `Task CRUD / storage ownership boundary`
+
+## Decision note - 2026-04-28
+
+Framesmith transcription task tracking is product-specific and should move out of `compute_orchestrator` into Framesmith-owned code during extraction. `compute_orchestrator` should provide runtime orchestration over a remote contract; a generic compute job facility can be designed later if multiple clients need one.

@@ -559,3 +559,160 @@ Each endpoint must:
 * `ldconfig -p | grep libcuda` (or check that `libcuda.so` exists)
 
 If either check fails, immediately destroy the instance and mark the host as infrastructure fatal. This avoids full model startup attempts on broken GPU hosts.
+
+## Architecture review: framework-light orchestration seams
+
+Date: 2026-04-28
+Status: current direction
+
+### Decision
+
+Keep the current Drupal-hosted implementation because it is production-proven and useful now, but treat Drupal as the host adapter rather than the conceptual center of the orchestration system.
+
+The core model should be progressively shaped around portable orchestration concepts:
+
+- acquire and release a runtime lease;
+- switch or prepare a workload;
+- determine runtime readiness;
+- manage provider lifecycle;
+- persist canonical pool state;
+- run a task or job against a leased runtime;
+- expose operator diagnostics and recovery paths.
+
+Drupal can remain the current shell for configuration, routes, forms, commands, state storage, logging, and batch pages. Those are host concerns. They should not leak deeper than necessary into the orchestration model.
+
+This is not a rewrite mandate. The immediate goal is to name the seams and choose small refactors that prevent the working production path from becoming a trap.
+
+### Current seam map
+
+#### Core orchestration candidates
+
+These services are closest to the durable orchestration core:
+
+- `VllmPoolManager`
+- `VllmPoolRepositoryInterface`
+- `VllmWorkloadCatalogInterface`
+- `GenericVllmRuntimeManagerInterface`
+- `WorkloadReadinessAdapterInterface`
+- `SshConnectionContext`
+- `SshProbeRequest`
+- `FramesmithRuntimeLeaseManagerInterface`
+
+They should trend toward explicit domain language and away from direct knowledge of Drupal forms, controllers, batch callbacks, or command wiring.
+
+#### Drupal host adapters
+
+These classes are Drupal host surface area. They are allowed to know about routes, forms, permissions, state, configuration, logging, file system services, and command invocation:
+
+- `ComputeOrchestratorSettingsForm`
+- `VllmPoolAdminForm`
+- `VllmPoolBatch`
+- `FramesmithTranscriptionController`
+- Drush command classes under `src/Command`
+- `VllmPoolRepository` while it remains backed by Drupal state
+- `BadHostRegistry` while it remains backed by Drupal state
+- `FramesmithTranscriptionTaskStore` while it remains backed by Drupal state and Drupal file paths
+
+The existence of Drupal adapters is good. The risk is adapter concerns becoming the vocabulary of the core model.
+
+#### Provider adapter seam
+
+The current provider is Vast.ai. These services are provider-shaped and should be treated as Vast adapter code, not generic orchestration language:
+
+- `VastApiClientInterface` / `VastApiClient`
+- `VastRestClientInterface` / `VastRestClient`
+- `VastInstanceLifecycleClientInterface` / `VastInstanceLifecycleClient`
+- `VastCredentialProviderInterface` / `VastCredentialProvider`
+- provider-specific fields such as contract identifiers, offers, machine identifiers, rented state, external ports, and Vast status names
+
+Near-term work can keep using Vast directly. The architectural rule is that Vast-specific concepts should be translated at the provider boundary before they become canonical pool concepts.
+
+#### Worker launcher seam
+
+`FramesmithTranscriptionLauncher` currently launches work through Drush and the Drupal root. That is acceptable as the present Drupal-hosted adapter.
+
+It should not become the conceptual contract for asynchronous work.
+
+The conceptual seam should be something like:
+
+- launch a task;
+- observe task status;
+- capture task output or failure;
+- recover or mark abandoned tasks.
+
+Drush is one possible adapter for that seam, not the seam itself.
+
+#### Task and job storage seam
+
+Decision: Framesmith transcription task tracking is product-specific and should move out of `compute_orchestrator` into Framesmith-owned code during extraction.
+
+Current state:
+
+- Framesmith task storage currently lives inside `compute_orchestrator` through `FramesmithTranscriptionTaskStore` and Drupal state.
+- That is acceptable as transitional production plumbing, but it is not the long-term ownership boundary.
+- AI listing inference does not use this task store, which is a useful signal that the current task model is Framesmith-specific rather than proven generic orchestration infrastructure.
+
+Target ownership:
+
+- Framesmith owns transcription task identity, uploaded media relationship, user-facing task state, transcript result, retry/user history, and product-specific task lifecycle.
+- `compute_orchestrator` owns runtime leasing, workload preparation, readiness, provider lifecycle, pool state, diagnostics, and lease release/reap behaviour.
+- A generic compute job/task facility may be built later, but it should be designed deliberately from shared needs rather than by promoting the current Framesmith task store by accident.
+
+This means future Framesmith extraction should remove `FramesmithTranscriptionTaskStore` and related product task tracking from `compute_orchestrator`, while preserving a remote runtime orchestration contract that Framesmith can call.
+
+#### Operator state seam
+
+Pool records currently mix behaviour-driving state and operator-display state:
+
+- `lease_status`
+- `runtime_state`
+- `current_workload_mode`
+- `current_model`
+- `last_phase`
+- `last_action`
+- `last_error`
+- `last_seen_at`
+- `last_used_at`
+- `last_stopped_at`
+- `last_reap_at`
+
+The desired direction is a clear split between:
+
+- canonical fields that drive behaviour;
+- last-operation fields that explain the most recent mutation;
+- optional history fields for debugging and audit.
+
+This is closely related to the backlog card `normalize-vllm-pool-record-state-fields.md`.
+
+### Current risks
+
+1. `VllmPoolManager` is valuable but heavy. It currently knows too much about provider lifecycle, pool state, readiness, failure handling, and operator messages.
+2. Vast-specific names and concepts are still present in several interfaces and core paths.
+3. Drupal state is used as both persistence and coordination. That is acceptable for now, but it should be wrapped behind explicit storage interfaces where records matter.
+4. Framesmith is product-specific but currently lives inside `compute_orchestrator`. That is acceptable as a transitional integration, but it should not confuse generic compute orchestration with product task ownership.
+5. Drush is a practical launcher, but it should remain an adapter.
+6. Operator semantics need tightening so command names, state names, user interface labels, and implementation behaviour agree.
+
+### Near-term refactor direction
+
+Do not start with a module split.
+
+Start with small clarity refactors that pay debt without destabilizing production:
+
+1. Normalize pool record state fields and mutation helpers.
+2. Review operational semantics across commands, user interface, state names, and service methods.
+3. Move Framesmith-specific task tracking toward Framesmith-owned code while keeping `compute_orchestrator` focused on runtime orchestration.
+4. Name the provider boundary explicitly, even if Vast remains the only implementation.
+5. Name the launcher boundary explicitly, even if Drush remains the only implementation.
+
+The optional admin user interface submodule remains a later candidate. It should only be done when the core/adapters boundary is clearer and the split buys freedom rather than ceremony.
+
+### First implementation candidates
+
+The first implementation work should come from these groomed cards:
+
+- `docs/kanban/backlog/75-review-operational-semantics-across-compute-ui-commands-state-and-code.md`
+- `docs/kanban/backlog/74-review-compute-task-crud-and-storage-ownership-boundary.md`
+- `docs/kanban/backlog/normalize-vllm-pool-record-state-fields.md`
+
+The first implementation should not be a broad extraction. It should be a contained debt payoff that makes the current production system easier to reason about.

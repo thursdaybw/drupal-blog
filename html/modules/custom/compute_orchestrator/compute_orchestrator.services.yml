@@ -109,10 +109,14 @@ services:
 
   Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncherInterface: '@compute_orchestrator.framesmith_transcription_launcher'
 
-  compute_orchestrator.framesmith_runtime_lease_manager:
-    class: Drupal\compute_orchestrator\Service\FramesmithVllmPoolLeaseManager
+  compute_orchestrator.framesmith_direct_compute_runtime_client:
+    class: Drupal\compute_orchestrator\Service\FramesmithDirectComputeRuntimeClient
     arguments:
       - '@compute_orchestrator.vllm_pool_manager'
+
+  compute_orchestrator.framesmith_runtime_lease_manager: '@compute_orchestrator.framesmith_direct_compute_runtime_client'
+
+  Drupal\compute_orchestrator\Service\FramesmithComputeRuntimeClientInterface: '@compute_orchestrator.framesmith_direct_compute_runtime_client'
 
   Drupal\compute_orchestrator\Service\FramesmithRuntimeLeaseManagerInterface: '@compute_orchestrator.framesmith_runtime_lease_manager'
 

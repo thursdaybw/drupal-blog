@@ -27,7 +27,8 @@ case "${TARGET}" in
     ;;
 esac
 
-FIXTURE_PATH="${FRAMESMITH_SMOKE_FIXTURE_PATH:-${FRAMESMITH_STAGING_FIXTURE_PATH:-/var/www/html/html/framesmith-browser-smoke-real.mp4}}"
+HOST_FIXTURE_PATH="${FRAMESMITH_SMOKE_HOST_FIXTURE_PATH:-${FRAMESMITH_STAGING_HOST_FIXTURE_PATH:-html/framesmith-browser-smoke-real.mp4}}"
+CONTAINER_FIXTURE_PATH="${FRAMESMITH_SMOKE_FIXTURE_PATH:-${FRAMESMITH_STAGING_FIXTURE_PATH:-/var/www/html/html/framesmith-browser-smoke-real.mp4}}"
 GRACE_SECONDS="${FRAMESMITH_SMOKE_REAP_GRACE_SECONDS:-${FRAMESMITH_STAGING_REAP_GRACE_SECONDS:-0}}"
 VERIFY_REAP="${FRAMESMITH_SMOKE_VERIFY_REAP:-${VERIFY_REAP_DEFAULT}}"
 UPLOAD_DELAY_MS="${FRAMESMITH_SMOKE_UPLOAD_DELAY_MS:-250}"
@@ -62,8 +63,8 @@ if [[ "${DROP_FIRST_UPLOAD_CHUNK}" != "0" && "${DROP_FIRST_UPLOAD_CHUNK}" != "1"
   echo "FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK must be 0 or 1." >&2
   exit 1
 fi
-if [[ ! -f "${FIXTURE_PATH}" ]]; then
-  echo "Framesmith smoke fixture not found: ${FIXTURE_PATH}" >&2
+if [[ ! -f "${HOST_FIXTURE_PATH}" ]]; then
+  echo "Framesmith smoke fixture not found on host: ${HOST_FIXTURE_PATH}" >&2
   exit 1
 fi
 
@@ -72,8 +73,9 @@ RUN_STARTED_AT="$(date +%s)"
 echo "== Framesmith deployed mobile smoke gate =="
 echo "target=${TARGET}"
 echo "base_url=${BASE_URL}"
-echo "fixture_path=${FIXTURE_PATH}"
-echo "fixture_size=$(wc -c < "${FIXTURE_PATH}")"
+echo "host_fixture_path=${HOST_FIXTURE_PATH}"
+echo "container_fixture_path=${CONTAINER_FIXTURE_PATH}"
+echo "fixture_size=$(wc -c < "${HOST_FIXTURE_PATH}")"
 echo "verify_reap=${VERIFY_REAP}"
 echo "reap_grace_seconds=${GRACE_SECONDS}"
 echo "upload_delay_ms=${UPLOAD_DELAY_MS}"
@@ -131,7 +133,7 @@ fi
 
 echo "== run black-box mobile browser smoke =="
 ddev exec bash -lc \
-  "export FRAMESMITH_SMOKE_BASE_URL='${BASE_URL}'; export FRAMESMITH_SMOKE_FIXTURE_PATH='${FIXTURE_PATH}'; export FRAMESMITH_SMOKE_LOGIN_URL=\"\$(cat /var/www/html/${LOGIN_FILE})\"; export FRAMESMITH_SMOKE_REQUIRE_CHUNKED_UPLOAD=1; export FRAMESMITH_SMOKE_UPLOAD_DELAY_MS='${UPLOAD_DELAY_MS}'; export FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK='${DROP_FIRST_UPLOAD_CHUNK}'; export FRAMESMITH_SMOKE_VIDEO_READY_TIMEOUT_MS='180000'; vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/compute_orchestrator/tests/src/ExistingSiteJavascript/FramesmithStagingBrowserSmokeTest.php"
+  "export FRAMESMITH_SMOKE_BASE_URL='${BASE_URL}'; export FRAMESMITH_SMOKE_FIXTURE_PATH='${CONTAINER_FIXTURE_PATH}'; export FRAMESMITH_SMOKE_LOGIN_URL=\"\$(cat /var/www/html/${LOGIN_FILE})\"; export FRAMESMITH_SMOKE_REQUIRE_CHUNKED_UPLOAD=1; export FRAMESMITH_SMOKE_UPLOAD_DELAY_MS='${UPLOAD_DELAY_MS}'; export FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK='${DROP_FIRST_UPLOAD_CHUNK}'; export FRAMESMITH_SMOKE_VIDEO_READY_TIMEOUT_MS='180000'; vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/compute_orchestrator/tests/src/ExistingSiteJavascript/FramesmithStagingBrowserSmokeTest.php"
 
 if [[ "${VERIFY_REAP}" == "1" ]]; then
   echo "== capture latest completed Framesmith contract =="

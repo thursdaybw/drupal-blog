@@ -27,7 +27,7 @@ case "${TARGET}" in
     ;;
 esac
 
-FIXTURE_PATH="${FRAMESMITH_SMOKE_FIXTURE_PATH:-/var/www/html/html/framesmith-browser-smoke-real.mp4}"
+FIXTURE_PATH="/var/www/html/html/framesmith-browser-smoke-real.mp4"
 GRACE_SECONDS="${FRAMESMITH_SMOKE_REAP_GRACE_SECONDS:-${FRAMESMITH_STAGING_REAP_GRACE_SECONDS:-0}}"
 VERIFY_REAP="${FRAMESMITH_SMOKE_VERIFY_REAP:-${VERIFY_REAP_DEFAULT}}"
 UPLOAD_DELAY_MS="${FRAMESMITH_SMOKE_UPLOAD_DELAY_MS:-250}"
@@ -73,7 +73,7 @@ echo "== Framesmith deployed mobile smoke gate =="
 echo "target=${TARGET}"
 echo "base_url=${BASE_URL}"
 echo "fixture_path=${FIXTURE_PATH}"
-echo "fixture_size=$(ddev exec wc -c < "${FIXTURE_PATH}" | tr -d '[:space:]')"
+echo "fixture_size=$(ddev exec wc -c "${FIXTURE_PATH}" | awk '{print $1}')"
 echo "verify_reap=${VERIFY_REAP}"
 echo "reap_grace_seconds=${GRACE_SECONDS}"
 echo "upload_delay_ms=${UPLOAD_DELAY_MS}"

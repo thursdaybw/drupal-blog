@@ -169,14 +169,18 @@ PHP
   ${REMOTE_EXEC} '../vendor/bin/drush cron'
 
   echo "== verify cron reaped released runtime =="
-  remote_script /tmp/framesmith_verify_reap.php <<PHP
+  REAP_SUMMARY="$(remote_script /tmp/framesmith_verify_reap.php <<PHP
 <?php
 \$contract_id = '${CONTRACT_ID}';
 \$repo = \Drupal::service('compute_orchestrator.vllm_pool_repository');
 \$record = \$repo->get(\$contract_id);
 if (!is_array(\$record)) {
-  fwrite(STDERR, "Pool record not found for contract {\$contract_id}.\n");
-  exit(1);
+  echo json_encode([
+    'ok' => FALSE,
+    'contract_id' => \$contract_id,
+    'error' => "Pool record not found for contract {\$contract_id}.",
+  ], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+  exit(0);
 }
 \$summary = [
   'contract_id' => \$contract_id,
@@ -188,17 +192,20 @@ if (!is_array(\$record)) {
   'last_reap_at' => \$record['last_reap_at'] ?? NULL,
   'last_stopped_at' => \$record['last_stopped_at'] ?? NULL,
 ];
-echo json_encode(\$summary, JSON_UNESCAPED_SLASHES) . PHP_EOL;
-\$ok = (\$summary['lease_status'] === 'available')
+\$summary['ok'] = (\$summary['lease_status'] === 'available')
   && (\$summary['runtime_state'] === 'stopped')
   && (\$summary['last_phase'] === 'idle_reap')
   && in_array(\$summary['last_action'], ['stopped', 'already_inactive'], TRUE)
   && trim((string) \$summary['last_error']) === '';
-if (!\$ok) {
-  fwrite(STDERR, "Cron did not persist an idle_reap stopped outcome for contract {\$contract_id}.\n");
-  exit(1);
-}
+echo json_encode(\$summary, JSON_UNESCAPED_SLASHES) . PHP_EOL;
 PHP
+)"
+  echo "${REAP_SUMMARY}"
+  REAP_OK="$(printf '%s' "${REAP_SUMMARY}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo (($j["ok"] ?? false) === true) ? "1" : "0";')"
+  if [[ "${REAP_OK}" != "1" ]]; then
+    echo "Cron did not persist an idle_reap stopped outcome for contract ${CONTRACT_ID}." >&2
+    exit 1
+  fi
 fi
 
 echo "== Framesmith ${TARGET} mobile smoke gate passed =="

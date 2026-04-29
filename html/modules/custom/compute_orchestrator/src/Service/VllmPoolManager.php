@@ -31,6 +31,7 @@ final class VllmPoolManager {
   private const STATE_MAX_INSTANCES_PER_WORKLOAD = 'compute_orchestrator.vllm_pool.max_instances_per_workload';
   private const DEFAULT_MAX_INSTANCES_PER_WORKLOAD = 5;
   private const STATE_WORKLOAD_READY_TIMEOUT_SECONDS = 'compute_orchestrator.vllm_pool.workload_ready_timeout_seconds';
+  private const STATE_VAST_STATE_CHANGE_SPACING_SECONDS = 'compute_orchestrator.vast.state_change_spacing_seconds';
   // vLLM cold starts (especially first-time model loads) frequently exceed
   // 5 minutes. Keep the default aligned with the vLLM readiness adapter's
   // declared startup timeout.
@@ -608,7 +609,7 @@ final class VllmPoolManager {
         ];
       }
 
-      $this->instanceLifecycleClient->stopInstance($contractId);
+      $this->stopInstanceForIdleReap($contractId);
       $now = time();
       $record['runtime_state'] = 'stopped';
       $record['last_phase'] = 'idle_reap';
@@ -624,7 +625,8 @@ final class VllmPoolManager {
       ];
     }
     catch (\Throwable $exception) {
-      $record['lease_status'] = 'unavailable';
+      $record['lease_status'] = $this->isVastRateLimitFailure($exception) ? 'available' : 'unavailable';
+      $record['runtime_state'] = 'running';
       $record['last_seen_at'] = time();
       $record['last_phase'] = 'idle_reap';
       $record['last_action'] = 'failed';
@@ -636,6 +638,53 @@ final class VllmPoolManager {
         'message' => $exception->getMessage(),
       ];
     }
+  }
+
+  /**
+   * Stops an instance for idle reap, retrying brief Vast API rate limits.
+   */
+  private function stopInstanceForIdleReap(string $contractId): void {
+    $maxAttempts = 4;
+    $lastException = NULL;
+    $spacingSeconds = $this->getVastStateChangeSpacingSeconds();
+
+    for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+      if ($spacingSeconds > 0) {
+        sleep($spacingSeconds);
+      }
+      try {
+        $this->instanceLifecycleClient->stopInstance($contractId);
+        return;
+      }
+      catch (\Throwable $exception) {
+        $lastException = $exception;
+        if (!$this->isVastRateLimitFailure($exception) || $attempt === $maxAttempts) {
+          throw $exception;
+        }
+        sleep(max($spacingSeconds, $attempt));
+      }
+    }
+
+    if ($lastException instanceof \Throwable) {
+      throw $lastException;
+    }
+  }
+
+  /**
+   * Returns TRUE when a Vast API failure is a retryable rate limit.
+   */
+  private function isVastRateLimitFailure(\Throwable $exception): bool {
+    $message = strtolower($exception->getMessage());
+    return str_contains($message, '429')
+      || str_contains($message, 'too many requests')
+      || str_contains($message, 'api requests too frequent');
+  }
+
+  /**
+   * Returns the minimum spacing before Vast state-change requests.
+   */
+  private function getVastStateChangeSpacingSeconds(): int {
+    return max(0, (int) $this->state->get(self::STATE_VAST_STATE_CHANGE_SPACING_SECONDS, 2));
   }
 
   /**

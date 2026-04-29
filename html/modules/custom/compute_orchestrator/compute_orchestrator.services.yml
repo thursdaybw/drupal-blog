@@ -113,6 +113,7 @@ services:
     class: Drupal\compute_orchestrator\Service\FramesmithDirectComputeRuntimeClient
     arguments:
       - '@compute_orchestrator.vllm_pool_manager'
+      - '@logger.factory'
 
   compute_orchestrator.framesmith_runtime_lease_manager: '@compute_orchestrator.framesmith_direct_compute_runtime_client'
 

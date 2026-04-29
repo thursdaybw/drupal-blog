@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+
 /**
  * Direct in-process Framesmith compute client backed by VllmPoolManager.
  *
@@ -12,14 +16,31 @@ namespace Drupal\compute_orchestrator\Service;
  */
 final class FramesmithDirectComputeRuntimeClient implements FramesmithRuntimeLeaseManagerInterface {
 
+  /**
+   * Module logger channel.
+   */
+  private LoggerInterface $logger;
+
   public function __construct(
     private readonly VllmPoolManager $poolManager,
-  ) {}
+    LoggerChannelFactoryInterface|LoggerInterface|null $logger = NULL,
+  ) {
+    if ($logger instanceof LoggerChannelFactoryInterface) {
+      $this->logger = $logger->get('compute_orchestrator');
+    }
+    elseif ($logger instanceof LoggerInterface) {
+      $this->logger = $logger;
+    }
+    else {
+      $this->logger = new NullLogger();
+    }
+  }
 
   /**
    * {@inheritdoc}
    */
   public function acquireWhisperRuntime(): array {
+    $this->emitTransitionalWarning('acquireWhisperRuntime');
     $record = $this->poolManager->acquire('whisper');
 
     return $this->normalizePoolRecord($record);
@@ -29,7 +50,19 @@ final class FramesmithDirectComputeRuntimeClient implements FramesmithRuntimeLea
    * {@inheritdoc}
    */
   public function releaseRuntime(string $contractId): array {
+    $this->emitTransitionalWarning('releaseRuntime');
     return $this->poolManager->release($contractId);
+  }
+
+  /**
+   * Emits a loud warning when the transitional direct compute path is used.
+   */
+  private function emitTransitionalWarning(string $operation): void {
+    $message = 'Framesmith is using the transitional direct in-process compute runtime client. Migrate this path to the remote compute runtime lease API before extracting Framesmith.';
+    $this->logger->warning($message, [
+      'operation' => $operation,
+    ]);
+    trigger_error($message, E_USER_WARNING);
   }
 
   /**

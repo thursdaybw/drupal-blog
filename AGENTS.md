@@ -79,9 +79,37 @@ Example split direction for eBay infrastructure:
 - Name modules, classes, methods, and variables by intent.
 - Prefer small, explicit abstractions when they remove ambiguity or make testing easier.
 
+### 12. Strict SRP at method level
+- Treat SRP as a method-level rule, not just a class-level aspiration.
+- Split control flow into small, named methods whenever a block starts doing more than one thing.
+- Prefer granular methods that each answer one plain-English question, such as:
+  - "Is this failure retryable?"
+  - "Record the successful stop outcome."
+  - "Wait before asking the provider for a state change."
+  - "Keep this failed record eligible for the next reap."
+- Avoid long methods that mix provider I/O, retry policy, state mutation, result formatting, and logging.
+- A method should usually sit at one level of abstraction. Do not mix low-level API mechanics with high-level orchestration in the same method.
+- If a comment is needed to explain a subsection inside a method, strongly consider extracting that subsection into a named method and putting the explanation on that method.
+
+### 13. Pedagogical comments and docblocks
+- Comments must explain why the code exists, what operational constraint it protects, or what future maintainers must not accidentally break.
+- Do not write comments that merely repeat the code in English.
+- Public and important private methods should have human-readable docblocks when the reason for the method is not obvious from the name alone.
+- For edge cases, retries, provider quirks, cleanup code, safety guards, and money-costing operations, add plain-text pedagogical comments that explain:
+  - the external behavior or failure mode being defended against;
+  - why the chosen state transition is safe;
+  - what would go wrong if the guard, retry, or delay were removed.
+- Comments should be useful to a tired human reading production code during an incident.
+- Prefer comments like:
+  - "A Vast 429 means the stop request was throttled, not that the instance is unusable. Keep it available so the next cron pass still sees an expensive live instance to stop."
+- Avoid comments like:
+  - "Set lease_status to available."
+
 ## Definition of Done for new work
 - Boundaries are explicit and respected.
 - Interfaces and adapters are coherent.
+- SRP has been checked at class and method level, with mixed responsibilities extracted into named methods.
+- Why-based comments/docblocks explain non-obvious edge cases, provider quirks, retries, cleanup, safety guards, and cost controls.
 - Tests cover the changed behavior.
 - Docs/architecture notes updated.
 - No unrelated files changed in the commit.

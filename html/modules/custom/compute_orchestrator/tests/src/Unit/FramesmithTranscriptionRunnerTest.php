@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
 require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionTaskStoreInterface.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithComputeRuntimeClientInterface.php';
+require_once __DIR__ . '/../../../src/Service/WhisperRuntimeClientInterface.php';
 require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionExecutorInterface.php';
 require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionRunner.php';
 
-use Drupal\compute_orchestrator\Service\FramesmithComputeRuntimeClientInterface;
+use Drupal\compute_orchestrator\Service\WhisperRuntimeClientInterface;
 use Drupal\compute_orchestrator\Service\FramesmithTranscriptionExecutorInterface;
 use Drupal\compute_orchestrator\Service\FramesmithTranscriptionRunner;
 use Drupal\compute_orchestrator\Service\FramesmithTranscriptionTaskStoreInterface;
@@ -48,7 +48,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     ];
 
     $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
-    $leaseManager = $this->createMock(FramesmithComputeRuntimeClientInterface::class);
+    $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
     $taskStore->method('get')
@@ -140,7 +140,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     ];
 
     $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
-    $leaseManager = $this->createMock(FramesmithComputeRuntimeClientInterface::class);
+    $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
     $taskStore->method('get')->willReturn([
@@ -193,7 +193,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
    */
   public function testRunThrowsForUnknownTask(): void {
     $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
-    $leaseManager = $this->createMock(FramesmithComputeRuntimeClientInterface::class);
+    $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
     $taskStore->method('get')
@@ -217,7 +217,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
    */
   public function testRunThrowsWhenTaskHasNoAudio(): void {
     $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
-    $leaseManager = $this->createMock(FramesmithComputeRuntimeClientInterface::class);
+    $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
     $taskStore->method('get')
@@ -252,7 +252,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     ];
 
     $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
-    $leaseManager = $this->createMock(FramesmithComputeRuntimeClientInterface::class);
+    $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
     $taskStore->method('get')->willReturn([
@@ -303,7 +303,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     $audioPath = 'temporary://framesmith-transcription/task-acquire-fail/audio.wav';
 
     $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
-    $leaseManager = $this->createMock(FramesmithComputeRuntimeClientInterface::class);
+    $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
     $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
 
     $taskStore->method('get')->willReturn([

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
 use Drupal\compute_orchestrator\Service\BadHostRegistry;
-use Drupal\compute_orchestrator\Service\FramesmithComputeRuntimeClientInterface;
-use Drupal\compute_orchestrator\Service\FramesmithDirectComputeRuntimeClient;
+use Drupal\compute_orchestrator\Service\WhisperRuntimeClientInterface;
+use Drupal\compute_orchestrator\Service\DirectWhisperRuntimeClient;
 use Drupal\compute_orchestrator\Service\FramesmithRuntimeLeaseManagerInterface;
 use Drupal\compute_orchestrator\Service\GenericVllmRuntimeManagerInterface;
 use Drupal\compute_orchestrator\Service\VastInstanceLifecycleClientInterface;
@@ -18,9 +18,9 @@ use Drupal\Core\State\StateInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
 
-require_once __DIR__ . '/../../../src/Service/FramesmithComputeRuntimeClientInterface.php';
+require_once __DIR__ . '/../../../src/Service/WhisperRuntimeClientInterface.php';
 require_once __DIR__ . '/../../../src/Service/FramesmithRuntimeLeaseManagerInterface.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithDirectComputeRuntimeClient.php';
+require_once __DIR__ . '/../../../src/Service/DirectWhisperRuntimeClient.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolManager.php';
 require_once __DIR__ . '/../../../src/Service/BadHostRegistry.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolRepositoryInterface.php';
@@ -35,7 +35,7 @@ require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
 /**
  * Tests the transitional direct Framesmith compute client.
  */
-final class FramesmithDirectComputeRuntimeClientTest extends TestCase {
+final class DirectWhisperRuntimeClientTest extends TestCase {
 
   /**
    * Tests the direct client is still interface-compatible.
@@ -43,7 +43,7 @@ final class FramesmithDirectComputeRuntimeClientTest extends TestCase {
   public function testDirectClientImplementsComputeRuntimeInterface(): void {
     $client = $this->newClient(new DirectClientTestLogger());
 
-    $this->assertInstanceOf(FramesmithComputeRuntimeClientInterface::class, $client);
+    $this->assertInstanceOf(WhisperRuntimeClientInterface::class, $client);
     $this->assertInstanceOf(FramesmithRuntimeLeaseManagerInterface::class, $client);
   }
 
@@ -70,7 +70,7 @@ final class FramesmithDirectComputeRuntimeClientTest extends TestCase {
     }
 
     $this->assertStringStartsWith(
-      'Framesmith is using the transitional direct in-process compute runtime client.',
+      'The transitional direct in-process Whisper runtime client is in use.',
       (string) $capturedWarning,
     );
     $this->assertSame('contract-1', $released['contract_id']);
@@ -83,7 +83,7 @@ final class FramesmithDirectComputeRuntimeClientTest extends TestCase {
   /**
    * Builds a direct compute runtime client with an in-memory pool.
    */
-  private function newClient(DirectClientTestLogger $logger): FramesmithDirectComputeRuntimeClient {
+  private function newClient(DirectClientTestLogger $logger): DirectWhisperRuntimeClient {
     $state = $this->createMock(StateInterface::class);
     $state->method('get')->willReturnCallback(static function (string $key, mixed $default = NULL): mixed {
       return $default;
@@ -112,7 +112,7 @@ final class FramesmithDirectComputeRuntimeClientTest extends TestCase {
       0,
     );
 
-    return new FramesmithDirectComputeRuntimeClient($manager, $logger);
+    return new DirectWhisperRuntimeClient($manager, $logger);
   }
 
 }

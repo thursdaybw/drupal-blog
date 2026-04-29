@@ -12,12 +12,12 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * Remote HTTP Framesmith compute client backed by runtime lease endpoints.
+ * Remote HTTP Whisper runtime client backed by runtime lease endpoints.
  */
-final class FramesmithHttpComputeRuntimeClient implements FramesmithComputeRuntimeClientInterface {
+final class HttpWhisperRuntimeClient implements WhisperRuntimeClientInterface {
 
-  public const STATE_BASE_URL = 'compute_orchestrator.framesmith_http_compute_runtime.base_url';
-  public const STATE_ACCESS_TOKEN = 'compute_orchestrator.framesmith_http_compute_runtime.access_token';
+  public const STATE_BASE_URL = 'compute_orchestrator.whisper_runtime_http_client.base_url';
+  public const STATE_ACCESS_TOKEN = 'compute_orchestrator.whisper_runtime_http_client.access_token';
 
   /**
    * Module logger channel.
@@ -107,12 +107,12 @@ final class FramesmithHttpComputeRuntimeClient implements FramesmithComputeRunti
       $response = $this->httpClient->request($method, $url, $options);
     }
     catch (\Throwable $exception) {
-      $this->logger->error('Framesmith remote compute runtime request failed: @message', [
+      $this->logger->error('Remote Whisper runtime request failed: @message', [
         '@message' => $exception->getMessage(),
         'method' => $method,
         'path' => $path,
       ]);
-      throw new \RuntimeException('Framesmith remote compute runtime request failed: ' . $exception->getMessage(), 0, $exception);
+      throw new \RuntimeException('Remote Whisper runtime request failed: ' . $exception->getMessage(), 0, $exception);
     }
 
     return $this->decodeJsonResponse($response, $method, $path);
@@ -184,7 +184,7 @@ final class FramesmithHttpComputeRuntimeClient implements FramesmithComputeRunti
   private function getBaseUrl(): string {
     $baseUrl = rtrim(trim((string) $this->state->get(self::STATE_BASE_URL, '')), '/');
     if ($baseUrl === '') {
-      throw new \RuntimeException('Framesmith remote compute runtime base URL is not configured.');
+      throw new \RuntimeException('Remote Whisper runtime base URL is not configured.');
     }
     return $baseUrl;
   }
@@ -195,7 +195,7 @@ final class FramesmithHttpComputeRuntimeClient implements FramesmithComputeRunti
   private function getAccessToken(): string {
     $token = trim((string) $this->state->get(self::STATE_ACCESS_TOKEN, ''));
     if ($token === '') {
-      throw new \RuntimeException('Framesmith remote compute runtime OAuth access token is not configured.');
+      throw new \RuntimeException('Remote Whisper runtime OAuth access token is not configured.');
     }
     return $token;
   }

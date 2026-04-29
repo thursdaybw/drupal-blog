@@ -4,27 +4,27 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
-use Drupal\compute_orchestrator\Service\FramesmithHttpComputeRuntimeClient;
+use Drupal\compute_orchestrator\Service\HttpWhisperRuntimeClient;
 use Drupal\Core\State\StateInterface;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
-require_once __DIR__ . '/../../../src/Service/FramesmithComputeRuntimeClientInterface.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithHttpComputeRuntimeClient.php';
+require_once __DIR__ . '/../../../src/Service/WhisperRuntimeClientInterface.php';
+require_once __DIR__ . '/../../../src/Service/HttpWhisperRuntimeClient.php';
 
 /**
  * Tests the remote HTTP Framesmith compute runtime client.
  */
-final class FramesmithHttpComputeRuntimeClientTest extends TestCase {
+final class HttpWhisperRuntimeClientTest extends TestCase {
 
   /**
    * Tests acquire calls the remote runtime lease API and maps the lease shape.
    */
   public function testAcquireWhisperRuntimeRequestsRemoteLease(): void {
     $httpClient = $this->createMock(ClientInterface::class);
-    $client = new FramesmithHttpComputeRuntimeClient(
+    $client = new HttpWhisperRuntimeClient(
       $httpClient,
       $this->configuredState(),
       new NullLogger(),
@@ -74,7 +74,7 @@ final class FramesmithHttpComputeRuntimeClientTest extends TestCase {
   public function testReleaseRuntimeRequiresLeaseToken(): void {
     $httpClient = $this->createMock(ClientInterface::class);
     $httpClient->expects($this->never())->method('request');
-    $client = new FramesmithHttpComputeRuntimeClient(
+    $client = new HttpWhisperRuntimeClient(
       $httpClient,
       $this->configuredState(),
       new NullLogger(),
@@ -91,7 +91,7 @@ final class FramesmithHttpComputeRuntimeClientTest extends TestCase {
    */
   public function testReleaseRuntimeCallsRemoteReleaseEndpoint(): void {
     $httpClient = $this->createMock(ClientInterface::class);
-    $client = new FramesmithHttpComputeRuntimeClient(
+    $client = new HttpWhisperRuntimeClient(
       $httpClient,
       $this->configuredState(),
       new NullLogger(),
@@ -134,8 +134,8 @@ final class FramesmithHttpComputeRuntimeClientTest extends TestCase {
     $state = $this->createMock(StateInterface::class);
     $state->method('get')->willReturnCallback(static function (string $key, mixed $default = NULL): mixed {
       return match ($key) {
-        FramesmithHttpComputeRuntimeClient::STATE_BASE_URL => 'https://compute.example.test/',
-        FramesmithHttpComputeRuntimeClient::STATE_ACCESS_TOKEN => 'test-access-token',
+        HttpWhisperRuntimeClient::STATE_BASE_URL => 'https://compute.example.test/',
+        HttpWhisperRuntimeClient::STATE_ACCESS_TOKEN => 'test-access-token',
         default => $default,
       };
     });

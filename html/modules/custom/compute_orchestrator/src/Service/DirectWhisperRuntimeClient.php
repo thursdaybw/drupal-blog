@@ -9,12 +9,12 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * Direct in-process Framesmith compute client backed by VllmPoolManager.
+ * Direct in-process Whisper runtime client backed by VllmPoolManager.
  *
  * This preserves the current production behaviour while the remote HTTP client
  * is developed and tested behind the same interface.
  */
-final class FramesmithDirectComputeRuntimeClient implements FramesmithRuntimeLeaseManagerInterface {
+final class DirectWhisperRuntimeClient implements FramesmithRuntimeLeaseManagerInterface {
 
   /**
    * Module logger channel.
@@ -58,7 +58,7 @@ final class FramesmithDirectComputeRuntimeClient implements FramesmithRuntimeLea
    * Emits a loud warning when the transitional direct compute path is used.
    */
   private function emitTransitionalWarning(string $operation): void {
-    $message = 'Framesmith is using the transitional direct in-process compute runtime client. Migrate this path to the remote compute runtime lease API before extracting Framesmith.';
+    $message = 'The transitional direct in-process Whisper runtime client is in use. Migrate this path to the remote compute runtime lease API before extracting product backends.';
     $this->logger->warning($message, [
       'operation' => $operation,
     ]);

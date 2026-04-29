@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Drupal\compute_orchestrator\Service;
 
 /**
- * Defines the Framesmith backend client for compute runtimes.
+ * Defines a backend client for Whisper compute runtimes.
  *
  * This is the extraction-facing seam. The current implementation may call
  * Drupal PHP services directly, while a later implementation can call the
  * remote compute runtime lease API over HTTP without changing the Framesmith
  * transcription runner contract.
  */
-interface FramesmithComputeRuntimeClientInterface {
+interface WhisperRuntimeClientInterface {
 
   /**
    * Acquires a Whisper runtime for transcription work.

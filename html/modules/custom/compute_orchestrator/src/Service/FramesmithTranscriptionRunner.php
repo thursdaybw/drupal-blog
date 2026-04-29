@@ -11,7 +11,7 @@ final class FramesmithTranscriptionRunner {
 
   public function __construct(
     private readonly FramesmithTranscriptionTaskStoreInterface $taskStore,
-    private readonly FramesmithComputeRuntimeClientInterface $leaseManager,
+    private readonly WhisperRuntimeClientInterface $leaseManager,
     private readonly FramesmithTranscriptionExecutorInterface $executor,
   ) {}
 

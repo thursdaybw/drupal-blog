@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 use Drupal\Core\File\FileSystemInterface;
 
 /**
  * Returns deterministic fake transcripts for frontend and dev work.
  */
-final class FramesmithFakeTranscriptionExecutor implements FramesmithTranscriptionExecutorInterface {
+final class FakeTranscriptionExecutor implements TranscriptionExecutorInterface {
 
   public function __construct(
     private readonly FileSystemInterface $fileSystem,

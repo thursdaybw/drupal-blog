@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 use Drupal\Core\State\StateInterface;
 
 /**
  * Selects the active Framesmith transcription executor mode.
  */
-final class FramesmithSelectableTranscriptionExecutor implements FramesmithTranscriptionExecutorInterface {
+final class SelectableTranscriptionExecutor implements TranscriptionExecutorInterface {
 
   private const STATE_KEY = 'compute_orchestrator.framesmith_transcription_executor_mode';
 
   public function __construct(
-    private readonly FramesmithWhisperHttpTranscriptionExecutor $realExecutor,
-    private readonly FramesmithFakeTranscriptionExecutor $fakeExecutor,
+    private readonly WhisperHttpTranscriptionExecutor $realExecutor,
+    private readonly FakeTranscriptionExecutor $fakeExecutor,
     private readonly StateInterface $state,
   ) {}
 
@@ -36,7 +36,7 @@ final class FramesmithSelectableTranscriptionExecutor implements FramesmithTrans
   /**
    * Returns the currently active executor implementation.
    */
-  private function getActiveExecutor(): FramesmithTranscriptionExecutorInterface {
+  private function getActiveExecutor(): TranscriptionExecutorInterface {
     return $this->getConfiguredMode() === 'fake'
       ? $this->fakeExecutor
       : $this->realExecutor;

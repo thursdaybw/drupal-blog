@@ -4,21 +4,21 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
-require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionExecutorInterface.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithWhisperHttpTranscriptionExecutor.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionExecutorInterface.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/WhisperHttpTranscriptionExecutor.php';
 
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\compute_orchestrator\Service\FramesmithWhisperHttpTranscriptionExecutor;
+use Drupal\media_transcription\Service\WhisperHttpTranscriptionExecutor;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @coversDefaultClass \Drupal\compute_orchestrator\Service\FramesmithWhisperHttpTranscriptionExecutor
+ * @coversDefaultClass \Drupal\media_transcription\Service\WhisperHttpTranscriptionExecutor
  *
  * @group compute_orchestrator
  */
-final class FramesmithWhisperHttpTranscriptionExecutorTest extends TestCase {
+final class WhisperHttpTranscriptionExecutorTest extends TestCase {
 
   /**
    * @covers ::transcribe
@@ -50,7 +50,7 @@ final class FramesmithWhisperHttpTranscriptionExecutorTest extends TestCase {
         'duration' => 5.7,
       ], JSON_THROW_ON_ERROR)));
 
-    $executor = new FramesmithWhisperHttpTranscriptionExecutor($httpClient, $fileSystem);
+    $executor = new WhisperHttpTranscriptionExecutor($httpClient, $fileSystem);
     $result = $executor->transcribe([
       'url' => 'http://10.0.0.4:9000',
       'current_model' => 'openai/whisper-large-v3-turbo',
@@ -100,7 +100,7 @@ final class FramesmithWhisperHttpTranscriptionExecutorTest extends TestCase {
         ], JSON_THROW_ON_ERROR));
       });
 
-    $executor = new FramesmithWhisperHttpTranscriptionExecutor($httpClient, $fileSystem);
+    $executor = new WhisperHttpTranscriptionExecutor($httpClient, $fileSystem);
     $result = $executor->transcribe([
       'url' => 'http://10.0.0.4:9000',
       'current_model' => 'openai/whisper-large-v3-turbo',

@@ -36,10 +36,3 @@ services:
       - '@compute_orchestrator.vast_rest_client'
     tags:
       - { name: drush.command }
-
-  compute_orchestrator.framesmith_transcription_command:
-    class: Drupal\compute_orchestrator\Command\FramesmithTranscriptionCommand
-    arguments:
-      - '@service_container'
-    tags:
-      - { name: drush.command }

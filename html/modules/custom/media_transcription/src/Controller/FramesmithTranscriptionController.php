@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Controller;
+namespace Drupal\media_transcription\Controller;
 
-use Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncherInterface;
-use Drupal\compute_orchestrator\Service\FramesmithTranscriptionTaskStoreInterface;
+use Drupal\media_transcription\Service\TranscriptionLauncherInterface;
+use Drupal\media_transcription\Service\TranscriptionTaskStoreInterface;
 use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -18,8 +18,8 @@ use Symfony\Component\HttpFoundation\Response;
 final class FramesmithTranscriptionController extends ControllerBase {
 
   public function __construct(
-    private readonly FramesmithTranscriptionTaskStoreInterface $taskStore,
-    private readonly FramesmithTranscriptionLauncherInterface $launcher,
+    private readonly TranscriptionTaskStoreInterface $taskStore,
+    private readonly TranscriptionLauncherInterface $launcher,
   ) {}
 
   /**
@@ -27,8 +27,8 @@ final class FramesmithTranscriptionController extends ControllerBase {
    */
   public static function create(ContainerInterface $container): self {
     return new self(
-      $container->get('compute_orchestrator.framesmith_transcription_task_store'),
-      $container->get('compute_orchestrator.framesmith_transcription_launcher'),
+      $container->get('media_transcription.transcription_task_store'),
+      $container->get('media_transcription.transcription_launcher'),
     );
   }
 

@@ -1,0 +1,7 @@
+services:
+  media_transcription.transcription_command:
+    class: Drupal\media_transcription\Command\TranscriptionCommand
+    arguments:
+      - '@service_container'
+    tags:
+      - { name: drush.command }

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * Defines storage operations for Framesmith transcription tasks.
  */
-interface FramesmithTranscriptionTaskStoreInterface {
+interface TranscriptionTaskStoreInterface {
 
   /**
    * Creates a new task.

@@ -14,43 +14,6 @@ compute_orchestrator.settings:
   requirements:
     _permission: 'administer compute orchestrator'
 
-compute_orchestrator.framesmith_transcription_start:
-  path: '/api/framesmith/transcription/start'
-  defaults:
-    _controller: '\Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController::start'
-    _title: 'Framesmith transcription start'
-  requirements:
-    _permission: 'use framesmith transcription api'
-  methods: [POST]
-
-compute_orchestrator.framesmith_transcription_upload:
-  path: '/api/framesmith/transcription/upload'
-  defaults:
-    _controller: '\Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController::upload'
-    _title: 'Framesmith transcription upload'
-  requirements:
-    _permission: 'use framesmith transcription api'
-  methods: [POST]
-
-compute_orchestrator.framesmith_transcription_status:
-  path: '/api/framesmith/transcription/status'
-  defaults:
-    _controller: '\Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController::status'
-    _title: 'Framesmith transcription status'
-  requirements:
-    _permission: 'use framesmith transcription api'
-  methods: [GET]
-
-compute_orchestrator.framesmith_transcription_result:
-  path: '/api/framesmith/transcription/result'
-  defaults:
-    _controller: '\Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController::result'
-    _title: 'Framesmith transcription result'
-  requirements:
-    _permission: 'use framesmith transcription api'
-  methods: [GET]
-
-
 compute_orchestrator.runtime_lease_acquire:
   path: '/api/compute-orchestrator/runtime-leases'
   defaults:

@@ -1,0 +1,9 @@
+name: 'Media Transcription'
+type: module
+description: 'Provides reusable transcription task, worker, executor, and Whisper runtime client services for product modules.'
+package: Bevans Bench
+core_version_requirement: ^10 || ^11
+dependencies:
+  - drupal:system
+  - drupal:file
+  - compute_orchestrator:compute_orchestrator

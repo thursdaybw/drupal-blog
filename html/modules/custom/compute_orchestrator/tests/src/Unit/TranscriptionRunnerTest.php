@@ -4,23 +4,23 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
-require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionTaskStoreInterface.php';
-require_once __DIR__ . '/../../../src/Service/WhisperRuntimeClientInterface.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionExecutorInterface.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionRunner.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionTaskStoreInterface.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/WhisperRuntimeClientInterface.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionExecutorInterface.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionRunner.php';
 
-use Drupal\compute_orchestrator\Service\WhisperRuntimeClientInterface;
-use Drupal\compute_orchestrator\Service\FramesmithTranscriptionExecutorInterface;
-use Drupal\compute_orchestrator\Service\FramesmithTranscriptionRunner;
-use Drupal\compute_orchestrator\Service\FramesmithTranscriptionTaskStoreInterface;
+use Drupal\media_transcription\Service\WhisperRuntimeClientInterface;
+use Drupal\media_transcription\Service\TranscriptionExecutorInterface;
+use Drupal\media_transcription\Service\TranscriptionRunner;
+use Drupal\media_transcription\Service\TranscriptionTaskStoreInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @coversDefaultClass \Drupal\compute_orchestrator\Service\FramesmithTranscriptionRunner
+ * @coversDefaultClass \Drupal\media_transcription\Service\TranscriptionRunner
  *
  * @group compute_orchestrator
  */
-final class FramesmithTranscriptionRunnerTest extends TestCase {
+final class TranscriptionRunnerTest extends TestCase {
 
   /**
    * @covers ::run
@@ -47,9 +47,9 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
       'completed_at' => 123456789,
     ];
 
-    $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
+    $taskStore = $this->createMock(TranscriptionTaskStoreInterface::class);
     $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
-    $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
+    $executor = $this->createMock(TranscriptionExecutorInterface::class);
 
     $taskStore->method('get')
       ->willReturn([
@@ -120,7 +120,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
       });
     $taskStore->expects($this->never())->method('fail');
 
-    $runner = new FramesmithTranscriptionRunner($taskStore, $leaseManager, $executor);
+    $runner = new TranscriptionRunner($taskStore, $leaseManager, $executor);
     $runner->run($taskId);
   }
 
@@ -139,9 +139,9 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
       'completed_at' => 123456789,
     ];
 
-    $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
+    $taskStore = $this->createMock(TranscriptionTaskStoreInterface::class);
     $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
-    $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
+    $executor = $this->createMock(TranscriptionExecutorInterface::class);
 
     $taskStore->method('get')->willReturn([
       'task_id' => $taskId,
@@ -184,7 +184,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
       });
     $taskStore->expects($this->never())->method('fail');
 
-    $runner = new FramesmithTranscriptionRunner($taskStore, $leaseManager, $executor);
+    $runner = new TranscriptionRunner($taskStore, $leaseManager, $executor);
     $runner->run($taskId);
   }
 
@@ -192,9 +192,9 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
    * @covers ::run
    */
   public function testRunThrowsForUnknownTask(): void {
-    $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
+    $taskStore = $this->createMock(TranscriptionTaskStoreInterface::class);
     $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
-    $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
+    $executor = $this->createMock(TranscriptionExecutorInterface::class);
 
     $taskStore->method('get')
       ->willReturn(NULL);
@@ -205,7 +205,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     $executor->expects($this->never())->method('transcribe');
     $taskStore->expects($this->never())->method('transition');
 
-    $runner = new FramesmithTranscriptionRunner($taskStore, $leaseManager, $executor);
+    $runner = new TranscriptionRunner($taskStore, $leaseManager, $executor);
 
     $this->expectException(\RuntimeException::class);
     $this->expectExceptionMessage('Unknown Framesmith transcription task: missing-task');
@@ -216,9 +216,9 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
    * @covers ::run
    */
   public function testRunThrowsWhenTaskHasNoAudio(): void {
-    $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
+    $taskStore = $this->createMock(TranscriptionTaskStoreInterface::class);
     $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
-    $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
+    $executor = $this->createMock(TranscriptionExecutorInterface::class);
 
     $taskStore->method('get')
       ->willReturn(['task_id' => 'task-no-audio', 'debug_events' => []]);
@@ -228,7 +228,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     $leaseManager->expects($this->never())->method('acquireWhisperRuntime');
     $executor->expects($this->never())->method('transcribe');
 
-    $runner = new FramesmithTranscriptionRunner($taskStore, $leaseManager, $executor);
+    $runner = new TranscriptionRunner($taskStore, $leaseManager, $executor);
 
     $this->expectException(\RuntimeException::class);
     $this->expectExceptionMessage('Task has no uploaded audio to transcribe: task-no-audio');
@@ -251,9 +251,9 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
       'lease_status' => 'available',
     ];
 
-    $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
+    $taskStore = $this->createMock(TranscriptionTaskStoreInterface::class);
     $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
-    $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
+    $executor = $this->createMock(TranscriptionExecutorInterface::class);
 
     $taskStore->method('get')->willReturn([
       'task_id' => $taskId,
@@ -288,7 +288,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
       )
       ->willReturn(['task_id' => $taskId, 'status' => 'failed']);
 
-    $runner = new FramesmithTranscriptionRunner($taskStore, $leaseManager, $executor);
+    $runner = new TranscriptionRunner($taskStore, $leaseManager, $executor);
 
     $this->expectException(\RuntimeException::class);
     $this->expectExceptionMessage('remote execution blew up');
@@ -302,9 +302,9 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
     $taskId = 'task-acquire-fail';
     $audioPath = 'temporary://framesmith-transcription/task-acquire-fail/audio.wav';
 
-    $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
+    $taskStore = $this->createMock(TranscriptionTaskStoreInterface::class);
     $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);
-    $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
+    $executor = $this->createMock(TranscriptionExecutorInterface::class);
 
     $taskStore->method('get')->willReturn([
       'task_id' => $taskId,
@@ -333,7 +333,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
       )
       ->willReturn(['task_id' => $taskId, 'status' => 'failed']);
 
-    $runner = new FramesmithTranscriptionRunner($taskStore, $leaseManager, $executor);
+    $runner = new TranscriptionRunner($taskStore, $leaseManager, $executor);
 
     $this->expectException(\RuntimeException::class);
     $this->expectExceptionMessage('pool unavailable');

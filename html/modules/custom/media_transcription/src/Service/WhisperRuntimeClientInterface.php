@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 /**
  * Defines a backend client for Whisper compute runtimes.

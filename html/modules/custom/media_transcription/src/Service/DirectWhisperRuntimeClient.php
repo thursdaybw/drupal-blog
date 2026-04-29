@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
+use Drupal\compute_orchestrator\Service\VllmPoolManager;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -14,7 +15,7 @@ use Psr\Log\NullLogger;
  * This preserves the current production behaviour while the remote HTTP client
  * is developed and tested behind the same interface.
  */
-final class DirectWhisperRuntimeClient implements FramesmithRuntimeLeaseManagerInterface {
+final class DirectWhisperRuntimeClient implements WhisperRuntimeClientInterface {
 
   /**
    * Module logger channel.
@@ -66,13 +67,13 @@ final class DirectWhisperRuntimeClient implements FramesmithRuntimeLeaseManagerI
   }
 
   /**
-   * Converts a pool record into the Framesmith backend lease shape.
+   * Converts a pool record into the transcription backend lease shape.
    *
    * @param array<string,mixed> $record
    *   Internal pool record.
    *
    * @return array<string,mixed>
-   *   Framesmith backend lease details.
+   *   Transcription backend lease details.
    */
   private function normalizePoolRecord(array $record): array {
     return [

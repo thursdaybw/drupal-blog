@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 /**
  * Executes one Framesmith transcription against the selected runtime mode.
  */
-interface FramesmithTranscriptionExecutorInterface {
+interface TranscriptionExecutorInterface {
 
   /**
    * Determines whether this executor requires a real runtime lease.

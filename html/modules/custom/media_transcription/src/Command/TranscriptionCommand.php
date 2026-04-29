@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Command;
+namespace Drupal\media_transcription\Command;
 
 use Drush\Commands\DrushCommands;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -10,7 +10,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Runs one Framesmith transcription task.
  */
-final class FramesmithTranscriptionCommand extends DrushCommands {
+final class TranscriptionCommand extends DrushCommands {
 
   public function __construct(
     private readonly ContainerInterface $container,
@@ -27,10 +27,10 @@ final class FramesmithTranscriptionCommand extends DrushCommands {
     $this->output()->writeln('Running Framesmith transcription task ' . $taskId . '.');
 
     try {
-      $this->container->get('compute_orchestrator.framesmith_transcription_runner')->run($taskId);
+      $this->container->get('media_transcription.transcription_runner')->run($taskId);
     }
     catch (\Throwable $exception) {
-      $this->container->get('logger.channel.compute_orchestrator')->error(
+      $this->container->get('logger.channel.media_transcription')->error(
         'Framesmith transcription task {task_id} failed: {message}',
         [
           'task_id' => $taskId,

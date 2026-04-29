@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
-use Drupal\compute_orchestrator\Service\HttpWhisperRuntimeClient;
+use Drupal\media_transcription\Service\HttpWhisperRuntimeClient;
 use Drupal\Core\State\StateInterface;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
-require_once __DIR__ . '/../../../src/Service/WhisperRuntimeClientInterface.php';
-require_once __DIR__ . '/../../../src/Service/HttpWhisperRuntimeClient.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/WhisperRuntimeClientInterface.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/HttpWhisperRuntimeClient.php';
 
 /**
  * Tests the remote HTTP Framesmith compute runtime client.
@@ -39,7 +39,7 @@ final class HttpWhisperRuntimeClientTest extends TestCase {
           TestCase::assertSame('Bearer test-access-token', $options['headers']['Authorization'] ?? NULL);
           TestCase::assertSame('application/json', $options['headers']['Accept'] ?? NULL);
           TestCase::assertSame('whisper', $options['json']['workload'] ?? NULL);
-          TestCase::assertSame('framesmith', $options['json']['client'] ?? NULL);
+          TestCase::assertSame('media_transcription', $options['json']['client'] ?? NULL);
           TestCase::assertSame('transcription', $options['json']['purpose'] ?? NULL);
           TestCase::assertTrue($options['json']['allow_provision'] ?? FALSE);
           return TRUE;
@@ -81,7 +81,7 @@ final class HttpWhisperRuntimeClientTest extends TestCase {
     );
 
     $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('Cannot release remote Framesmith runtime lease without a lease token.');
+    $this->expectExceptionMessage('Cannot release remote Whisper runtime lease without a lease token.');
 
     $client->releaseRuntime('123');
   }
@@ -105,7 +105,7 @@ final class HttpWhisperRuntimeClientTest extends TestCase {
         $this->callback(function (array $options): bool {
           TestCase::assertSame('Bearer test-access-token', $options['headers']['Authorization'] ?? NULL);
           TestCase::assertSame('lease-token-123', $options['json']['lease_token'] ?? NULL);
-          TestCase::assertSame('framesmith transcription task finished', $options['json']['reason'] ?? NULL);
+          TestCase::assertSame('transcription task finished', $options['json']['reason'] ?? NULL);
           return TRUE;
         }),
       )

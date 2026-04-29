@@ -1,0 +1,61 @@
+services:
+  media_transcription.transcription_task_store:
+    class: Drupal\media_transcription\Service\TranscriptionTaskStore
+    arguments:
+      - '@state'
+      - '@uuid'
+      - '@file_system'
+
+  Drupal\media_transcription\Service\TranscriptionTaskStoreInterface: '@media_transcription.transcription_task_store'
+
+  media_transcription.transcription_launcher:
+    class: Drupal\media_transcription\Service\TranscriptionLauncher
+    arguments:
+      - '@media_transcription.transcription_task_store'
+      - '@logger.factory'
+      - '%app.root%'
+      - '@file_system'
+
+  Drupal\media_transcription\Service\TranscriptionLauncherInterface: '@media_transcription.transcription_launcher'
+
+  media_transcription.direct_whisper_runtime_client:
+    class: Drupal\media_transcription\Service\DirectWhisperRuntimeClient
+    arguments:
+      - '@compute_orchestrator.vllm_pool_manager'
+      - '@logger.factory'
+
+  media_transcription.http_whisper_runtime_client:
+    class: Drupal\media_transcription\Service\HttpWhisperRuntimeClient
+    arguments:
+      - '@http_client'
+      - '@state'
+      - '@logger.factory'
+
+  Drupal\media_transcription\Service\WhisperRuntimeClientInterface: '@media_transcription.direct_whisper_runtime_client'
+
+  media_transcription.real_transcription_executor:
+    class: Drupal\media_transcription\Service\WhisperHttpTranscriptionExecutor
+    arguments:
+      - '@http_client'
+      - '@file_system'
+
+  media_transcription.fake_transcription_executor:
+    class: Drupal\media_transcription\Service\FakeTranscriptionExecutor
+    arguments:
+      - '@file_system'
+
+  media_transcription.transcription_executor:
+    class: Drupal\media_transcription\Service\SelectableTranscriptionExecutor
+    arguments:
+      - '@media_transcription.real_transcription_executor'
+      - '@media_transcription.fake_transcription_executor'
+      - '@state'
+
+  Drupal\media_transcription\Service\TranscriptionExecutorInterface: '@media_transcription.transcription_executor'
+
+  media_transcription.transcription_runner:
+    class: Drupal\media_transcription\Service\TranscriptionRunner
+    arguments:
+      - '@media_transcription.transcription_task_store'
+      - '@media_transcription.direct_whisper_runtime_client'
+      - '@media_transcription.transcription_executor'

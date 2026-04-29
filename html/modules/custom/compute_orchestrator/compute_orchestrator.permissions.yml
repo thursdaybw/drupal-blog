@@ -2,11 +2,6 @@ administer compute orchestrator:
   title: 'Administer compute orchestrator'
   description: 'View and run compute orchestrator pool and provisioning controls.'
 
-use framesmith transcription api:
-  title: 'Use Framesmith transcription API'
-  description: 'Create, upload, poll, and read Framesmith transcription tasks. This may launch paid compute through the pooled runtime backend.'
-
-
 use compute runtime leases:
   title: 'Use compute runtime leases'
   description: 'Acquire, inspect, renew, and release compute runtime leases through the remote runtime API. This may launch paid compute through the pooled runtime backend.'

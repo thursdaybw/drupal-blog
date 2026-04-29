@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 use Drupal\Core\File\FileSystemInterface;
 use GuzzleHttp\ClientInterface;
@@ -11,7 +11,7 @@ use GuzzleHttp\Exception\GuzzleException;
 /**
  * Calls the leased Whisper runtime over HTTP to produce transcripts.
  */
-final class FramesmithWhisperHttpTranscriptionExecutor implements FramesmithTranscriptionExecutorInterface {
+final class WhisperHttpTranscriptionExecutor implements TranscriptionExecutorInterface {
 
   public function __construct(
     private readonly ClientInterface $httpClient,

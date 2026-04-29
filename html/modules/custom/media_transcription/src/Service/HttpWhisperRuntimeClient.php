@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\State\StateInterface;
@@ -47,7 +47,7 @@ final class HttpWhisperRuntimeClient implements WhisperRuntimeClientInterface {
     $payload = $this->requestJson('POST', '/api/compute-orchestrator/runtime-leases', [
       'json' => [
         'workload' => 'whisper',
-        'client' => 'framesmith',
+        'client' => 'media_transcription',
         'purpose' => 'transcription',
         'allow_provision' => TRUE,
       ],
@@ -62,7 +62,7 @@ final class HttpWhisperRuntimeClient implements WhisperRuntimeClientInterface {
   public function releaseRuntime(string $contractId, ?string $leaseToken = NULL): array {
     $leaseToken = trim((string) $leaseToken);
     if ($leaseToken === '') {
-      throw new \RuntimeException('Cannot release remote Framesmith runtime lease without a lease token.');
+      throw new \RuntimeException('Cannot release remote Whisper runtime lease without a lease token.');
     }
 
     $payload = $this->requestJson(
@@ -71,7 +71,7 @@ final class HttpWhisperRuntimeClient implements WhisperRuntimeClientInterface {
       [
         'json' => [
           'lease_token' => $leaseToken,
-          'reason' => 'framesmith transcription task finished',
+          'reason' => 'transcription task finished',
         ],
       ],
     );

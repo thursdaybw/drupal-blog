@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Drupal\Tests\compute_orchestrator\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController;
-use Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncherInterface;
-use Drupal\compute_orchestrator\Service\FramesmithTranscriptionTaskStoreInterface;
+use Drupal\media_transcription\Controller\FramesmithTranscriptionController;
+use Drupal\media_transcription\Service\TranscriptionLauncherInterface;
+use Drupal\media_transcription\Service\TranscriptionTaskStoreInterface;
 use Symfony\Component\HttpFoundation\Request;
 
-require_once __DIR__ . '/../../../src/Controller/FramesmithTranscriptionController.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionTaskStoreInterface.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionLauncherInterface.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Controller/FramesmithTranscriptionController.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionTaskStoreInterface.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionLauncherInterface.php';
 
 /**
  * Verifies the Framesmith transcription controller contract.
@@ -30,7 +30,7 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
     'system',
     'user',
     'file',
-    'compute_orchestrator',
+    'compute_orchestrator', 'media_transcription',
   ];
 
   /**
@@ -61,7 +61,7 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
     $this->assertSame('awaiting_upload', $payload['status']);
     $this->assertNotEmpty($payload['task_id']);
 
-    $task = $this->container->get('compute_orchestrator.framesmith_transcription_task_store')->get($payload['task_id']);
+    $task = $this->container->get('media_transcription.transcription_task_store')->get($payload['task_id']);
     $this->assertSame('vid-1', $task['video_id']);
     $this->assertSame('awaiting_upload', $task['status']);
   }
@@ -70,14 +70,14 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
    * Verifies start launches an existing task with uploaded audio.
    */
   public function testStartLaunchesWhenTaskAlreadyHasUploadedAudio(): void {
-    $taskStore = $this->container->get('compute_orchestrator.framesmith_transcription_task_store');
-    assert($taskStore instanceof FramesmithTranscriptionTaskStoreInterface);
+    $taskStore = $this->container->get('media_transcription.transcription_task_store');
+    assert($taskStore instanceof TranscriptionTaskStoreInterface);
     $task = $taskStore->create(['video_id' => 'vid-2']);
     $taskStore->merge($task['task_id'], [
       'local_audio_path' => 'temporary://framesmith-transcription/' . $task['task_id'] . '/audio.wav',
     ]);
 
-    $fakeLauncher = new class() implements FramesmithTranscriptionLauncherInterface {
+    $fakeLauncher = new class() implements TranscriptionLauncherInterface {
 
       /**
        * Captured launch calls.
@@ -101,7 +101,7 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
       }
 
     };
-    $this->container->set('compute_orchestrator.framesmith_transcription_launcher', $fakeLauncher);
+    $this->container->set('media_transcription.transcription_launcher', $fakeLauncher);
 
     $controller = FramesmithTranscriptionController::create($this->container);
     $response = $controller->start(Request::create(
@@ -126,8 +126,8 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
    * Verifies status and result return stored task data.
    */
   public function testStatusAndResultExposeStoredTaskData(): void {
-    $taskStore = $this->container->get('compute_orchestrator.framesmith_transcription_task_store');
-    assert($taskStore instanceof FramesmithTranscriptionTaskStoreInterface);
+    $taskStore = $this->container->get('media_transcription.transcription_task_store');
+    assert($taskStore instanceof TranscriptionTaskStoreInterface);
     $task = $taskStore->create(['video_id' => 'vid-3']);
     $taskStore->transition($task['task_id'], 'completed', [
       'runtime_contract_id' => '35456908',
@@ -165,10 +165,10 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
    * Verifies the real launcher records output-seam debug data.
    */
   public function testRealLauncherCapturesLaunchDebugWhenOutputPathIsMissing(): void {
-    $taskStore = $this->container->get('compute_orchestrator.framesmith_transcription_task_store');
-    assert($taskStore instanceof FramesmithTranscriptionTaskStoreInterface);
-    $launcher = $this->container->get('compute_orchestrator.framesmith_transcription_launcher');
-    assert($launcher instanceof FramesmithTranscriptionLauncherInterface);
+    $taskStore = $this->container->get('media_transcription.transcription_task_store');
+    assert($taskStore instanceof TranscriptionTaskStoreInterface);
+    $launcher = $this->container->get('media_transcription.transcription_launcher');
+    assert($launcher instanceof TranscriptionLauncherInterface);
 
     $task = $taskStore->create(['video_id' => 'launch-debug-video']);
     $taskStore->merge($task['task_id'], [

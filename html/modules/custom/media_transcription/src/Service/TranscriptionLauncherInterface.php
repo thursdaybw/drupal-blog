@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 /**
  * Launches detached Framesmith transcription work.
  */
-interface FramesmithTranscriptionLauncherInterface {
+interface TranscriptionLauncherInterface {
 
   /**
    * Launches one transcription task asynchronously.

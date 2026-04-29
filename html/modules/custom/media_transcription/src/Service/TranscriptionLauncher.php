@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
@@ -11,7 +11,7 @@ use Psr\Log\LoggerInterface;
 /**
  * Launches detached Framesmith transcription runners.
  */
-final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLauncherInterface {
+final class TranscriptionLauncher implements TranscriptionLauncherInterface {
 
   /**
    * Logger channel for transcription launcher events.
@@ -19,7 +19,7 @@ final class FramesmithTranscriptionLauncher implements FramesmithTranscriptionLa
   private readonly LoggerInterface $logger;
 
   public function __construct(
-    private readonly FramesmithTranscriptionTaskStoreInterface $taskStore,
+    private readonly TranscriptionTaskStoreInterface $taskStore,
     LoggerChannelFactoryInterface $loggerFactory,
     private readonly string $appRoot,
     private readonly FileSystemInterface $fileSystem,

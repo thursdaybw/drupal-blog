@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
 use Drupal\compute_orchestrator\Service\BadHostRegistry;
-use Drupal\compute_orchestrator\Service\WhisperRuntimeClientInterface;
-use Drupal\compute_orchestrator\Service\DirectWhisperRuntimeClient;
-use Drupal\compute_orchestrator\Service\FramesmithRuntimeLeaseManagerInterface;
+use Drupal\media_transcription\Service\WhisperRuntimeClientInterface;
+use Drupal\media_transcription\Service\DirectWhisperRuntimeClient;
 use Drupal\compute_orchestrator\Service\GenericVllmRuntimeManagerInterface;
 use Drupal\compute_orchestrator\Service\VastInstanceLifecycleClientInterface;
 use Drupal\compute_orchestrator\Service\VastRestClientInterface;
@@ -18,9 +17,8 @@ use Drupal\Core\State\StateInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
 
-require_once __DIR__ . '/../../../src/Service/WhisperRuntimeClientInterface.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithRuntimeLeaseManagerInterface.php';
-require_once __DIR__ . '/../../../src/Service/DirectWhisperRuntimeClient.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/WhisperRuntimeClientInterface.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/DirectWhisperRuntimeClient.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolManager.php';
 require_once __DIR__ . '/../../../src/Service/BadHostRegistry.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolRepositoryInterface.php';
@@ -44,7 +42,6 @@ final class DirectWhisperRuntimeClientTest extends TestCase {
     $client = $this->newClient(new DirectClientTestLogger());
 
     $this->assertInstanceOf(WhisperRuntimeClientInterface::class, $client);
-    $this->assertInstanceOf(FramesmithRuntimeLeaseManagerInterface::class, $client);
   }
 
   /**

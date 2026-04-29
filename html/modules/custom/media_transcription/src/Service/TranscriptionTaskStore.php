@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 use Drupal\Component\Uuid\UuidInterface;
 use Drupal\Core\File\FileSystemInterface;
@@ -17,7 +17,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  * repository once task volume, concurrent writes, or retention requirements
  * grow beyond local development and controlled smoke testing.
  */
-final class FramesmithTranscriptionTaskStore implements FramesmithTranscriptionTaskStoreInterface {
+final class TranscriptionTaskStore implements TranscriptionTaskStoreInterface {
 
   private const STATE_KEY = 'compute_orchestrator.framesmith_transcription.tasks';
 

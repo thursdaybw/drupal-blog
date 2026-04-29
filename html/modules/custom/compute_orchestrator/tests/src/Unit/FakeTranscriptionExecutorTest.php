@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
-require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionExecutorInterface.php';
-require_once __DIR__ . '/../../../src/Service/FramesmithFakeTranscriptionExecutor.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionExecutorInterface.php';
+require_once __DIR__ . '/../../../../media_transcription/src/Service/FakeTranscriptionExecutor.php';
 
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\compute_orchestrator\Service\FramesmithFakeTranscriptionExecutor;
+use Drupal\media_transcription\Service\FakeTranscriptionExecutor;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @coversDefaultClass \Drupal\compute_orchestrator\Service\FramesmithFakeTranscriptionExecutor
+ * @coversDefaultClass \Drupal\media_transcription\Service\FakeTranscriptionExecutor
  *
  * @group compute_orchestrator
  */
-final class FramesmithFakeTranscriptionExecutorTest extends TestCase {
+final class FakeTranscriptionExecutorTest extends TestCase {
 
   /**
    * @covers ::requiresRuntimeLease
@@ -29,7 +29,7 @@ final class FramesmithFakeTranscriptionExecutorTest extends TestCase {
       ->with('temporary://framesmith/framesmith-known-text.wav')
       ->willReturn('/tmp/framesmith-known-text.wav');
 
-    $executor = new FramesmithFakeTranscriptionExecutor($fileSystem);
+    $executor = new FakeTranscriptionExecutor($fileSystem);
 
     $this->assertFalse($executor->requiresRuntimeLease());
 

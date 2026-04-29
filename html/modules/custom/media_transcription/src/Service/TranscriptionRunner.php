@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Drupal\compute_orchestrator\Service;
+namespace Drupal\media_transcription\Service;
 
 /**
  * Runs one Framesmith transcription task.
  */
-final class FramesmithTranscriptionRunner {
+final class TranscriptionRunner {
 
   public function __construct(
-    private readonly FramesmithTranscriptionTaskStoreInterface $taskStore,
+    private readonly TranscriptionTaskStoreInterface $taskStore,
     private readonly WhisperRuntimeClientInterface $leaseManager,
-    private readonly FramesmithTranscriptionExecutorInterface $executor,
+    private readonly TranscriptionExecutorInterface $executor,
   ) {}
 
   /**

@@ -27,10 +27,12 @@ interface FramesmithComputeRuntimeClientInterface {
    *
    * @param string $contractId
    *   Pooled runtime contract identifier.
+   * @param string|null $leaseToken
+   *   Backend-owned lease token required by remote compute clients.
    *
    * @return array<string,mixed>
    *   Updated lease/runtime details.
    */
-  public function releaseRuntime(string $contractId): array;
+  public function releaseRuntime(string $contractId, ?string $leaseToken = NULL): array;
 
 }

@@ -72,7 +72,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
       ->willReturn($result);
     $leaseManager->expects($this->once())
       ->method('releaseRuntime')
-      ->with('contract-9')
+      ->with('contract-9', 'token-123')
       ->willReturn($releasedLease);
 
     $taskStore->expects($this->exactly(4))
@@ -269,7 +269,7 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
       ->method('transcribe')
       ->with($lease, $audioPath, $taskId)
       ->willThrowException(new \RuntimeException('remote execution blew up'));
-    $leaseManager->expects($this->once())->method('releaseRuntime')->with('contract-fail')->willReturn($releasedLease);
+    $leaseManager->expects($this->once())->method('releaseRuntime')->with('contract-fail', 'token-fail')->willReturn($releasedLease);
 
     $taskStore->expects($this->exactly(3))
       ->method('transition')

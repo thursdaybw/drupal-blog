@@ -49,7 +49,7 @@ final class FramesmithDirectComputeRuntimeClient implements FramesmithRuntimeLea
   /**
    * {@inheritdoc}
    */
-  public function releaseRuntime(string $contractId): array {
+  public function releaseRuntime(string $contractId, ?string $leaseToken = NULL): array {
     $this->emitTransitionalWarning('releaseRuntime');
     return $this->poolManager->release($contractId);
   }

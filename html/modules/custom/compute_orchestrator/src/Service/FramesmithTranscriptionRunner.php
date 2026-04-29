@@ -125,7 +125,7 @@ final class FramesmithTranscriptionRunner {
         $this->recordDebug($taskId, 'runner.release.begin', [
           'contract_id' => $contractId,
         ]);
-        $releasedLease = $this->leaseManager->releaseRuntime($contractId);
+        $releasedLease = $this->leaseManager->releaseRuntime($contractId, (string) ($lease['lease_token'] ?? ''));
         $this->recordDebug($taskId, 'runner.release.succeeded', [
           'contract_id' => $contractId,
         ]);
@@ -157,7 +157,7 @@ final class FramesmithTranscriptionRunner {
           $this->recordDebug($taskId, 'runner.release.after_exception.begin', [
             'contract_id' => $contractId,
           ]);
-          $releasedLease = $this->leaseManager->releaseRuntime($contractId);
+          $releasedLease = $this->leaseManager->releaseRuntime($contractId, (string) ($lease['lease_token'] ?? ''));
           $this->recordDebug($taskId, 'runner.release.after_exception.succeeded', [
             'contract_id' => $contractId,
           ]);

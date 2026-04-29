@@ -9,8 +9,8 @@ namespace Drupal\media_transcription\Service;
  *
  * This is the extraction-facing seam. The current implementation may call
  * Drupal PHP services directly, while a later implementation can call the
- * remote compute runtime lease API over HTTP without changing the Framesmith
- * transcription runner contract.
+ * remote compute runtime lease API over HTTP without changing the transcription
+ * runner contract.
  */
 interface WhisperRuntimeClientInterface {
 
@@ -18,7 +18,7 @@ interface WhisperRuntimeClientInterface {
    * Acquires a Whisper runtime for transcription work.
    *
    * @return array<string,mixed>
-   *   Lease details in the Framesmith backend task shape.
+   *   Lease details in the transcription backend task shape.
    */
   public function acquireWhisperRuntime(): array;
 

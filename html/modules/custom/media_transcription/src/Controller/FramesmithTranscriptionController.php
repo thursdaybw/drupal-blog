@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Framesmith transcription API endpoints.
+ * Framesmith compatibility API endpoints for transcription tasks.
  */
 final class FramesmithTranscriptionController extends ControllerBase {
 
@@ -33,7 +33,7 @@ final class FramesmithTranscriptionController extends ControllerBase {
   }
 
   /**
-   * Starts or resumes a Framesmith transcription task.
+   * Starts or resumes a transcription task.
    */
   public function start(Request $request): JsonResponse {
     $payload = json_decode($request->getContent(), TRUE);

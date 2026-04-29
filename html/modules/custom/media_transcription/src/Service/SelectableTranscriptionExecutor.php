@@ -7,11 +7,11 @@ namespace Drupal\media_transcription\Service;
 use Drupal\Core\State\StateInterface;
 
 /**
- * Selects the active Framesmith transcription executor mode.
+ * Selects the active transcription transcription executor mode.
  */
 final class SelectableTranscriptionExecutor implements TranscriptionExecutorInterface {
 
-  private const STATE_KEY = 'compute_orchestrator.framesmith_transcription_executor_mode';
+  private const STATE_KEY = 'media_transcription.executor_mode';
 
   public function __construct(
     private readonly WhisperHttpTranscriptionExecutor $realExecutor,

@@ -29,9 +29,9 @@ final class FakeTranscriptionExecutor implements TranscriptionExecutorInterface 
     $resolvedPath = $this->fileSystem->realpath($localAudioPath) ?: $localAudioPath;
     $filename = basename($resolvedPath);
 
-    $text = 'Fake Framesmith transcript for ' . $filename . '.';
+    $text = 'Fake transcription transcript for ' . $filename . '.';
     if (str_contains($filename, 'framesmith-known-text')) {
-      $text = 'Framesmith test one two three. The quick brown fox jumps over the lazy dog.';
+      $text = 'Transcription test one two three. The quick brown fox jumps over the lazy dog.';
     }
 
     usleep(200000);

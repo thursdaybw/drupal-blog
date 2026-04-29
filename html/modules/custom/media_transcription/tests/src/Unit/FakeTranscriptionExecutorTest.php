@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\Tests\compute_orchestrator\Unit;
+namespace Drupal\Tests\media_transcription\Unit;
 
 require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionExecutorInterface.php';
 require_once __DIR__ . '/../../../../media_transcription/src/Service/FakeTranscriptionExecutor.php';
@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * @coversDefaultClass \Drupal\media_transcription\Service\FakeTranscriptionExecutor
  *
- * @group compute_orchestrator
+ * @group media_transcription
  */
 final class FakeTranscriptionExecutorTest extends TestCase {
 
@@ -36,7 +36,7 @@ final class FakeTranscriptionExecutorTest extends TestCase {
     $result = $executor->transcribe([], 'temporary://framesmith/framesmith-known-text.wav', 'task-1');
 
     $this->assertSame('fake', $result['mode']);
-    $this->assertSame('Framesmith test one two three. The quick brown fox jumps over the lazy dog.', $result['json']['text']);
+    $this->assertSame('Transcription test one two three. The quick brown fox jumps over the lazy dog.', $result['json']['text']);
     $this->assertCount(1, $result['json']['segments']);
     $this->assertNull($result['lease_url']);
   }

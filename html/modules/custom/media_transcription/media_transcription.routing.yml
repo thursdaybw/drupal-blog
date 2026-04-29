@@ -2,7 +2,7 @@ media_transcription.framesmith_transcription_start:
   path: '/api/framesmith/transcription/start'
   defaults:
     _controller: '\Drupal\media_transcription\Controller\FramesmithTranscriptionController::start'
-    _title: 'Framesmith transcription start'
+    _title: 'Framesmith transcription compatibility start'
   requirements:
     _permission: 'use framesmith transcription api'
   methods: [POST]
@@ -11,7 +11,7 @@ media_transcription.framesmith_transcription_upload:
   path: '/api/framesmith/transcription/upload'
   defaults:
     _controller: '\Drupal\media_transcription\Controller\FramesmithTranscriptionController::upload'
-    _title: 'Framesmith transcription upload'
+    _title: 'Framesmith transcription compatibility upload'
   requirements:
     _permission: 'use framesmith transcription api'
   methods: [POST]
@@ -20,7 +20,7 @@ media_transcription.framesmith_transcription_status:
   path: '/api/framesmith/transcription/status'
   defaults:
     _controller: '\Drupal\media_transcription\Controller\FramesmithTranscriptionController::status'
-    _title: 'Framesmith transcription status'
+    _title: 'Framesmith transcription compatibility status'
   requirements:
     _permission: 'use framesmith transcription api'
   methods: [GET]
@@ -29,7 +29,7 @@ media_transcription.framesmith_transcription_result:
   path: '/api/framesmith/transcription/result'
   defaults:
     _controller: '\Drupal\media_transcription\Controller\FramesmithTranscriptionController::result'
-    _title: 'Framesmith transcription result'
+    _title: 'Framesmith transcription compatibility result'
   requirements:
     _permission: 'use framesmith transcription api'
   methods: [GET]

@@ -10,16 +10,16 @@ use Drupal\Core\State\StateInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
- * Stores Framesmith transcription task state in Drupal state.
+ * Stores transcription task state in Drupal state.
  *
- * This is intentionally lightweight smoke/dev storage for the first Framesmith
- * integration slice. It is not intended to be the long-term durable task
- * repository once task volume, concurrent writes, or retention requirements
- * grow beyond local development and controlled smoke testing.
+ * This is intentionally lightweight smoke/dev storage for the first
+ * transcription integration slice. It is not intended to be the long-term
+ * durable task repository once task volume, concurrent writes, or retention
+ * requirements grow beyond local development and controlled smoke testing.
  */
 final class TranscriptionTaskStore implements TranscriptionTaskStoreInterface {
 
-  private const STATE_KEY = 'compute_orchestrator.framesmith_transcription.tasks';
+  private const STATE_KEY = 'media_transcription.tasks';
 
   public function __construct(
     private readonly StateInterface $state,
@@ -180,7 +180,7 @@ final class TranscriptionTaskStore implements TranscriptionTaskStoreInterface {
    */
   public function storeUpload(string $taskId, UploadedFile $uploadedFile): array {
     $this->requireTask($taskId);
-    $directory = 'temporary://framesmith-transcription/' . $taskId;
+    $directory = 'temporary://media-transcription/' . $taskId;
     $this->fileSystem->prepareDirectory(
       $directory,
       FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS,
@@ -289,7 +289,7 @@ final class TranscriptionTaskStore implements TranscriptionTaskStoreInterface {
   private function requireTask(string $taskId): array {
     $task = $this->get($taskId);
     if ($task === NULL) {
-      throw new \RuntimeException('Unknown Framesmith transcription task: ' . $taskId);
+      throw new \RuntimeException('Unknown transcription task: ' . $taskId);
     }
     return $task;
   }

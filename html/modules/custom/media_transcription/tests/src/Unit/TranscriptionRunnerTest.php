@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\Tests\compute_orchestrator\Unit;
+namespace Drupal\Tests\media_transcription\Unit;
 
 require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionTaskStoreInterface.php';
 require_once __DIR__ . '/../../../../media_transcription/src/Service/WhisperRuntimeClientInterface.php';
@@ -18,7 +18,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * @coversDefaultClass \Drupal\media_transcription\Service\TranscriptionRunner
  *
- * @group compute_orchestrator
+ * @group media_transcription
  */
 final class TranscriptionRunnerTest extends TestCase {
 
@@ -27,7 +27,7 @@ final class TranscriptionRunnerTest extends TestCase {
    */
   public function testRunTransitionsTaskThroughRealExecutionLifecycle(): void {
     $taskId = 'task-123';
-    $audioPath = 'temporary://framesmith-transcription/task-123/audio.wav';
+    $audioPath = 'temporary://media-transcription/task-123/audio.wav';
     $lease = [
       'contract_id' => 'contract-9',
       'lease_token' => 'token-123',
@@ -129,11 +129,11 @@ final class TranscriptionRunnerTest extends TestCase {
    */
   public function testRunSkipsLeaseInFakeMode(): void {
     $taskId = 'task-fake';
-    $audioPath = 'temporary://framesmith-transcription/task-fake/framesmith-known-text.wav';
+    $audioPath = 'temporary://media-transcription/task-fake/framesmith-known-text.wav';
     $result = [
       'mode' => 'fake',
       'json' => [
-        'text' => 'Framesmith test one two three. The quick brown fox jumps over the lazy dog.',
+        'text' => 'Transcription test one two three. The quick brown fox jumps over the lazy dog.',
         'segments' => [],
       ],
       'completed_at' => 123456789,
@@ -208,7 +208,7 @@ final class TranscriptionRunnerTest extends TestCase {
     $runner = new TranscriptionRunner($taskStore, $leaseManager, $executor);
 
     $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('Unknown Framesmith transcription task: missing-task');
+    $this->expectExceptionMessage('Unknown transcription task: missing-task');
     $runner->run('missing-task');
   }
 
@@ -240,7 +240,7 @@ final class TranscriptionRunnerTest extends TestCase {
    */
   public function testRunMarksTaskFailedWhenExecutorFails(): void {
     $taskId = 'task-fail';
-    $audioPath = 'temporary://framesmith-transcription/task-fail/audio.wav';
+    $audioPath = 'temporary://media-transcription/task-fail/audio.wav';
     $lease = [
       'contract_id' => 'contract-fail',
       'lease_token' => 'token-fail',
@@ -300,7 +300,7 @@ final class TranscriptionRunnerTest extends TestCase {
    */
   public function testRunMarksTaskFailedWhenRuntimeAcquisitionFails(): void {
     $taskId = 'task-acquire-fail';
-    $audioPath = 'temporary://framesmith-transcription/task-acquire-fail/audio.wav';
+    $audioPath = 'temporary://media-transcription/task-acquire-fail/audio.wav';
 
     $taskStore = $this->createMock(TranscriptionTaskStoreInterface::class);
     $leaseManager = $this->createMock(WhisperRuntimeClientInterface::class);

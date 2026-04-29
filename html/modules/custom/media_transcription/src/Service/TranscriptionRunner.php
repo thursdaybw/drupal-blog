@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Drupal\media_transcription\Service;
 
 /**
- * Runs one Framesmith transcription task.
+ * Runs one transcription task.
  */
 final class TranscriptionRunner {
 
@@ -16,7 +16,7 @@ final class TranscriptionRunner {
   ) {}
 
   /**
-   * Executes one Framesmith transcription task.
+   * Executes one transcription task.
    *
    * @param string $taskId
    *   Task identifier.
@@ -25,7 +25,7 @@ final class TranscriptionRunner {
     $this->recordDebug($taskId, 'runner.run.begin', []);
     $task = $this->taskStore->get($taskId);
     if ($task === NULL) {
-      throw new \RuntimeException('Unknown Framesmith transcription task: ' . $taskId);
+      throw new \RuntimeException('Unknown transcription task: ' . $taskId);
     }
     $this->recordDebug($taskId, 'runner.task.loaded', [
       'status' => (string) ($task['status'] ?? ''),

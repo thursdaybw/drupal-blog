@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Drupal\media_transcription\Service;
 
 /**
- * Launches detached Framesmith transcription work.
+ * Launches detached transcription transcription work.
  */
 interface TranscriptionLauncherInterface {
 

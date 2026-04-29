@@ -9,7 +9,7 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Psr\Log\LoggerInterface;
 
 /**
- * Launches detached Framesmith transcription runners.
+ * Launches detached transcription runners.
  */
 final class TranscriptionLauncher implements TranscriptionLauncherInterface {
 
@@ -36,31 +36,31 @@ final class TranscriptionLauncher implements TranscriptionLauncherInterface {
   public function launch(string $taskId): array {
     $task = $this->taskStore->get($taskId);
     if ($task === NULL) {
-      throw new \RuntimeException('Unknown Framesmith transcription task: ' . $taskId);
+      throw new \RuntimeException('Unknown transcription task: ' . $taskId);
     }
     if (trim((string) ($task['local_audio_path'] ?? '')) === '') {
       throw new \RuntimeException('Cannot launch task without uploaded audio: ' . $taskId);
     }
 
     $drushBinary = $this->resolveDrushBinary();
-    $outputDirectory = 'temporary://framesmith-transcription/' . $taskId . '/runner-output';
+    $outputDirectory = 'temporary://media-transcription/' . $taskId . '/runner-output';
     if (!$this->fileSystem->prepareDirectory($outputDirectory, FileSystemInterface::CREATE_DIRECTORY | FileSystemInterface::MODIFY_PERMISSIONS)) {
-      throw new \RuntimeException('Failed to prepare Framesmith runner output directory.');
+      throw new \RuntimeException('Failed to prepare transcription runner output directory.');
     }
     $outputRealDirectory = $this->fileSystem->realpath($outputDirectory);
     if ($outputRealDirectory === FALSE || !is_dir($outputRealDirectory)) {
-      throw new \RuntimeException('Failed to resolve Framesmith runner output directory.');
+      throw new \RuntimeException('Failed to resolve transcription runner output directory.');
     }
 
     $stdoutPath = $outputRealDirectory . '/stdout.log';
     $stderrPath = $outputRealDirectory . '/stderr.log';
     if (file_put_contents($stdoutPath, '') === FALSE || file_put_contents($stderrPath, '') === FALSE) {
-      throw new \RuntimeException('Failed to initialize Framesmith runner output files.');
+      throw new \RuntimeException('Failed to initialize transcription runner output files.');
     }
 
     $processEnvironment = $this->buildDetachedProcessEnvironment();
     $command = sprintf(
-      '%s setsid %s compute:framesmith-run-transcription %s > %s 2> %s < /dev/null & echo $!',
+      '%s setsid %s media-transcription:run-task %s > %s 2> %s < /dev/null & echo $!',
       $this->buildShellEnvironmentPrefix($processEnvironment),
       escapeshellarg($drushBinary),
       escapeshellarg($taskId),
@@ -107,7 +107,7 @@ final class TranscriptionLauncher implements TranscriptionLauncherInterface {
           $processEnvironment,
         ),
       ]);
-      throw new \RuntimeException('Failed to start detached Framesmith runner process.');
+      throw new \RuntimeException('Failed to start detached transcription runner process.');
     }
 
     fclose($pipes[0]);
@@ -131,10 +131,10 @@ final class TranscriptionLauncher implements TranscriptionLauncherInterface {
     $this->taskStore->merge($taskId, ['launch_debug' => $debug]);
 
     if ($exitCode !== 0 || $stdout === '' || !ctype_digit($stdout)) {
-      $message = 'Failed to launch detached Framesmith runner.';
+      $message = 'Failed to launch detached transcription runner.';
       $this->taskStore->fail($taskId, $message, [
         'launch' => [
-          'command' => $drushBinary . ' compute:framesmith-run-transcription ' . $taskId,
+          'command' => $drushBinary . ' media-transcription:run-task ' . $taskId,
           'stdout' => $stdout,
           'stderr' => $stderr,
           'exit_code' => $exitCode,
@@ -152,7 +152,7 @@ final class TranscriptionLauncher implements TranscriptionLauncherInterface {
     }
 
     $launch = [
-      'command' => $drushBinary . ' compute:framesmith-run-transcription ' . $taskId,
+      'command' => $drushBinary . ' media-transcription:run-task ' . $taskId,
       'pid' => (int) $stdout,
       'launched_at' => time(),
       'launched' => TRUE,
@@ -169,7 +169,7 @@ final class TranscriptionLauncher implements TranscriptionLauncherInterface {
       'launch_debug' => $debug,
     ]);
     $this->logger->notice(
-      'Framesmith transcription runner launched for task {task_id} pid={pid}.',
+      'transcription runner launched for task {task_id} pid={pid}.',
       [
         'task_id' => $taskId,
         'pid' => (int) $stdout,
@@ -207,7 +207,7 @@ final class TranscriptionLauncher implements TranscriptionLauncherInterface {
    *   Environment variables for detached process bootstrap.
    */
   private function buildDetachedProcessEnvironment(): array {
-    $base = sys_get_temp_dir() . '/framesmith-drush-home';
+    $base = sys_get_temp_dir() . '/media-transcription-drush-home';
     return [
       'HOME' => $base,
       'XDG_CACHE_HOME' => $base . '/.cache',

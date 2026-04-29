@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\Tests\compute_orchestrator\Unit;
+namespace Drupal\Tests\media_transcription\Unit;
 
 require_once __DIR__ . '/../../../../media_transcription/src/Service/TranscriptionExecutorInterface.php';
 require_once __DIR__ . '/../../../../media_transcription/src/Service/WhisperHttpTranscriptionExecutor.php';
@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * @coversDefaultClass \Drupal\media_transcription\Service\WhisperHttpTranscriptionExecutor
  *
- * @group compute_orchestrator
+ * @group media_transcription
  */
 final class WhisperHttpTranscriptionExecutorTest extends TestCase {
 
@@ -44,8 +44,8 @@ final class WhisperHttpTranscriptionExecutorTest extends TestCase {
         }),
       )
       ->willReturn(new Response(200, [], json_encode([
-        'text' => 'Framesmith test one two three.',
-        'segments' => [['id' => 0, 'text' => 'Framesmith test one two three.']],
+        'text' => 'Transcription test one two three.',
+        'segments' => [['id' => 0, 'text' => 'Transcription test one two three.']],
         'language' => 'en',
         'duration' => 5.7,
       ], JSON_THROW_ON_ERROR)));
@@ -57,7 +57,7 @@ final class WhisperHttpTranscriptionExecutorTest extends TestCase {
     ], 'temporary://task/audio.wav', 'task-1');
 
     $this->assertSame('whisper_http', $result['mode']);
-    $this->assertSame('Framesmith test one two three.', $result['json']['text']);
+    $this->assertSame('Transcription test one two three.', $result['json']['text']);
     $this->assertSame('en', $result['json']['language']);
     $this->assertCount(1, $result['json']['segments']);
     $this->assertSame('http://10.0.0.4:9000', $result['lease_url']);
@@ -93,8 +93,8 @@ final class WhisperHttpTranscriptionExecutorTest extends TestCase {
         }
 
         return new Response(200, [], json_encode([
-          'text' => 'Framesmith test one two three.',
-          'segments' => [['id' => 0, 'text' => 'Framesmith test one two three.']],
+          'text' => 'Transcription test one two three.',
+          'segments' => [['id' => 0, 'text' => 'Transcription test one two three.']],
           'language' => 'en',
           'duration' => 5.7,
         ], JSON_THROW_ON_ERROR));
@@ -106,7 +106,7 @@ final class WhisperHttpTranscriptionExecutorTest extends TestCase {
       'current_model' => 'openai/whisper-large-v3-turbo',
     ], 'temporary://task/audio.wav', 'task-2');
 
-    $this->assertSame('Framesmith test one two three.', $result['json']['text']);
+    $this->assertSame('Transcription test one two three.', $result['json']['text']);
 
     @unlink($tmpFile);
   }

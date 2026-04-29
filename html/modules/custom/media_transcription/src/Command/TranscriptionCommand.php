@@ -8,7 +8,7 @@ use Drush\Commands\DrushCommands;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Runs one Framesmith transcription task.
+ * Runs one transcription task.
  */
 final class TranscriptionCommand extends DrushCommands {
 
@@ -19,19 +19,19 @@ final class TranscriptionCommand extends DrushCommands {
   }
 
   /**
-   * Executes one Framesmith transcription task.
+   * Executes one transcription task.
    *
-   * @command compute:framesmith-run-transcription
+   * @command media-transcription:run-task
    */
   public function run(string $taskId): void {
-    $this->output()->writeln('Running Framesmith transcription task ' . $taskId . '.');
+    $this->output()->writeln('Running transcription task ' . $taskId . '.');
 
     try {
       $this->container->get('media_transcription.transcription_runner')->run($taskId);
     }
     catch (\Throwable $exception) {
       $this->container->get('logger.channel.media_transcription')->error(
-        'Framesmith transcription task {task_id} failed: {message}',
+        'transcription task {task_id} failed: {message}',
         [
           'task_id' => $taskId,
           'message' => $exception->getMessage(),
@@ -41,7 +41,7 @@ final class TranscriptionCommand extends DrushCommands {
       throw $exception;
     }
 
-    $this->output()->writeln('Completed Framesmith transcription task ' . $taskId . '.');
+    $this->output()->writeln('Completed transcription task ' . $taskId . '.');
   }
 
 }

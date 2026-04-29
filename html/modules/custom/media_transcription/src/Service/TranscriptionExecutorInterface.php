@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Drupal\media_transcription\Service;
 
 /**
- * Executes one Framesmith transcription against the selected runtime mode.
+ * Executes one transcription transcription against the selected runtime mode.
  */
 interface TranscriptionExecutorInterface {
 

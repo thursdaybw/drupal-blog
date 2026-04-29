@@ -7,7 +7,7 @@ namespace Drupal\media_transcription\Service;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
- * Defines storage operations for Framesmith transcription tasks.
+ * Defines storage operations for transcription tasks.
  */
 interface TranscriptionTaskStoreInterface {
 

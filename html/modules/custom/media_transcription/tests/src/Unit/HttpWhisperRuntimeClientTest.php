@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\Tests\compute_orchestrator\Unit;
+namespace Drupal\Tests\media_transcription\Unit;
 
 use Drupal\media_transcription\Service\HttpWhisperRuntimeClient;
 use Drupal\Core\State\StateInterface;

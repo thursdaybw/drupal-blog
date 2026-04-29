@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Drupal\Tests\compute_orchestrator\Unit;
+namespace Drupal\Tests\media_transcription\Unit;
 
 use Drupal\compute_orchestrator\Service\BadHostRegistry;
 use Drupal\media_transcription\Service\WhisperRuntimeClientInterface;
@@ -19,16 +19,16 @@ use Psr\Log\AbstractLogger;
 
 require_once __DIR__ . '/../../../../media_transcription/src/Service/WhisperRuntimeClientInterface.php';
 require_once __DIR__ . '/../../../../media_transcription/src/Service/DirectWhisperRuntimeClient.php';
-require_once __DIR__ . '/../../../src/Service/VllmPoolManager.php';
-require_once __DIR__ . '/../../../src/Service/BadHostRegistry.php';
-require_once __DIR__ . '/../../../src/Service/VllmPoolRepositoryInterface.php';
-require_once __DIR__ . '/../../../src/Service/VllmWorkloadCatalogInterface.php';
-require_once __DIR__ . '/../../../src/Service/GenericVllmRuntimeManagerInterface.php';
-require_once __DIR__ . '/../../../src/Service/VastInstanceLifecycleClientInterface.php';
-require_once __DIR__ . '/../../../src/Service/VastRestClientInterface.php';
-require_once __DIR__ . '/../../../src/Exception/AcquirePendingException.php';
-require_once __DIR__ . '/../../../src/Exception/WorkloadReadinessException.php';
-require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Service/VllmPoolManager.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Service/BadHostRegistry.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Service/VllmPoolRepositoryInterface.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Service/VllmWorkloadCatalogInterface.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Service/GenericVllmRuntimeManagerInterface.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Service/VastInstanceLifecycleClientInterface.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Service/VastRestClientInterface.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Exception/AcquirePendingException.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Exception/WorkloadReadinessException.php';
+require_once __DIR__ . '/../../../../compute_orchestrator/src/Service/Workload/FailureClass.php';
 
 /**
  * Tests the transitional direct Framesmith compute client.

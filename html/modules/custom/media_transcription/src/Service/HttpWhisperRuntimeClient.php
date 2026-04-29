@@ -147,13 +147,13 @@ final class HttpWhisperRuntimeClient implements WhisperRuntimeClientInterface {
   }
 
   /**
-   * Converts the remote lease payload into the Framesmith backend lease shape.
+   * Converts the remote lease payload into the transcription backend shape.
    *
    * @param array<string,mixed> $payload
    *   Remote runtime lease response payload.
    *
    * @return array<string,mixed>
-   *   Framesmith backend lease details.
+   *   Transcription backend lease details.
    */
   private function normalizeLeasePayload(array $payload): array {
     $lease = $payload['lease'] ?? NULL;

@@ -2,14 +2,37 @@
 
 set -euo pipefail
 
-## Description: Run the Framesmith staging browser smoke and verify cron reaps the released warm runtime.
-## Usage: test-framesmith-staging-smoke
-## Example: ddev test-framesmith-staging-smoke
+## Description: Run the deployed Framesmith mobile browser smoke against staging or production.
+## Usage: test-framesmith-staging-smoke [staging|production]
+## Example: ddev test-framesmith-staging-smoke staging
+## Example: ddev test-framesmith-staging-smoke production
 
-BASE_URL="${FRAMESMITH_STAGING_BASE_URL:-https://bb-drupal-staging.bevansbench.com}"
-FIXTURE_PATH="${FRAMESMITH_STAGING_FIXTURE_PATH:-/var/www/html/html/framesmith-browser-smoke.mp4}"
-GRACE_SECONDS="${FRAMESMITH_STAGING_REAP_GRACE_SECONDS:-0}"
-LOGIN_FILE=".tmp-drush-probes/framesmith-staging-uli.txt"
+TARGET="${1:-${FRAMESMITH_SMOKE_TARGET:-staging}}"
+case "${TARGET}" in
+  staging|stage)
+    TARGET="staging"
+    BASE_URL="${FRAMESMITH_SMOKE_BASE_URL:-${FRAMESMITH_STAGING_BASE_URL:-https://bb-drupal-staging.bevansbench.com}}"
+    REMOTE_EXEC="ddev exec-stage"
+    VERIFY_REAP_DEFAULT="1"
+    ;;
+  production|prod)
+    TARGET="production"
+    BASE_URL="${FRAMESMITH_SMOKE_BASE_URL:-${FRAMESMITH_PRODUCTION_BASE_URL:-https://www.bevansbench.com}}"
+    REMOTE_EXEC="ddev exec-prod"
+    VERIFY_REAP_DEFAULT="0"
+    ;;
+  *)
+    echo "Usage: ddev test-framesmith-staging-smoke [staging|production]" >&2
+    exit 1
+    ;;
+esac
+
+FIXTURE_PATH="${FRAMESMITH_SMOKE_FIXTURE_PATH:-${FRAMESMITH_STAGING_FIXTURE_PATH:-/var/www/html/html/framesmith-browser-smoke-real.mp4}}"
+GRACE_SECONDS="${FRAMESMITH_SMOKE_REAP_GRACE_SECONDS:-${FRAMESMITH_STAGING_REAP_GRACE_SECONDS:-0}}"
+VERIFY_REAP="${FRAMESMITH_SMOKE_VERIFY_REAP:-${VERIFY_REAP_DEFAULT}}"
+UPLOAD_DELAY_MS="${FRAMESMITH_SMOKE_UPLOAD_DELAY_MS:-250}"
+DROP_FIRST_UPLOAD_CHUNK="${FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK:-1}"
+LOGIN_FILE=".tmp-drush-probes/framesmith-${TARGET}-uli.txt"
 STATE_KEY="compute_orchestrator.vllm_pool.idle_shutdown_seconds"
 
 mkdir -p .tmp-drush-probes
@@ -18,42 +41,59 @@ cleanup() {
 }
 trap cleanup EXIT
 
-stage_script() {
+remote_script() {
   local script_path="$1"
-  ddev exec-stage "cat > ${script_path} && ../vendor/bin/drush php:script ${script_path}; rm -f ${script_path}"
+  ${REMOTE_EXEC} "cat > ${script_path} && ../vendor/bin/drush php:script ${script_path}; rm -f ${script_path}"
 }
 
 if ! [[ "${GRACE_SECONDS}" =~ ^[0-9]+$ ]]; then
-  echo "FRAMESMITH_STAGING_REAP_GRACE_SECONDS must be a non-negative integer." >&2
+  echo "FRAMESMITH_SMOKE_REAP_GRACE_SECONDS must be a non-negative integer." >&2
+  exit 1
+fi
+if ! [[ "${UPLOAD_DELAY_MS}" =~ ^[0-9]+$ ]]; then
+  echo "FRAMESMITH_SMOKE_UPLOAD_DELAY_MS must be a non-negative integer." >&2
+  exit 1
+fi
+if [[ "${VERIFY_REAP}" != "0" && "${VERIFY_REAP}" != "1" ]]; then
+  echo "FRAMESMITH_SMOKE_VERIFY_REAP must be 0 or 1." >&2
+  exit 1
+fi
+if [[ "${DROP_FIRST_UPLOAD_CHUNK}" != "0" && "${DROP_FIRST_UPLOAD_CHUNK}" != "1" ]]; then
+  echo "FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK must be 0 or 1." >&2
+  exit 1
+fi
+if [[ ! -f "${FIXTURE_PATH}" ]]; then
+  echo "Framesmith smoke fixture not found: ${FIXTURE_PATH}" >&2
   exit 1
 fi
 
 RUN_STARTED_AT="$(date +%s)"
 
-echo "== Framesmith staging smoke gate =="
+echo "== Framesmith deployed mobile smoke gate =="
+echo "target=${TARGET}"
 echo "base_url=${BASE_URL}"
 echo "fixture_path=${FIXTURE_PATH}"
+echo "fixture_size=$(wc -c < "${FIXTURE_PATH}")"
+echo "verify_reap=${VERIFY_REAP}"
 echo "reap_grace_seconds=${GRACE_SECONDS}"
+echo "upload_delay_ms=${UPLOAD_DELAY_MS}"
+echo "drop_first_upload_chunk=${DROP_FIRST_UPLOAD_CHUNK}"
 echo "run_started_at=${RUN_STARTED_AT}"
 
-echo "== save original staging reap grace =="
-ORIGINAL_GRACE_JSON="$(stage_script /tmp/framesmith_get_reap_grace.php <<PHP
-<?php
-echo json_encode(\Drupal::state()->get('${STATE_KEY}', NULL));
-PHP
-)"
-echo "original_grace=${ORIGINAL_GRACE_JSON}"
-
+ORIGINAL_GRACE_JSON="null"
 restore_grace() {
-  echo "== restore original staging reap grace =="
+  if [[ "${VERIFY_REAP}" != "1" ]]; then
+    return 0
+  fi
+  echo "== restore original ${TARGET} reap grace =="
   if [[ "${ORIGINAL_GRACE_JSON}" == "null" ]]; then
-    stage_script /tmp/framesmith_restore_reap_grace.php <<PHP
+    remote_script /tmp/framesmith_restore_reap_grace.php <<PHP
 <?php
 \Drupal::state()->delete('${STATE_KEY}');
 echo "restored=null\n";
 PHP
   else
-    stage_script /tmp/framesmith_restore_reap_grace.php <<PHP
+    remote_script /tmp/framesmith_restore_reap_grace.php <<PHP
 <?php
 \Drupal::state()->set('${STATE_KEY}', (int) ${ORIGINAL_GRACE_JSON});
 echo "restored=" . (int) ${ORIGINAL_GRACE_JSON} . PHP_EOL;
@@ -62,14 +102,25 @@ PHP
 }
 trap 'status=$?; cleanup; restore_grace || true; exit ${status}' EXIT
 
-echo "== set short staging reap grace =="
-stage_script /tmp/framesmith_set_reap_grace.php <<PHP
+if [[ "${VERIFY_REAP}" == "1" ]]; then
+  echo "== save original ${TARGET} reap grace =="
+  ORIGINAL_GRACE_JSON="$(remote_script /tmp/framesmith_get_reap_grace.php <<PHP
+<?php
+echo json_encode(\Drupal::state()->get('${STATE_KEY}', NULL));
+PHP
+)"
+  echo "original_grace=${ORIGINAL_GRACE_JSON}"
+
+  echo "== set short ${TARGET} reap grace =="
+  remote_script /tmp/framesmith_set_reap_grace.php <<PHP
 <?php
 \Drupal::state()->set('${STATE_KEY}', ${GRACE_SECONDS});
 echo "set=${GRACE_SECONDS}\n";
 PHP
-echo "== generate one-time staging login URL, hidden =="
-ddev exec-stage "../vendor/bin/drush uli --uri=${BASE_URL}" | tail -1 > "${LOGIN_FILE}"
+fi
+
+echo "== generate one-time ${TARGET} login URL, hidden =="
+${REMOTE_EXEC} "../vendor/bin/drush uli --uri=${BASE_URL}" | tail -1 > "${LOGIN_FILE}"
 chmod 600 "${LOGIN_FILE}"
 if grep -q "^${BASE_URL}/" "${LOGIN_FILE}"; then
   echo "login-url-file=<created>"
@@ -78,12 +129,13 @@ else
   exit 1
 fi
 
-echo "== run black-box browser smoke =="
+echo "== run black-box mobile browser smoke =="
 ddev exec bash -lc \
-  "export FRAMESMITH_STAGING_BASE_URL='${BASE_URL}'; export FRAMESMITH_STAGING_FIXTURE_PATH='${FIXTURE_PATH}'; export FRAMESMITH_STAGING_LOGIN_URL=\"\$(cat /var/www/html/${LOGIN_FILE})\"; vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/compute_orchestrator/tests/src/ExistingSiteJavascript/FramesmithStagingBrowserSmokeTest.php"
+  "export FRAMESMITH_SMOKE_BASE_URL='${BASE_URL}'; export FRAMESMITH_SMOKE_FIXTURE_PATH='${FIXTURE_PATH}'; export FRAMESMITH_SMOKE_LOGIN_URL=\"\$(cat /var/www/html/${LOGIN_FILE})\"; export FRAMESMITH_SMOKE_REQUIRE_CHUNKED_UPLOAD=1; export FRAMESMITH_SMOKE_UPLOAD_DELAY_MS='${UPLOAD_DELAY_MS}'; export FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK='${DROP_FIRST_UPLOAD_CHUNK}'; export FRAMESMITH_SMOKE_VIDEO_READY_TIMEOUT_MS='180000'; vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/compute_orchestrator/tests/src/ExistingSiteJavascript/FramesmithStagingBrowserSmokeTest.php"
 
-echo "== capture latest completed Framesmith contract =="
-TASK_SUMMARY="$(stage_script /tmp/framesmith_latest_task.php <<PHP
+if [[ "${VERIFY_REAP}" == "1" ]]; then
+  echo "== capture latest completed Framesmith contract =="
+  TASK_SUMMARY="$(remote_script /tmp/framesmith_latest_task.php <<PHP
 <?php
 \$run_started_at = ${RUN_STARTED_AT};
 \$tasks = \Drupal::state()->get('compute_orchestrator.framesmith_transcription.tasks', []);
@@ -106,18 +158,18 @@ fwrite(STDERR, "No completed Framesmith task from this run with runtime_contract
 exit(1);
 PHP
 )"
-echo "${TASK_SUMMARY}"
-CONTRACT_ID="$(printf '%s' "${TASK_SUMMARY}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo $j["contract_id"] ?? "";')"
-if [[ -z "${CONTRACT_ID}" ]]; then
-  echo "Unable to parse contract id from latest task summary." >&2
-  exit 1
-fi
+  echo "${TASK_SUMMARY}"
+  CONTRACT_ID="$(printf '%s' "${TASK_SUMMARY}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo $j["contract_id"] ?? "";')"
+  if [[ -z "${CONTRACT_ID}" ]]; then
+    echo "Unable to parse contract id from latest task summary." >&2
+    exit 1
+  fi
 
-echo "== run staging Drupal cron =="
-ddev exec-stage '../vendor/bin/drush cron'
+  echo "== run ${TARGET} Drupal cron =="
+  ${REMOTE_EXEC} '../vendor/bin/drush cron'
 
-echo "== verify cron reaped released runtime =="
-stage_script /tmp/framesmith_verify_reap.php <<PHP
+  echo "== verify cron reaped released runtime =="
+  remote_script /tmp/framesmith_verify_reap.php <<PHP
 <?php
 \$contract_id = '${CONTRACT_ID}';
 \$repo = \Drupal::service('compute_orchestrator.vllm_pool_repository');
@@ -147,5 +199,6 @@ if (!\$ok) {
   exit(1);
 }
 PHP
+fi
 
-echo "== staging smoke gate passed =="
+echo "== Framesmith ${TARGET} mobile smoke gate passed =="

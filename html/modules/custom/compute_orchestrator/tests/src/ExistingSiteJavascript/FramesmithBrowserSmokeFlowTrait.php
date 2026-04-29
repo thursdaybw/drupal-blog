@@ -45,12 +45,13 @@ trait FramesmithBrowserSmokeFlowTrait {
    * Continues the transcription smoke once a source has been selected/loaded.
    */
   private function runFramesmithTranscriptionFromLoadedSource(bool $expectFakeTranscript, int $timeoutSeconds): void {
-    $this->assertSession()->waitForText('Video ready', 30000);
+    $this->assertSession()->waitForText('Video ready', $this->videoReadyTimeoutMilliseconds());
     $this->assertSession()->buttonExists('Transcribe');
+    $this->installFramesmithUploadStressHarness();
 
     $this->getSession()->getPage()->pressButton('Transcribe');
 
-    $this->assertSession()->waitForText('Captions ready', 30000);
+    $this->assertSession()->waitForText('Captions ready', $timeoutSeconds * 1000);
 
     $transcriptButton = $this->waitForTranscriptButton($timeoutSeconds);
     $statusText = $this->getFramesmithStatusText();
@@ -63,6 +64,8 @@ trait FramesmithBrowserSmokeFlowTrait {
 
     $transcriptButton->click();
     $panelText = $this->waitForTranscriptPanelText($expectFakeTranscript, $timeoutSeconds);
+
+    $this->assertFramesmithUploadStressHarness();
 
     if ($expectFakeTranscript) {
       $this->assertStringContainsString(
@@ -114,6 +117,153 @@ trait FramesmithBrowserSmokeFlowTrait {
     $page->pressButton('Log in');
 
     $this->assertSession()->waitForElementRemoved('css', 'form.user-login-form', 30000);
+  }
+
+  /**
+   * Installs a browser-side upload observer and stress harness.
+   */
+  private function installFramesmithUploadStressHarness(): void {
+    $delayMs = $this->envInt('FRAMESMITH_SMOKE_UPLOAD_DELAY_MS', 0);
+    $dropFirstUploadChunk = $this->envFlag('FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK');
+
+    $script = sprintf(
+      <<<'JS'
+(function () {
+  if (window.__framesmithSmokeUpload && window.__framesmithSmokeUpload.installed) {
+    return;
+  }
+  const originalFetch = window.fetch.bind(window);
+  const state = {
+    installed: true,
+    calls: [],
+    failedOnce: false,
+    delayMs: %d,
+    dropFirstUploadChunk: %s
+  };
+  window.__framesmithSmokeUpload = state;
+  window.fetch = async function framesmithSmokeFetch(resource, init) {
+    const url = typeof resource === 'string'
+      ? resource
+      : (resource && typeof resource.url === 'string' ? resource.url : '');
+    if (url.includes('/api/framesmith/transcription/upload')) {
+      const parsed = new URL(url, window.location.href);
+      const index = Number(parsed.searchParams.get('index'));
+      const total = Number(parsed.searchParams.get('total'));
+      state.calls.push({
+        index,
+        total,
+        uploadId: parsed.searchParams.get('upload_id') || '',
+        at: Date.now()
+      });
+      if (state.delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, state.delayMs));
+      }
+      if (state.dropFirstUploadChunk && !state.failedOnce) {
+        state.failedOnce = true;
+        throw new TypeError('Simulated mobile network drop during Framesmith upload chunk');
+      }
+    }
+    return originalFetch(resource, init);
+  };
+}());
+JS,
+      $delayMs,
+      $dropFirstUploadChunk ? 'true' : 'false',
+    );
+
+    $this->getSession()->executeScript($script);
+  }
+
+  /**
+   * Asserts the browser-side upload stress harness saw chunked upload behavior.
+   */
+  private function assertFramesmithUploadStressHarness(): void {
+    if (!$this->envFlag('FRAMESMITH_SMOKE_REQUIRE_CHUNKED_UPLOAD')) {
+      return;
+    }
+
+    $state = $this->getSession()->evaluateScript('window.__framesmithSmokeUpload || null');
+    $this->assertIsArray($state, 'Framesmith upload smoke harness was not installed.');
+
+    $calls = $state['calls'] ?? [];
+    $this->assertIsArray($calls, 'Framesmith upload smoke harness did not record calls.');
+    $this->assertNotEmpty($calls, 'Framesmith upload smoke harness saw no upload calls.');
+
+    $maxTotal = 0;
+    $indices = [];
+    foreach ($calls as $call) {
+      if (!is_array($call)) {
+        continue;
+      }
+      $total = (int) ($call['total'] ?? 0);
+      $index = (int) ($call['index'] ?? -1);
+      $maxTotal = max($maxTotal, $total);
+      if ($index >= 0) {
+        $indices[$index] = TRUE;
+      }
+    }
+
+    $this->assertGreaterThan(
+      1,
+      $maxTotal,
+      'Framesmith uploaded the transcription audio as a single request, not chunks.',
+    );
+    $this->assertGreaterThan(
+      1,
+      count($calls),
+      'Framesmith upload smoke expected multiple upload requests.',
+    );
+    $this->assertGreaterThan(
+      1,
+      count($indices),
+      'Framesmith upload smoke expected multiple chunk indexes.',
+    );
+
+    if ($this->envFlag('FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK')) {
+      $this->assertTrue(
+        (bool) ($state['failedOnce'] ?? FALSE),
+        'Framesmith upload smoke did not simulate the requested network drop.',
+      );
+      $this->assertGreaterThan(
+        $maxTotal,
+        count($calls),
+        'Framesmith upload did not retry after the simulated network drop.',
+      );
+    }
+  }
+
+  /**
+   * Returns the video-ready wait budget in milliseconds.
+   */
+  private function videoReadyTimeoutMilliseconds(): int {
+    return $this->envInt('FRAMESMITH_SMOKE_VIDEO_READY_TIMEOUT_MS', 120000);
+  }
+
+  /**
+   * Returns an integer environment setting.
+   */
+  private function envInt(string $name, int $default): int {
+    $value = getenv($name);
+    if (!is_string($value) || trim($value) === '') {
+      return $default;
+    }
+    if (!preg_match('/^\d+$/', trim($value))) {
+      return $default;
+    }
+
+    return (int) trim($value);
+  }
+
+  /**
+   * Returns TRUE when an environment flag is enabled.
+   */
+  private function envFlag(string $name): bool {
+    $value = getenv($name);
+    if (!is_string($value)) {
+      return FALSE;
+    }
+
+    return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'on'], TRUE);
   }
 
   /**

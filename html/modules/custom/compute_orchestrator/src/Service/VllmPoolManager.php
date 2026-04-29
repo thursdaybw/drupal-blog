@@ -587,18 +587,9 @@ final class VllmPoolManager {
     try {
       $info = $this->vastClient->showInstance($contractId);
       $record['last_seen_at'] = time();
+
       if (!$this->isRunningState($info)) {
-        $record['runtime_state'] = 'stopped';
-        $record['last_phase'] = 'idle_reap';
-        $record['last_action'] = 'already_inactive';
-        $record['last_reap_at'] = time();
-        $record['last_error'] = '';
-        $this->poolRepository->save($record);
-        return [
-          'contract_id' => $contractId,
-          'action' => 'already_inactive',
-          'message' => 'Instance is not running.',
-        ];
+        return $this->recordIdleReapAlreadyInactive($contractId, $record);
       }
 
       if ($dryRun) {
@@ -609,65 +600,158 @@ final class VllmPoolManager {
         ];
       }
 
-      $this->stopInstanceForIdleReap($contractId);
-      $now = time();
-      $record['runtime_state'] = 'stopped';
-      $record['last_phase'] = 'idle_reap';
-      $record['last_action'] = 'stopped';
-      $record['last_stopped_at'] = $now;
-      $record['last_reap_at'] = $now;
-      $record['last_error'] = '';
-      $this->poolRepository->save($record);
-      return [
-        'contract_id' => $contractId,
-        'action' => 'stopped',
-        'message' => 'Idle running instance was stopped.',
-      ];
+      $this->stopRunningInstanceForIdleReap($contractId);
+      return $this->recordIdleReapStopped($contractId, $record);
     }
     catch (\Throwable $exception) {
-      $record['lease_status'] = $this->isVastRateLimitFailure($exception) ? 'available' : 'unavailable';
-      $record['runtime_state'] = 'running';
-      $record['last_seen_at'] = time();
-      $record['last_phase'] = 'idle_reap';
-      $record['last_action'] = 'failed';
-      $record['last_error'] = $exception->getMessage();
-      $this->poolRepository->save($record);
-      return [
-        'contract_id' => $contractId,
-        'action' => 'failed',
-        'message' => $exception->getMessage(),
-      ];
+      return $this->recordIdleReapFailure($contractId, $record, $exception);
     }
   }
 
   /**
-   * Stops an instance for idle reap, retrying brief Vast API rate limits.
+   * Records a reaped instance that Vast already reports as inactive.
+   *
+   * @param string $contractId
+   *   Vast contract ID for the pool record.
+   * @param array<string,mixed> $record
+   *   Pool record to update.
+   *
+   * @return array<string,string>
+   *   Operator-facing result row.
    */
-  private function stopInstanceForIdleReap(string $contractId): void {
+  private function recordIdleReapAlreadyInactive(string $contractId, array $record): array {
+    $record['runtime_state'] = 'stopped';
+    $record['last_phase'] = 'idle_reap';
+    $record['last_action'] = 'already_inactive';
+    $record['last_reap_at'] = time();
+    $record['last_error'] = '';
+    $this->poolRepository->save($record);
+
+    return [
+      'contract_id' => $contractId,
+      'action' => 'already_inactive',
+      'message' => 'Instance is not running.',
+    ];
+  }
+
+  /**
+   * Records a reaped instance after Vast accepts the stop request.
+   *
+   * @param string $contractId
+   *   Vast contract ID for the pool record.
+   * @param array<string,mixed> $record
+   *   Pool record to update.
+   *
+   * @return array<string,string>
+   *   Operator-facing result row.
+   */
+  private function recordIdleReapStopped(string $contractId, array $record): array {
+    $now = time();
+    $record['runtime_state'] = 'stopped';
+    $record['last_phase'] = 'idle_reap';
+    $record['last_action'] = 'stopped';
+    $record['last_stopped_at'] = $now;
+    $record['last_reap_at'] = $now;
+    $record['last_error'] = '';
+    $this->poolRepository->save($record);
+
+    return [
+      'contract_id' => $contractId,
+      'action' => 'stopped',
+      'message' => 'Idle running instance was stopped.',
+    ];
+  }
+
+  /**
+   * Records a failed idle reap without hiding retryable live instances.
+   *
+   * A Vast 429 means the stop request was throttled, not that the instance is
+   * unusable. Keep the record available and running so the next cron pass still
+   * sees an expensive live instance that needs to be stopped. Non-rate-limit
+   * failures are marked unavailable because their live state is less certain.
+   *
+   * @param string $contractId
+   *   Vast contract ID for the pool record.
+   * @param array<string,mixed> $record
+   *   Pool record to update.
+   * @param \Throwable $exception
+   *   Failure raised while reading or stopping the Vast instance.
+   *
+   * @return array<string,string>
+   *   Operator-facing result row.
+   */
+  private function recordIdleReapFailure(string $contractId, array $record, \Throwable $exception): array {
+    $record['lease_status'] = $this->isVastRateLimitFailure($exception) ? 'available' : 'unavailable';
+    $record['runtime_state'] = 'running';
+    $record['last_seen_at'] = time();
+    $record['last_phase'] = 'idle_reap';
+    $record['last_action'] = 'failed';
+    $record['last_error'] = $exception->getMessage();
+    $this->poolRepository->save($record);
+
+    return [
+      'contract_id' => $contractId,
+      'action' => 'failed',
+      'message' => $exception->getMessage(),
+    ];
+  }
+
+  /**
+   * Stops a running Vast instance during idle reap.
+   *
+   * Vast applies a tight rate limit to instance state changes. The reaper has
+   * just called showInstance() to avoid stopping an already-inactive instance;
+   * sending the PUT state change immediately afterwards can exceed Vast's
+   * per-instance endpoint threshold. Space the state change out, and retry 429s
+   * with a small backoff, because leaving a paid instance running is worse than
+   * making cron wait a few seconds.
+   */
+  private function stopRunningInstanceForIdleReap(string $contractId): void {
     $maxAttempts = 4;
     $lastException = NULL;
     $spacingSeconds = $this->getVastStateChangeSpacingSeconds();
 
     for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-      if ($spacingSeconds > 0) {
-        sleep($spacingSeconds);
-      }
+      $this->waitBeforeVastStateChange($spacingSeconds);
       try {
         $this->instanceLifecycleClient->stopInstance($contractId);
         return;
       }
       catch (\Throwable $exception) {
         $lastException = $exception;
-        if (!$this->isVastRateLimitFailure($exception) || $attempt === $maxAttempts) {
+        if (!$this->shouldRetryVastStateChange($exception, $attempt, $maxAttempts)) {
           throw $exception;
         }
-        sleep(max($spacingSeconds, $attempt));
+        $this->waitAfterVastRateLimit($attempt, $spacingSeconds);
       }
     }
 
     if ($lastException instanceof \Throwable) {
       throw $lastException;
     }
+  }
+
+  /**
+   * Waits between the Vast readback and the subsequent state-change request.
+   */
+  private function waitBeforeVastStateChange(int $spacingSeconds): void {
+    if ($spacingSeconds > 0) {
+      sleep($spacingSeconds);
+    }
+  }
+
+  /**
+   * Returns TRUE when another Vast state-change attempt is worthwhile.
+   */
+  private function shouldRetryVastStateChange(\Throwable $exception, int $attempt, int $maxAttempts): bool {
+    return $this->isVastRateLimitFailure($exception) && $attempt < $maxAttempts;
+  }
+
+  /**
+   * Waits after a Vast 429 before retrying the state-change request.
+   */
+  private function waitAfterVastRateLimit(int $attempt, int $spacingSeconds): void {
+    sleep(max($spacingSeconds, $attempt));
   }
 
   /**
@@ -682,6 +766,9 @@ final class VllmPoolManager {
 
   /**
    * Returns the minimum spacing before Vast state-change requests.
+   *
+   * This is state-backed so staging can increase the spacing without a deploy
+   * if Vast tightens its endpoint thresholds again.
    */
   private function getVastStateChangeSpacingSeconds(): int {
     return max(0, (int) $this->state->get(self::STATE_VAST_STATE_CHANGE_SPACING_SECONDS, 2));

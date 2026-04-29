@@ -11,6 +11,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * Framesmith transcription API endpoints.
@@ -94,7 +95,11 @@ final class FramesmithTranscriptionController extends ControllerBase {
    * Stores uploaded audio for a task.
    */
   public function upload(Request $request): JsonResponse {
-    $taskId = trim((string) $request->request->get('task_id', ''));
+    $taskId = trim((string) (
+      $request->request->get('task_id')
+      ?? $request->query->get('task_id')
+      ?? ''
+    ));
     if ($taskId === '') {
       return new JsonResponse([
         'ok' => FALSE,
@@ -118,6 +123,26 @@ final class FramesmithTranscriptionController extends ControllerBase {
       ], Response::HTTP_BAD_REQUEST);
     }
 
+    if ($this->isChunkedUploadRequest($request)) {
+      return $this->storeChunkedUpload($request, $taskId, $uploadedFile);
+    }
+
+    return $this->storeCompleteUpload($request, $taskId, $uploadedFile);
+  }
+
+  /**
+   * Determines whether this request is one chunk of a larger audio upload.
+   */
+  private function isChunkedUploadRequest(Request $request): bool {
+    return $request->query->has('upload_id')
+      || $request->query->has('index')
+      || $request->query->has('total');
+  }
+
+  /**
+   * Stores one complete uploaded audio file and optionally launches work.
+   */
+  private function storeCompleteUpload(Request $request, string $taskId, UploadedFile $uploadedFile): JsonResponse {
     $task = $this->taskStore->storeUpload($taskId, $uploadedFile);
     $autoLaunch = $request->request->getBoolean('auto_launch', TRUE);
     $launch = NULL;
@@ -137,6 +162,138 @@ final class FramesmithTranscriptionController extends ControllerBase {
       'launch' => $launch,
       'task' => $this->buildTaskPayload($task),
     ]);
+  }
+
+  /**
+   * Stores one chunk of a Framesmith transcription audio upload.
+   */
+  private function storeChunkedUpload(Request $request, string $taskId, UploadedFile $uploadedFile): JsonResponse {
+    $uploadId = $this->sanitizeUploadId((string) $request->query->get('upload_id', ''));
+    $index = $request->query->has('index') ? (int) $request->query->get('index') : NULL;
+    $total = $request->query->has('total') ? (int) $request->query->get('total') : NULL;
+
+    if ($uploadId === '') {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'upload_id is required for chunked uploads.'], Response::HTTP_BAD_REQUEST);
+    }
+    if ($index === NULL || $index < 0) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'index must be a non-negative integer.'], Response::HTTP_BAD_REQUEST);
+    }
+    if ($total === NULL || $total < 1) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'total must be greater than zero.'], Response::HTTP_BAD_REQUEST);
+    }
+    if ($index >= $total) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'index is out of range for total chunks.'], Response::HTTP_BAD_REQUEST);
+    }
+
+    $chunkDirectory = $this->chunkDirectory($taskId, $uploadId);
+    if (!is_dir($chunkDirectory) && !mkdir($chunkDirectory, 0775, TRUE) && !is_dir($chunkDirectory)) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to prepare chunk upload directory.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
+
+    $sourcePath = $uploadedFile->getRealPath();
+    if (!is_string($sourcePath) || $sourcePath === '' || !is_readable($sourcePath)) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'Uploaded chunk has no readable source path.'], Response::HTTP_BAD_REQUEST);
+    }
+
+    $partPath = $chunkDirectory . '/part-' . str_pad((string) $index, 8, '0', STR_PAD_LEFT) . '.bin';
+    if (!copy($sourcePath, $partPath)) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to store uploaded chunk.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
+
+    if ($index + 1 < $total) {
+      return new JsonResponse([
+        'ok' => TRUE,
+        'task_id' => $taskId,
+        'status' => 'partial',
+        'mode' => 'chunked',
+        'upload_id' => $uploadId,
+        'index' => $index,
+        'total' => $total,
+      ]);
+    }
+
+    $assembledPath = $chunkDirectory . '/audio.wav';
+    $assembled = @fopen($assembledPath, 'wb');
+    if ($assembled === FALSE) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to assemble uploaded chunks.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
+
+    try {
+      for ($partIndex = 0; $partIndex < $total; $partIndex++) {
+        $currentPartPath = $chunkDirectory . '/part-' . str_pad((string) $partIndex, 8, '0', STR_PAD_LEFT) . '.bin';
+        if (!is_file($currentPartPath) || !is_readable($currentPartPath)) {
+          fclose($assembled);
+          @unlink($assembledPath);
+          return new JsonResponse([
+            'ok' => FALSE,
+            'error' => 'Missing uploaded chunk.',
+            'missing_index' => $partIndex,
+          ], Response::HTTP_BAD_REQUEST);
+        }
+        $part = @fopen($currentPartPath, 'rb');
+        if ($part === FALSE) {
+          fclose($assembled);
+          @unlink($assembledPath);
+          return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to read uploaded chunk.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+        stream_copy_to_stream($part, $assembled);
+        fclose($part);
+      }
+    }
+    finally {
+      if (is_resource($assembled)) {
+        fclose($assembled);
+      }
+    }
+
+    $assembledUpload = new UploadedFile(
+      $assembledPath,
+      $taskId . '.wav',
+      'audio/wav',
+      NULL,
+      TRUE,
+    );
+
+    $response = $this->storeCompleteUpload($request, $taskId, $assembledUpload);
+    $this->removeDirectory($chunkDirectory);
+    return $response;
+  }
+
+  /**
+   * Sanitizes a caller-generated upload ID for use in temporary paths.
+   */
+  private function sanitizeUploadId(string $uploadId): string {
+    return preg_replace('/[^A-Za-z0-9._-]/', '_', trim($uploadId)) ?: '';
+  }
+
+  /**
+   * Builds the temporary directory path for one chunked upload.
+   */
+  private function chunkDirectory(string $taskId, string $uploadId): string {
+    return sys_get_temp_dir() . '/framesmith-transcription-chunks/' . $this->sanitizeUploadId($taskId) . '/' . $uploadId;
+  }
+
+  /**
+   * Removes a temporary chunk directory after successful finalization.
+   */
+  private function removeDirectory(string $directory): void {
+    if (!is_dir($directory)) {
+      return;
+    }
+    $entries = scandir($directory);
+    if ($entries === FALSE) {
+      return;
+    }
+    foreach ($entries as $entry) {
+      if ($entry === '.' || $entry === '..') {
+        continue;
+      }
+      $path = $directory . '/' . $entry;
+      if (is_file($path) || is_link($path)) {
+        @unlink($path);
+      }
+    }
+    @rmdir($directory);
   }
 
   /**

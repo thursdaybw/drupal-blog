@@ -9,6 +9,7 @@ use Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController;
 use Drupal\compute_orchestrator\Service\FramesmithTranscriptionLauncherInterface;
 use Drupal\compute_orchestrator\Service\FramesmithTranscriptionTaskStoreInterface;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 require_once __DIR__ . '/../../../src/Controller/FramesmithTranscriptionController.php';
 require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionTaskStoreInterface.php';
@@ -64,6 +65,57 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
     $task = $this->container->get('compute_orchestrator.framesmith_transcription_task_store')->get($payload['task_id']);
     $this->assertSame('vid-1', $task['video_id']);
     $this->assertSame('awaiting_upload', $task['status']);
+  }
+
+  /**
+   * Verifies chunked upload finalizes audio on the last chunk.
+   */
+  public function testChunkedUploadFinalizesAudioOnLastChunk(): void {
+    $taskStore = $this->container->get('compute_orchestrator.framesmith_transcription_task_store');
+    assert($taskStore instanceof FramesmithTranscriptionTaskStoreInterface);
+    $task = $taskStore->create(['video_id' => 'vid-chunked']);
+
+    $controller = FramesmithTranscriptionController::create($this->container);
+
+    $firstResponse = $controller->upload($this->buildChunkUploadRequest(
+      $task['task_id'],
+      'upload-test-1',
+      0,
+      2,
+      'RIFF',
+      'part-0.bin',
+    ));
+    $firstPayload = json_decode($firstResponse->getContent() ?: '{}', TRUE, 512, JSON_THROW_ON_ERROR);
+
+    $this->assertTrue($firstPayload['ok']);
+    $this->assertSame('partial', $firstPayload['status']);
+    $this->assertSame('chunked', $firstPayload['mode']);
+    $this->assertSame(0, $firstPayload['index']);
+
+    $storedAfterFirstChunk = $taskStore->get($task['task_id']);
+    $this->assertSame('', $storedAfterFirstChunk['local_audio_path']);
+
+    $finalResponse = $controller->upload($this->buildChunkUploadRequest(
+      $task['task_id'],
+      'upload-test-1',
+      1,
+      2,
+      'WAVE',
+      'part-1.bin',
+    ));
+    $finalPayload = json_decode($finalResponse->getContent() ?: '{}', TRUE, 512, JSON_THROW_ON_ERROR);
+
+    $this->assertTrue($finalPayload['ok']);
+    $this->assertSame('ready_to_launch', $finalPayload['status']);
+    $this->assertNull($finalPayload['launch']);
+
+    $storedAfterFinalChunk = $taskStore->get($task['task_id']);
+    $this->assertSame('ready_to_launch', $storedAfterFinalChunk['status']);
+    $this->assertNotSame('', $storedAfterFinalChunk['local_audio_path']);
+
+    $resolvedPath = $this->container->get('file_system')->realpath($storedAfterFinalChunk['local_audio_path']);
+    $this->assertIsString($resolvedPath);
+    $this->assertSame('RIFFWAVE', file_get_contents($resolvedPath));
   }
 
   /**
@@ -199,6 +251,42 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
     $this->assertArrayHasKey('proc_stdout', $stored['launch_debug']);
     $this->assertArrayHasKey('proc_stderr', $stored['launch_debug']);
     $this->assertArrayHasKey('proc_exit_code', $stored['launch_debug']);
+  }
+
+  /**
+   * Builds a request carrying one uploaded audio chunk.
+   */
+  private function buildChunkUploadRequest(
+    string $taskId,
+    string $uploadId,
+    int $index,
+    int $total,
+    string $contents,
+    string $filename,
+  ): Request {
+    $path = tempnam(sys_get_temp_dir(), 'framesmith-upload-test-');
+    $this->assertIsString($path);
+    file_put_contents($path, $contents);
+
+    $request = Request::create(
+      '/api/framesmith/transcription/upload',
+      'POST',
+      [
+        'task_id' => $taskId,
+        'auto_launch' => '0',
+      ],
+      [],
+      [
+        'file' => new UploadedFile($path, $filename, 'audio/wav', NULL, TRUE),
+      ],
+    );
+    $request->query->replace([
+      'task_id' => $taskId,
+      'upload_id' => $uploadId,
+      'index' => $index,
+      'total' => $total,
+    ]);
+    return $request;
   }
 
 }

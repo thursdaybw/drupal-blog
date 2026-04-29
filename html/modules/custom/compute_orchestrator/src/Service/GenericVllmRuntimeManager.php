@@ -43,42 +43,28 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
 
     $maxHourlyPrice = (float) ($this->configFactory->get('compute_orchestrator.settings')->get('max_hourly_price') ?? 0.5);
 
-    $offer = $this->vastClient->selectBestOffer(
+    return $this->vastClient->provisionInstanceFromOffers(
       $filters,
-      [],
       ['RU', 'CN', 'IR', 'KP', 'SY'],
       20,
       $maxHourlyPrice,
-    );
-
-    if ($offer === NULL || empty($offer['id'])) {
-      throw new \RuntimeException(sprintf('No suitable Vast offer matched the generic vLLM filters under the configured hourly cap of $%.2f.', $maxHourlyPrice));
-    }
-
-    $create = $this->vastClient->createInstance(
-      (string) $offer['id'],
-      $image,
+      NULL,
       [
-        'disk' => 40,
-        'runtype' => 'ssh',
-        'target_state' => 'running',
-        'env' => [
-          '-p 8000:8000' => '1',
+        'workload' => (string) ($workloadDefinition['mode'] ?? 'generic'),
+        'image' => $image,
+        'bootstrap_only' => TRUE,
+        'options' => [
+          'disk' => 40,
+          'runtype' => 'ssh',
+          'target_state' => 'running',
+          'env' => [
+            '-p 8000:8000' => '1',
+          ],
         ],
       ],
+      5,
+      600,
     );
-
-    $contractId = (string) ($create['new_contract'] ?? '');
-    if ($contractId === '') {
-      throw new \RuntimeException('Vast did not return a contract ID for fresh provisioning.');
-    }
-
-    $instanceInfo = $this->vastClient->showInstance($contractId);
-
-    return [
-      'contract_id' => $contractId,
-      'instance_info' => $instanceInfo,
-    ];
   }
 
   /**

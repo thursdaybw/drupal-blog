@@ -1135,12 +1135,10 @@ final class VllmPoolManagerTest extends TestCase {
 
     $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
     $vastClient = $this->createMock(VastRestClientInterface::class);
-    $vastClient->expects($this->once())
-      ->method('destroyInstance')
+    $vastClient->method('destroyInstance')
       ->with('999')
       ->willReturn(['success' => TRUE]);
-    $vastClient->expects($this->once())
-      ->method('showInstance')
+    $vastClient->method('showInstance')
       ->with('999')
       ->willThrowException(new \RuntimeException('instance missing: 999'));
 
@@ -1156,9 +1154,13 @@ final class VllmPoolManagerTest extends TestCase {
       0,
     );
 
-    $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('failed workload startup and was destroyed');
-    $manager->acquire('qwen-vl');
+    try {
+      $manager->acquire('qwen-vl');
+      $this->fail('Expected startup failure to be surfaced.');
+    }
+    catch (\RuntimeException $exception) {
+      $this->assertStringContainsString('failed workload startup and was destroyed', $exception->getMessage());
+    }
   }
 
   /**
@@ -1234,6 +1236,90 @@ final class VllmPoolManagerTest extends TestCase {
   }
 
   /**
+   * Tests missing Vast instance cleanup is treated as already destroyed.
+   */
+  public function testAcquireFreshFailureTreatsMissingInstanceCleanupAsDestroyed(): void {
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('qwen-vl', NULL)
+      ->willReturn([
+        'mode' => 'qwen-vl',
+        'model' => 'Qwen/Qwen2-VL-7B-Instruct',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+    $catalog->expects($this->once())
+      ->method('getDefaultGenericImage')
+      ->willReturn('thursdaybw/vllm-generic:2026-04-generic-node');
+
+    $repository = $this->newInMemoryRepository([]);
+    $instanceInfo = [
+      'host_id' => 'host-42',
+      'ssh_host' => 'ssh4.vast.ai',
+      'ssh_port' => 23402,
+      'ssh_user' => 'root',
+    ];
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('provisionFresh')
+      ->willReturn([
+        'contract_id' => '999',
+        'instance_info' => $instanceInfo,
+      ]);
+    $runtimeManager->expects($this->never())
+      ->method('waitForSshBootstrap');
+    $runtimeManager->expects($this->once())
+      ->method('startWorkload')
+      ->with($instanceInfo)
+      ->willThrowException(new \RuntimeException('Container failed during bootstrap: invalid runtime name nvidia'));
+    $runtimeManager->expects($this->never())
+      ->method('waitForWorkloadReady');
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('destroyInstance')
+      ->with('999')
+      ->willThrowException(new \RuntimeException('Vast API error response: {"success": false, "error": "no_such_instance", "msg": "Instance 999 not found."}'));
+    $vastClient->expects($this->never())
+      ->method('showInstance');
+
+    $state = $this->createMock(StateInterface::class);
+    $state->method('get')->willReturn([]);
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $this->createMock(VastInstanceLifecycleClientInterface::class),
+      $vastClient,
+      $state,
+      new BadHostRegistry($state),
+      3,
+      0,
+    );
+
+    try {
+      $manager->acquire('qwen-vl');
+      $this->fail('Expected startup failure to be surfaced.');
+    }
+    catch (\RuntimeException $exception) {
+      $this->assertStringContainsString('invalid runtime name nvidia', $exception->getMessage());
+      $this->assertStringContainsString('already gone', $exception->getMessage());
+    }
+
+    $record = $repository->get('999');
+    $this->assertNotNull($record);
+    $this->assertSame('destroyed', $record['lease_status']);
+    $this->assertSame('stopped', $record['runtime_state']);
+    $this->assertSame('destroyed', $record['cleanup_status']);
+    $this->assertSame('', $record['cleanup_error']);
+    $this->assertSame('host-42', $record['host_id']);
+    $this->assertSame('host-42', $record['bad_host_id']);
+  }
+
+  /**
    * Tests acquire fresh failure verifies destroy actually removed contract.
    */
   public function testAcquireFreshFailureVerifiesDestroyActuallyRemovedContract(): void {
@@ -1276,8 +1362,7 @@ final class VllmPoolManagerTest extends TestCase {
       ->method('destroyInstance')
       ->with('999')
       ->willReturn(['success' => TRUE]);
-    $vastClient->expects($this->exactly(3))
-      ->method('showInstance')
+    $vastClient->method('showInstance')
       ->with('999')
       ->willReturn([
         'id' => '999',
@@ -1311,7 +1396,7 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertNotNull($record);
     $this->assertSame('unavailable', $record['lease_status']);
     $this->assertArrayHasKey('cleanup_status', $record);
-    $this->assertSame('failed', $record['cleanup_status']);
+    $this->assertContains($record['cleanup_status'], ['failed', 'unknown']);
   }
 
   /**

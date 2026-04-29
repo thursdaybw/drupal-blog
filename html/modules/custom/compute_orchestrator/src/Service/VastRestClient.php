@@ -609,6 +609,7 @@ final class VastRestClient implements VastRestClientInterface {
   ): array {
 
     $preserveOnFailure = (bool) ($createOptions['preserve_on_failure'] ?? FALSE);
+    $bootstrapOnly = (bool) ($createOptions['bootstrap_only'] ?? FALSE);
     $workload = (string) ($createOptions['workload'] ?? 'vllm');
 
     $globalBlacklist = $this->getGlobalBlacklist();
@@ -729,13 +730,18 @@ final class VastRestClient implements VastRestClientInterface {
 
         $contractId = (string) $create['new_contract'];
 
-        $this->logWithTime('Waiting for running + SSH for contract ' . $contractId);
-
-        $info = $this->waitForRunningAndSsh(
-          $contractId,
-          $workload,
-          $bootTimeoutSeconds
-        );
+        if ($bootstrapOnly) {
+          $this->logWithTime('Waiting for SSH bootstrap for contract ' . $contractId);
+          $info = $this->waitForSshBootstrapOnly($contractId, $bootTimeoutSeconds);
+        }
+        else {
+          $this->logWithTime('Waiting for running + SSH for contract ' . $contractId);
+          $info = $this->waitForRunningAndSsh(
+            $contractId,
+            $workload,
+            $bootTimeoutSeconds
+          );
+        }
 
         $this->recordHostSuccess($hostId);
 
@@ -847,6 +853,94 @@ final class VastRestClient implements VastRestClientInterface {
     throw new \RuntimeException(
       'All provisioning attempts failed.' . ($lastFailureMessage ? ' Last error: ' . $lastFailureMessage : '')
     );
+  }
+
+  /**
+   * Waits for a freshly created generic image to reach SSH bootstrap only.
+   *
+   * @return array<string,mixed>
+   *   Latest Vast instance information.
+   */
+  private function waitForSshBootstrapOnly(string $contractId, int $timeoutSeconds): array {
+    $start = time();
+    $lastProgressAt = $start;
+    $lastSnapshot = [];
+    $stallThresholdSeconds = 600;
+    $pollIntervalSeconds = 10;
+
+    while (TRUE) {
+      if ((time() - $start) > max(5, $timeoutSeconds)) {
+        throw new \RuntimeException('Instance exceeded SSH bootstrap timeout.');
+      }
+
+      $info = $this->showInstance($contractId);
+      $snapshot = [
+        'cur_state' => (string) ($info['cur_state'] ?? ''),
+        'actual_status' => (string) ($info['actual_status'] ?? ''),
+        'status_msg' => (string) ($info['status_msg'] ?? ''),
+        'ssh_host' => (string) ($info['ssh_host'] ?? ''),
+        'ssh_port' => (string) ($info['ssh_port'] ?? ''),
+      ];
+
+      if ($snapshot !== $lastSnapshot) {
+        $this->logWithTime(sprintf(
+          'BOOTSTRAP %s cur_state=%s actual_status=%s ssh=%s:%s msg=%s',
+          $contractId,
+          $snapshot['cur_state'] !== '' ? $snapshot['cur_state'] : '(null)',
+          $snapshot['actual_status'] !== '' ? $snapshot['actual_status'] : '(null)',
+          $snapshot['ssh_host'] !== '' ? $snapshot['ssh_host'] : '(null)',
+          $snapshot['ssh_port'] !== '' ? $snapshot['ssh_port'] : '(null)',
+          $snapshot['status_msg'] !== '' ? $snapshot['status_msg'] : '(null)'
+        ));
+        $lastSnapshot = $snapshot;
+        $lastProgressAt = time();
+      }
+
+      if ($snapshot['status_msg'] !== '' && (
+        stripos($snapshot['status_msg'], 'OCI runtime create failed') !== FALSE ||
+        stripos($snapshot['status_msg'], 'failed to create task for container') !== FALSE ||
+        stripos($snapshot['status_msg'], 'Error response from daemon') !== FALSE ||
+        stripos($snapshot['status_msg'], 'no such container') !== FALSE
+      )) {
+        throw new \RuntimeException('Container failed during bootstrap: ' . $snapshot['status_msg']);
+      }
+
+      $isFailureState = in_array($snapshot['actual_status'], ['error', 'exited', 'failed'], TRUE);
+      $isStatusMismatch = $this->isBootstrapStatusMismatch(
+        $snapshot['cur_state'],
+        $snapshot['actual_status'],
+        $snapshot['status_msg'],
+        $snapshot['ssh_host'],
+        $snapshot['ssh_port'],
+      );
+
+      if ($isFailureState && !$isStatusMismatch) {
+        throw new \RuntimeException('Instance entered failure state: ' . $snapshot['actual_status'] . ' — ' . $snapshot['status_msg']);
+      }
+
+      if ($snapshot['actual_status'] === 'created' && $snapshot['status_msg'] !== '' && $this->isCreationFailureMessage($snapshot['status_msg'])) {
+        throw new \RuntimeException('Container failed during creation: ' . $snapshot['status_msg']);
+      }
+
+      if ($snapshot['cur_state'] === 'running' && $snapshot['ssh_host'] !== '' && $snapshot['ssh_port'] !== '') {
+        $sshCheck = $this->sshLoginCheck(
+          $snapshot['ssh_host'],
+          (int) $snapshot['ssh_port'],
+          (string) ($info['ssh_user'] ?? 'root'),
+        );
+        if ($sshCheck['ok']) {
+          return $info;
+        }
+        $this->logWithTime('PROBE ssh not ready: ' . $sshCheck['why']);
+      }
+
+      $stalledFor = time() - $lastProgressAt;
+      if ($stalledFor >= $stallThresholdSeconds) {
+        throw new \RuntimeException('Instance stalled before SSH bootstrap for ' . $stalledFor . ' seconds.');
+      }
+
+      sleep($pollIntervalSeconds);
+    }
   }
 
   /**
@@ -1362,20 +1456,6 @@ final class VastRestClient implements VastRestClientInterface {
     }
 
     return str_contains($lower, 'workload ' . strtolower($workload));
-  }
-
-  /**
-   * Resolves SSH key path from environment or default location.
-   */
-  private function resolveSshKeyPath(): ?string {
-    return $this->sshKeyPathResolver->resolvePath();
-  }
-
-  /**
-   * Returns the candidate SSH private key path (may not exist).
-   */
-  private function getSshKeyCandidate(): string {
-    return $this->sshKeyPathResolver->getCandidatePath();
   }
 
   /**

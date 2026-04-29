@@ -93,6 +93,7 @@ final class VllmPoolManager {
       'current_model' => trim($model),
       'lease_status' => 'available',
       'host' => trim((string) ($info['public_ipaddr'] ?? '')),
+      'host_id' => trim((string) ($info['host_id'] ?? '')),
       'port' => $this->extractPublicPort($info),
       'url' => $this->buildPublicUrl($info),
       'source' => $source,
@@ -827,6 +828,7 @@ final class VllmPoolManager {
       'current_model' => (string) ($definition['model'] ?? ''),
       'lease_status' => 'bootstrapping',
       'host' => trim((string) ($instanceInfo['public_ipaddr'] ?? '')),
+      'host_id' => trim((string) ($instanceInfo['host_id'] ?? '')),
       'port' => $this->extractPublicPort($instanceInfo),
       'url' => $this->buildPublicUrl($instanceInfo),
       'source' => 'fresh_fallback',
@@ -838,14 +840,11 @@ final class VllmPoolManager {
     $this->poolRepository->save($record);
 
     try {
-      $bootstrapCompleted = FALSE;
-      $workloadStartIssued = FALSE;
-      $phase = 'ssh_bootstrap';
-      $action = 'wait for SSH bootstrap';
-      $bootInfo = $this->runtimeManager->waitForSshBootstrap($contractId, $bootstrapTimeoutSeconds);
       $bootstrapCompleted = TRUE;
+      $workloadStartIssued = FALSE;
       $phase = 'start_workload';
       $action = 'start workload';
+      $bootInfo = $instanceInfo;
       $this->runtimeManager->startWorkload($bootInfo, $definition);
       $workloadStartIssued = TRUE;
       $phase = 'workload_ready_probe';
@@ -881,6 +880,10 @@ final class VllmPoolManager {
         );
       }
 
+      if (!$workloadStartIssued) {
+        $record = $this->recordFailedFreshHost($record, $contractId, $definition);
+      }
+
       $record['lease_status'] = 'unavailable';
       $record['last_error'] = $exception->getMessage();
       $record['last_seen_at'] = time();
@@ -895,8 +898,8 @@ final class VllmPoolManager {
 
       $cleanupSuffix = '';
       if (!$workloadStartIssued && $cleanupMessage !== '') {
-        $cleanupSuffix = $cleanupMessage === 'and was destroyed'
-          ? ' and was destroyed'
+        $cleanupSuffix = in_array($cleanupMessage, ['and was destroyed', 'and was already gone'], TRUE)
+          ? ' ' . $cleanupMessage
           : ' (' . $cleanupMessage . ')';
       }
 
@@ -1031,13 +1034,7 @@ final class VllmPoolManager {
       // Preserve original bootstrap failure handling below.
     }
 
-    $hostId = trim((string) ($this->extractHostIdFromRecordOrProvider($record, $contractId) ?? ''));
-    if ($hostId !== '') {
-      $this->badHostRegistry->add($hostId);
-      $this->recordWorkloadBadHost((string) ($definition['mode'] ?? ''), $hostId);
-      $this->recordGlobalBadHost($hostId);
-      $record['bad_host_id'] = $hostId;
-    }
+    $record = $this->recordFailedFreshHost($record, $contractId, $definition);
 
     $this->recordAcquireFailure($record, 'unavailable', $phase, $action, $exception);
     $cleanup = $this->destroyFreshFailedContract($contractId, $record);
@@ -1052,6 +1049,33 @@ final class VllmPoolManager {
       $workloadTimeoutSeconds,
       $freshBootstrapRetriesRemaining,
     );
+  }
+
+  /**
+   * Records the failed fresh-fallback host so later offers can avoid it.
+   *
+   * @param array<string,mixed> $record
+   *   Failed pool record.
+   * @param string $contractId
+   *   Vast contract ID.
+   * @param array<string,int|string> $definition
+   *   Requested workload definition.
+   *
+   * @return array<string,mixed>
+   *   Updated pool record.
+   */
+  private function recordFailedFreshHost(array $record, string $contractId, array $definition): array {
+    $hostId = trim((string) ($this->extractHostIdFromRecordOrProvider($record, $contractId) ?? ''));
+    if ($hostId === '') {
+      return $record;
+    }
+
+    $this->badHostRegistry->add($hostId);
+    $this->recordWorkloadBadHost((string) ($definition['mode'] ?? ''), $hostId);
+    $this->recordGlobalBadHost($hostId);
+    $record['bad_host_id'] = $hostId;
+
+    return $record;
   }
 
   /**
@@ -1139,6 +1163,19 @@ final class VllmPoolManager {
       }
       catch (\Throwable $cleanupException) {
         $cleanupError = $cleanupException->getMessage();
+        if ($this->isAlreadyMissingCleanupFailure($cleanupException)) {
+          $record['lease_status'] = 'destroyed';
+          $record['runtime_state'] = 'stopped';
+          $record['cleanup_status'] = 'destroyed';
+          $record['cleanup_error'] = '';
+          $record['last_error'] = 'Fresh fallback startup failed and contract was already gone: ' . (string) ($record['last_error'] ?? '');
+          $record['last_seen_at'] = time();
+          $this->poolRepository->save($record);
+          return [
+            'record' => $record,
+            'message' => 'and was already gone',
+          ];
+        }
         if (!$this->isRetryableCleanupFailure($cleanupException) || $attempt === $maxAttempts) {
           $record['cleanup_status'] = 'failed';
           $record['cleanup_error'] = $cleanupError;
@@ -1167,8 +1204,7 @@ final class VllmPoolManager {
         }
       }
       catch (\Throwable $verificationException) {
-        $message = strtolower($verificationException->getMessage());
-        if (str_contains($message, 'missing') || str_contains($message, 'not found') || str_contains($message, '404')) {
+        if ($this->isAlreadyMissingCleanupFailure($verificationException)) {
           $record['lease_status'] = 'destroyed';
           $record['cleanup_status'] = 'destroyed';
           $record['cleanup_error'] = '';
@@ -1203,6 +1239,28 @@ final class VllmPoolManager {
       'record' => $record,
       'message' => 'cleanup failed: ' . ($cleanupError !== '' ? $cleanupError : 'unknown cleanup error'),
     ];
+  }
+
+  /**
+   * Returns TRUE when Vast says the failed instance is already gone.
+   */
+  private function isAlreadyMissingCleanupFailure(\Throwable $exception): bool {
+    $message = strtolower($exception->getMessage());
+    foreach ([
+      'no_such_instance',
+      'no such instance',
+      'instance not found',
+      'instance missing',
+      'missing',
+      'not found',
+      '404',
+    ] as $needle) {
+      if (str_contains($message, $needle)) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
   }
 
   /**

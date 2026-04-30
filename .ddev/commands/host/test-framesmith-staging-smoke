@@ -2,27 +2,37 @@
 
 set -euo pipefail
 
-## Description: Run the deployed Framesmith mobile browser smoke against staging or production.
-## Usage: test-framesmith-staging-smoke [staging|production]
+## Description: Run the Framesmith mobile browser smoke against local dev, staging, or production.
+## Usage: test-framesmith-staging-smoke [dev|staging|production]
+## Example: ddev test-framesmith-staging-smoke dev
 ## Example: ddev test-framesmith-staging-smoke staging
 ## Example: ddev test-framesmith-staging-smoke production
 
 TARGET="${1:-${FRAMESMITH_SMOKE_TARGET:-staging}}"
 case "${TARGET}" in
+  dev|local)
+    TARGET="dev"
+    BASE_URL="${FRAMESMITH_SMOKE_BASE_URL:-${FRAMESMITH_DEV_BASE_URL:-https://dev.bevansbench.com}}"
+    REMOTE_EXEC="ddev exec"
+    DRUSH_CMD="vendor/bin/drush"
+    VERIFY_REAP_DEFAULT="1"
+    ;;
   staging|stage)
     TARGET="staging"
     BASE_URL="${FRAMESMITH_SMOKE_BASE_URL:-${FRAMESMITH_STAGING_BASE_URL:-https://bb-drupal-staging.bevansbench.com}}"
     REMOTE_EXEC="ddev exec-stage"
+    DRUSH_CMD="../vendor/bin/drush"
     VERIFY_REAP_DEFAULT="1"
     ;;
   production|prod)
     TARGET="production"
     BASE_URL="${FRAMESMITH_SMOKE_BASE_URL:-${FRAMESMITH_PRODUCTION_BASE_URL:-https://www.bevansbench.com}}"
     REMOTE_EXEC="ddev exec-prod"
+    DRUSH_CMD="../vendor/bin/drush"
     VERIFY_REAP_DEFAULT="0"
     ;;
   *)
-    echo "Usage: ddev test-framesmith-staging-smoke [staging|production]" >&2
+    echo "Usage: ddev test-framesmith-staging-smoke [dev|staging|production]" >&2
     exit 1
     ;;
 esac
@@ -43,7 +53,7 @@ trap cleanup EXIT
 
 remote_script() {
   local script_path="$1"
-  ${REMOTE_EXEC} "cat > ${script_path} && ../vendor/bin/drush php:script ${script_path}; rm -f ${script_path}"
+  ${REMOTE_EXEC} "cat > ${script_path} && ${DRUSH_CMD} php:script ${script_path}; rm -f ${script_path}"
 }
 
 if ! [[ "${GRACE_SECONDS}" =~ ^[0-9]+$ ]]; then
@@ -120,7 +130,7 @@ PHP
 fi
 
 echo "== generate one-time ${TARGET} login URL, hidden =="
-${REMOTE_EXEC} "../vendor/bin/drush uli --uri=${BASE_URL}" | tail -1 > "${LOGIN_FILE}"
+${REMOTE_EXEC} "${DRUSH_CMD} uli --uri=${BASE_URL}" | tail -1 > "${LOGIN_FILE}"
 chmod 600 "${LOGIN_FILE}"
 if grep -q "^${BASE_URL}/" "${LOGIN_FILE}"; then
   echo "login-url-file=<created>"
@@ -166,7 +176,7 @@ PHP
   fi
 
   echo "== run ${TARGET} Drupal cron =="
-  ${REMOTE_EXEC} '../vendor/bin/drush cron'
+  ${REMOTE_EXEC} "${DRUSH_CMD} cron"
 
   echo "== verify cron reaped released runtime =="
   REAP_SUMMARY="$(remote_script /tmp/framesmith_verify_reap.php <<PHP

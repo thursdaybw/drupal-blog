@@ -43,6 +43,7 @@ VERIFY_REAP="${FRAMESMITH_SMOKE_VERIFY_REAP:-${VERIFY_REAP_DEFAULT}}"
 UPLOAD_DELAY_MS="${FRAMESMITH_SMOKE_UPLOAD_DELAY_MS:-250}"
 DROP_FIRST_UPLOAD_CHUNK="${FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK:-1}"
 DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS="${FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS:-4}"
+DROP_STATUS_POLL_ATTEMPTS="${FRAMESMITH_SMOKE_DROP_STATUS_POLL_ATTEMPTS:-2}"
 REQUIRE_RANGE_REDUCTION="${FRAMESMITH_SMOKE_REQUIRE_RANGE_REDUCTION:-0}"
 LOGIN_FILE=".tmp-drush-probes/framesmith-${TARGET}-uli.txt"
 STATE_KEY="compute_orchestrator.vllm_pool.idle_shutdown_seconds"
@@ -78,6 +79,10 @@ if ! [[ "${DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS}" =~ ^[0-9]+$ ]]; then
   echo "FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS must be a non-negative integer." >&2
   exit 1
 fi
+if ! [[ "${DROP_STATUS_POLL_ATTEMPTS}" =~ ^[0-9]+$ ]]; then
+  echo "FRAMESMITH_SMOKE_DROP_STATUS_POLL_ATTEMPTS must be a non-negative integer." >&2
+  exit 1
+fi
 if [[ "${REQUIRE_RANGE_REDUCTION}" != "0" && "${REQUIRE_RANGE_REDUCTION}" != "1" ]]; then
   echo "FRAMESMITH_SMOKE_REQUIRE_RANGE_REDUCTION must be 0 or 1." >&2
   exit 1
@@ -102,6 +107,7 @@ echo "reap_grace_seconds=${GRACE_SECONDS}"
 echo "upload_delay_ms=${UPLOAD_DELAY_MS}"
 echo "drop_first_upload_chunk=${DROP_FIRST_UPLOAD_CHUNK}"
 echo "drop_first_upload_chunk_attempts=${DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS}"
+echo "drop_status_poll_attempts=${DROP_STATUS_POLL_ATTEMPTS}"
 echo "require_range_reduction=${REQUIRE_RANGE_REDUCTION}"
 echo "run_started_at=${RUN_STARTED_AT}"
 
@@ -156,7 +162,7 @@ fi
 
 echo "== run black-box mobile browser smoke =="
 ddev exec bash -lc \
-  "export FRAMESMITH_SMOKE_BASE_URL='${BASE_URL}'; export FRAMESMITH_SMOKE_FIXTURE_PATH='${FIXTURE_PATH}'; export FRAMESMITH_SMOKE_LOGIN_URL=\"\$(cat /var/www/html/${LOGIN_FILE})\"; export FRAMESMITH_SMOKE_REQUIRE_CHUNKED_UPLOAD=1; export FRAMESMITH_SMOKE_REQUIRE_RANGE_REDUCTION='${REQUIRE_RANGE_REDUCTION}'; export FRAMESMITH_SMOKE_UPLOAD_DELAY_MS='${UPLOAD_DELAY_MS}'; export FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK='${DROP_FIRST_UPLOAD_CHUNK}'; export FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS='${DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS}'; export FRAMESMITH_SMOKE_VIDEO_READY_TIMEOUT_MS='180000'; vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/compute_orchestrator/tests/src/ExistingSiteJavascript/FramesmithStagingBrowserSmokeTest.php"
+  "export FRAMESMITH_SMOKE_BASE_URL='${BASE_URL}'; export FRAMESMITH_SMOKE_FIXTURE_PATH='${FIXTURE_PATH}'; export FRAMESMITH_SMOKE_LOGIN_URL=\"\$(cat /var/www/html/${LOGIN_FILE})\"; export FRAMESMITH_SMOKE_REQUIRE_CHUNKED_UPLOAD=1; export FRAMESMITH_SMOKE_REQUIRE_RANGE_REDUCTION='${REQUIRE_RANGE_REDUCTION}'; export FRAMESMITH_SMOKE_UPLOAD_DELAY_MS='${UPLOAD_DELAY_MS}'; export FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK='${DROP_FIRST_UPLOAD_CHUNK}'; export FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS='${DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS}'; export FRAMESMITH_SMOKE_DROP_STATUS_POLL_ATTEMPTS='${DROP_STATUS_POLL_ATTEMPTS}'; export FRAMESMITH_SMOKE_VIDEO_READY_TIMEOUT_MS='180000'; vendor/bin/phpunit -c phpunit.dtt.xml html/modules/custom/compute_orchestrator/tests/src/ExistingSiteJavascript/FramesmithStagingBrowserSmokeTest.php"
 
 if [[ "${VERIFY_REAP}" == "1" ]]; then
   echo "== capture latest completed Framesmith contract =="

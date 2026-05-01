@@ -130,6 +130,7 @@ trait FramesmithBrowserSmokeFlowTrait {
       'FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS',
       $dropFirstUploadChunk ? 1 : 0,
     );
+    $dropStatusPollAttempts = $this->envInt('FRAMESMITH_SMOKE_DROP_STATUS_POLL_ATTEMPTS', 0);
 
     $script = sprintf(
       <<<'JS'
@@ -143,14 +144,49 @@ trait FramesmithBrowserSmokeFlowTrait {
     calls: [],
     failedOnce: false,
     simulatedDropCount: 0,
+    statusPollCalls: [],
+    statusPollSimulatedDropCount: 0,
     delayMs: %d,
-    dropFirstUploadChunkAttempts: %d
+    dropFirstUploadChunkAttempts: %d,
+    dropStatusPollAttempts: %d
   };
   window.__framesmithSmokeUpload = state;
   window.fetch = async function framesmithSmokeFetch(resource, init) {
     const url = typeof resource === 'string'
       ? resource
       : (resource && typeof resource.url === 'string' ? resource.url : '');
+    if (url.includes('/api/framesmith/transcription/status')) {
+      const parsed = new URL(url, window.location.href);
+      const statusCall = {
+        taskId: parsed.searchParams.get('task_id') || '',
+        at: Date.now(),
+        completedAt: 0,
+        simulatedDrop: false,
+        responseOk: null,
+        responseStatus: null,
+        error: ''
+      };
+      state.statusPollCalls.push(statusCall);
+      if (state.statusPollSimulatedDropCount < state.dropStatusPollAttempts) {
+        state.statusPollSimulatedDropCount += 1;
+        statusCall.simulatedDrop = true;
+        statusCall.completedAt = Date.now();
+        statusCall.error = 'Simulated mobile network drop during Framesmith status poll';
+        throw new TypeError(statusCall.error);
+      }
+      try {
+        const response = await originalFetch(resource, init);
+        statusCall.completedAt = Date.now();
+        statusCall.responseOk = response.ok;
+        statusCall.responseStatus = response.status;
+        return response;
+      }
+      catch (error) {
+        statusCall.completedAt = Date.now();
+        statusCall.error = error && error.message ? error.message : String(error);
+        throw error;
+      }
+    }
     if (url.includes('/api/framesmith/transcription/upload')) {
       const parsed = new URL(url, window.location.href);
       const offset = Number(parsed.searchParams.get('offset'));
@@ -199,6 +235,7 @@ trait FramesmithBrowserSmokeFlowTrait {
 JS,
       $delayMs,
       $dropFirstChunkAttempts,
+      $dropStatusPollAttempts,
     );
 
     $this->getSession()->executeScript($script);
@@ -416,6 +453,23 @@ JS);
         1,
         count($calls),
         'Framesmith upload did not retry after the simulated network drop.',
+      );
+    }
+
+    $dropStatusPollAttempts = $this->envInt('FRAMESMITH_SMOKE_DROP_STATUS_POLL_ATTEMPTS', 0);
+    if ($dropStatusPollAttempts > 0) {
+      $statusPollCalls = $state['statusPollCalls'] ?? [];
+      $this->assertIsArray($statusPollCalls, 'Framesmith status-poll smoke harness did not record calls.');
+      $this->assertNotEmpty($statusPollCalls, 'Framesmith status-poll smoke harness saw no status calls.');
+      $this->assertSame(
+        $dropStatusPollAttempts,
+        (int) ($state['statusPollSimulatedDropCount'] ?? 0),
+        'Framesmith status-poll smoke did not simulate the requested network drops.',
+      );
+      $lastPollFailure = $this->getSession()->evaluateScript('window.__lastWhisperStatusPollTransportFailure || null');
+      $this->assertIsArray(
+        $lastPollFailure,
+        'Framesmith did not expose a transient status-poll transport failure before recovering.',
       );
     }
 

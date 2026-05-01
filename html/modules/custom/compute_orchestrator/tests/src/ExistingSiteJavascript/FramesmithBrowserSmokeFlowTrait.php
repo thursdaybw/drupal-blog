@@ -126,6 +126,10 @@ trait FramesmithBrowserSmokeFlowTrait {
   private function installFramesmithUploadStressHarness(): void {
     $delayMs = $this->envInt('FRAMESMITH_SMOKE_UPLOAD_DELAY_MS', 0);
     $dropFirstUploadChunk = $this->envFlag('FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK');
+    $dropFirstChunkAttempts = $this->envInt(
+      'FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS',
+      $dropFirstUploadChunk ? 1 : 0,
+    );
 
     $script = sprintf(
       <<<'JS'
@@ -138,8 +142,9 @@ trait FramesmithBrowserSmokeFlowTrait {
     installed: true,
     calls: [],
     failedOnce: false,
+    simulatedDropCount: 0,
     delayMs: %d,
-    dropFirstUploadChunk: %s
+    dropFirstUploadChunkAttempts: %d
   };
   window.__framesmithSmokeUpload = state;
   window.fetch = async function framesmithSmokeFetch(resource, init) {
@@ -165,8 +170,9 @@ trait FramesmithBrowserSmokeFlowTrait {
       if (state.delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, state.delayMs));
       }
-      if (state.dropFirstUploadChunk && !state.failedOnce && index === 0) {
+      if (state.simulatedDropCount < state.dropFirstUploadChunkAttempts && index === 0) {
         state.failedOnce = true;
+        state.simulatedDropCount += 1;
         uploadCall.simulatedDrop = true;
         uploadCall.completedAt = Date.now();
         uploadCall.error = 'Simulated mobile network drop during Framesmith upload chunk';
@@ -190,7 +196,7 @@ trait FramesmithBrowserSmokeFlowTrait {
 }());
 JS,
       $delayMs,
-      $dropFirstUploadChunk ? 'true' : 'false',
+      $dropFirstChunkAttempts,
     );
 
     $this->getSession()->executeScript($script);
@@ -361,18 +367,32 @@ JS);
       count($calls),
       'Framesmith upload smoke expected multiple upload requests.',
     );
-    if ($this->envFlag('FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK')) {
-      $droppedFirstChunk = FALSE;
+    $dropFirstChunkAttempts = $this->envInt(
+      'FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK_ATTEMPTS',
+      $this->envFlag('FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK') ? 1 : 0,
+    );
+    if ($dropFirstChunkAttempts > 0) {
+      $droppedFirstChunk = 0;
       $retriedFirstChunk = 0;
       foreach ($calls as $call) {
         if (!is_array($call) || (int) ($call['index'] ?? -1) !== 0) {
           continue;
         }
         $retriedFirstChunk++;
-        $droppedFirstChunk = $droppedFirstChunk || (($call['simulatedDrop'] ?? FALSE) === TRUE);
+        if (($call['simulatedDrop'] ?? FALSE) === TRUE) {
+          $droppedFirstChunk++;
+        }
       }
-      $this->assertTrue($droppedFirstChunk, 'Framesmith upload smoke did not simulate a first-chunk network drop.');
-      $this->assertGreaterThan(1, $retriedFirstChunk, 'Framesmith did not retry the first chunk after a simulated network drop.');
+      $this->assertSame(
+        $dropFirstChunkAttempts,
+        $droppedFirstChunk,
+        'Framesmith upload smoke did not simulate the requested first-chunk drops.',
+      );
+      $this->assertGreaterThan(
+        $dropFirstChunkAttempts,
+        $retriedFirstChunk,
+        'Framesmith did not retry the first chunk after simulated network drops.',
+      );
     }
     $this->assertGreaterThan(
       1,
@@ -380,10 +400,11 @@ JS);
       'Framesmith upload smoke expected multiple chunk indexes.',
     );
 
-    if ($this->envFlag('FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK')) {
-      $this->assertTrue(
-        (bool) ($state['failedOnce'] ?? FALSE),
-        'Framesmith upload smoke did not simulate the requested network drop.',
+    if ($dropFirstChunkAttempts > 0) {
+      $this->assertSame(
+        $dropFirstChunkAttempts,
+        (int) ($state['simulatedDropCount'] ?? 0),
+        'Framesmith upload smoke did not simulate the requested network drops.',
       );
       $this->assertGreaterThan(
         $maxTotal,

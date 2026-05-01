@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
+require_once __DIR__ . '/../../../src/Exception/AcquirePendingException.php';
 require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionTaskStoreInterface.php';
 require_once __DIR__ . '/../../../src/Service/FramesmithRuntimeLeaseManagerInterface.php';
 require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionExecutorInterface.php';
 require_once __DIR__ . '/../../../src/Service/FramesmithTranscriptionRunner.php';
 
+use Drupal\compute_orchestrator\Exception\AcquirePendingException;
 use Drupal\compute_orchestrator\Service\FramesmithRuntimeLeaseManagerInterface;
 use Drupal\compute_orchestrator\Service\FramesmithTranscriptionExecutorInterface;
 use Drupal\compute_orchestrator\Service\FramesmithTranscriptionRunner;
@@ -292,6 +294,67 @@ final class FramesmithTranscriptionRunnerTest extends TestCase {
 
     $this->expectException(\RuntimeException::class);
     $this->expectExceptionMessage('remote execution blew up');
+    $runner->run($taskId);
+  }
+
+  /**
+   * @covers ::run
+   */
+  public function testRunRecordsRuntimeAcquirePendingWithoutFailingTask(): void {
+    $taskId = 'task-acquire-pending';
+    $audioPath = 'temporary://framesmith-transcription/task-acquire-pending/audio.wav';
+    $progress = [
+      'step' => 4,
+      'total_steps' => 4,
+      'label' => 'Waiting for vLLM API (/v1/models)',
+      'result' => 'Not ready yet (expected during cold start).',
+      'next' => 'retry',
+    ];
+    $pending = AcquirePendingException::fromProgress(
+      'Step 4/4: Waiting for vLLM API (/v1/models). Result: Not ready yet (expected during cold start). Next: retry.',
+      'contract-pending',
+      $progress,
+    );
+
+    $taskStore = $this->createMock(FramesmithTranscriptionTaskStoreInterface::class);
+    $leaseManager = $this->createMock(FramesmithRuntimeLeaseManagerInterface::class);
+    $executor = $this->createMock(FramesmithTranscriptionExecutorInterface::class);
+
+    $taskStore->method('get')->willReturn([
+      'task_id' => $taskId,
+      'launch_ready' => TRUE,
+      'local_audio_path' => $audioPath,
+      'debug_events' => [],
+    ]);
+    $taskStore->method('merge')
+      ->willReturnCallback(fn (string $calledTaskId, array $values): array => ['task_id' => $calledTaskId] + $values);
+
+    $executor->expects($this->once())->method('requiresRuntimeLease')->willReturn(TRUE);
+    $leaseManager->expects($this->once())
+      ->method('acquireWhisperRuntime')
+      ->willThrowException($pending);
+    $executor->expects($this->never())->method('transcribe');
+    $leaseManager->expects($this->never())->method('releaseRuntime');
+    $taskStore->expects($this->never())->method('fail');
+    $taskStore->expects($this->once())
+      ->method('transition')
+      ->with(
+        $taskId,
+        'acquiring_runtime',
+        $this->callback(static function (array $extra) use ($progress): bool {
+          return ($extra['runtime_contract_id'] ?? NULL) === 'contract-pending'
+            && ($extra['runtime_lease_snapshot'] ?? NULL) === []
+            && ($extra['last_error'] ?? NULL) === ''
+            && ($extra['runtime_progress']['retryable'] ?? NULL) === TRUE
+            && ($extra['runtime_progress']['progress'] ?? NULL) === $progress;
+        }),
+        'Runtime is still warming; waiting for the next acquire retry.',
+      )
+      ->willReturn(['task_id' => $taskId, 'status' => 'acquiring_runtime']);
+
+    $runner = new FramesmithTranscriptionRunner($taskStore, $leaseManager, $executor);
+
+    $this->expectException(AcquirePendingException::class);
     $runner->run($taskId);
   }
 

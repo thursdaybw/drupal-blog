@@ -200,6 +200,8 @@ final class FramesmithTranscriptionController extends ControllerBase {
       return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to store uploaded chunk.'], Response::HTTP_INTERNAL_SERVER_ERROR);
     }
 
+    $uploadProgress = $this->recordChunkUploadProgress($taskId, $uploadId, $chunkDirectory, $index, $total);
+
     if ($index + 1 < $total) {
       return new JsonResponse([
         'ok' => TRUE,
@@ -209,6 +211,7 @@ final class FramesmithTranscriptionController extends ControllerBase {
         'upload_id' => $uploadId,
         'index' => $index,
         'total' => $total,
+        'upload_progress' => $uploadProgress,
       ]);
     }
 
@@ -228,6 +231,7 @@ final class FramesmithTranscriptionController extends ControllerBase {
             'ok' => FALSE,
             'error' => 'Missing uploaded chunk.',
             'missing_index' => $partIndex,
+            'upload_progress' => $uploadProgress,
           ], Response::HTTP_BAD_REQUEST);
         }
         $part = @fopen($currentPartPath, 'rb');
@@ -257,6 +261,40 @@ final class FramesmithTranscriptionController extends ControllerBase {
     $response = $this->storeCompleteUpload($request, $taskId, $assembledUpload);
     $this->removeDirectory($chunkDirectory);
     return $response;
+  }
+
+  /**
+   * Records backend-visible progress for an in-flight chunked upload.
+   *
+   * The browser smoke can fail quickly when the UI and Drupal disagree about
+   * chunk progress. Without this persisted signal, a broken retry can leave the
+   * task in awaiting_upload until the long transcription timeout expires.
+   *
+   * @return array<string,mixed>
+   *   Upload progress payload stored on the task.
+   */
+  private function recordChunkUploadProgress(string $taskId, string $uploadId, string $chunkDirectory, int $index, int $total): array {
+    $receivedIndices = [];
+    for ($partIndex = 0; $partIndex < $total; $partIndex++) {
+      $partPath = $chunkDirectory . '/part-' . str_pad((string) $partIndex, 8, '0', STR_PAD_LEFT) . '.bin';
+      if (is_file($partPath)) {
+        $receivedIndices[] = $partIndex;
+      }
+    }
+
+    $progress = [
+      'mode' => 'chunked',
+      'upload_id' => $uploadId,
+      'last_received_index' => $index,
+      'total' => $total,
+      'received_indices' => $receivedIndices,
+      'received_count' => count($receivedIndices),
+      'complete' => count($receivedIndices) >= $total,
+      'updated_at' => time(),
+    ];
+
+    $this->taskStore->merge($taskId, ['upload_progress' => $progress]);
+    return $progress;
   }
 
   /**

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+use Drupal\compute_orchestrator\Exception\AcquirePendingException;
+
 /**
  * Runs one Framesmith transcription task.
  */
@@ -147,43 +149,143 @@ final class FramesmithTranscriptionRunner {
           : 'Fake transcription completed without real compute.',
       );
     }
-    catch (\Throwable $exception) {
-      $this->recordDebug($taskId, 'runner.exception.caught', [
-        'message' => $exception->getMessage(),
-      ]);
-      $releasedLease = [];
-      if ($contractId !== '') {
-        try {
-          $this->recordDebug($taskId, 'runner.release.after_exception.begin', [
-            'contract_id' => $contractId,
-          ]);
-          $releasedLease = $this->leaseManager->releaseRuntime($contractId);
-          $this->recordDebug($taskId, 'runner.release.after_exception.succeeded', [
-            'contract_id' => $contractId,
-          ]);
-        }
-        catch (\Throwable $releaseException) {
-          $this->recordDebug($taskId, 'runner.release.after_exception.failed', [
-            'contract_id' => $contractId,
-            'message' => $releaseException->getMessage(),
-          ]);
-          $releasedLease = [
-            'contract_id' => $contractId,
-            'release_failed' => TRUE,
-          ];
-        }
-      }
-
-      $this->taskStore->fail(
-        $taskId,
-        $exception->getMessage(),
-        [
-          'runtime_contract_id' => $contractId,
-          'runtime_lease_snapshot' => $lease,
-          'runtime_release_snapshot' => $releasedLease,
-        ],
-      );
+    catch (AcquirePendingException $exception) {
+      $this->recordRuntimeAcquirePending($taskId, $contractId, $lease, $exception);
       throw $exception;
+    }
+    catch (\Throwable $exception) {
+      $this->recordTerminalRunnerFailure($taskId, $contractId, $lease, $exception);
+      throw $exception;
+    }
+  }
+
+  /**
+   * Records retryable runtime-acquire progress without failing the task.
+   *
+   * A runtime warmup probe is allowed to fail many times before the service is
+   * ready. Those probe failures belong to the acquire attempt, not to the
+   * Framesmith transcription task as a whole. Keep the task in an active state
+   * and store the operator-facing probe detail separately so status polling can
+   * say "still warming" instead of "failed".
+   *
+   * @param string $taskId
+   *   Framesmith task ID.
+   * @param string $contractId
+   *   Current runtime contract ID, if already known.
+   * @param array<string,mixed> $lease
+   *   Current lease snapshot, if one has been allocated.
+   * @param \Drupal\compute_orchestrator\Exception\AcquirePendingException $exception
+   *   Retryable pool-acquire progress exception.
+   */
+  private function recordRuntimeAcquirePending(
+    string $taskId,
+    string $contractId,
+    array $lease,
+    AcquirePendingException $exception,
+  ): void {
+    $resolvedContractId = $contractId !== ''
+      ? $contractId
+      : (string) ($exception->getContractId() ?? '');
+    $progress = $exception->getProgress();
+    $this->recordDebug($taskId, 'runner.lease.acquire.pending', [
+      'contract_id' => $resolvedContractId,
+      'message' => $exception->getMessage(),
+      'progress' => $progress,
+    ]);
+
+    $this->taskStore->transition(
+      $taskId,
+      'acquiring_runtime',
+      [
+        'runtime_contract_id' => $resolvedContractId,
+        'runtime_lease_snapshot' => $lease,
+        'runtime_progress' => [
+          'retryable' => TRUE,
+          'message' => $exception->getMessage(),
+          'progress' => $progress,
+          'updated_at' => time(),
+        ],
+        'last_error' => '',
+      ],
+      'Runtime is still warming; waiting for the next acquire retry.',
+    );
+  }
+
+  /**
+   * Records a terminal runner failure and releases any owned lease.
+   *
+   * This is deliberately separate from retryable acquire progress: once the
+   * runner has a real terminal exception, the task should move to failed and
+   * any runtime lease must be released so paid capacity is not stranded.
+   *
+   * @param string $taskId
+   *   Framesmith task ID.
+   * @param string $contractId
+   *   Runtime contract ID to release, if present.
+   * @param array<string,mixed> $lease
+   *   Current lease snapshot.
+   * @param \Throwable $exception
+   *   Terminal runner exception.
+   */
+  private function recordTerminalRunnerFailure(
+    string $taskId,
+    string $contractId,
+    array $lease,
+    \Throwable $exception,
+  ): void {
+    $this->recordDebug($taskId, 'runner.exception.caught', [
+      'message' => $exception->getMessage(),
+    ]);
+    $releasedLease = [];
+    if ($contractId !== '') {
+      $releasedLease = $this->releaseRuntimeAfterTerminalFailure($taskId, $contractId);
+    }
+
+    $this->taskStore->fail(
+      $taskId,
+      $exception->getMessage(),
+      [
+        'runtime_contract_id' => $contractId,
+        'runtime_lease_snapshot' => $lease,
+        'runtime_release_snapshot' => $releasedLease,
+      ],
+    );
+  }
+
+  /**
+   * Releases a runtime lease after terminal task failure.
+   *
+   * Release failures are recorded on the task debug stream instead of masking
+   * the original transcription failure that operators need to diagnose first.
+   *
+   * @param string $taskId
+   *   Framesmith task ID for debug events.
+   * @param string $contractId
+   *   Runtime contract ID to release.
+   *
+   * @return array<string,mixed>
+   *   Release snapshot or failure marker.
+   */
+  private function releaseRuntimeAfterTerminalFailure(string $taskId, string $contractId): array {
+    try {
+      $this->recordDebug($taskId, 'runner.release.after_exception.begin', [
+        'contract_id' => $contractId,
+      ]);
+      $releasedLease = $this->leaseManager->releaseRuntime($contractId);
+      $this->recordDebug($taskId, 'runner.release.after_exception.succeeded', [
+        'contract_id' => $contractId,
+      ]);
+      return $releasedLease;
+    }
+    catch (\Throwable $releaseException) {
+      $this->recordDebug($taskId, 'runner.release.after_exception.failed', [
+        'contract_id' => $contractId,
+        'message' => $releaseException->getMessage(),
+      ]);
+      return [
+        'contract_id' => $contractId,
+        'release_failed' => TRUE,
+      ];
     }
   }
 

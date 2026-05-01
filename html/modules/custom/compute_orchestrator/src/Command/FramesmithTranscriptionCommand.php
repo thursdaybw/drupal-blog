@@ -30,7 +30,7 @@ final class FramesmithTranscriptionCommand extends DrushCommands {
       $this->container->get('compute_orchestrator.framesmith_transcription_runner')->run($taskId);
     }
     catch (\Throwable $exception) {
-      $this->container->get('logger.channel.compute_orchestrator')->error(
+      $this->container->get('logger.factory')->get('compute_orchestrator')->error(
         'Framesmith transcription task {task_id} failed: {message}',
         [
           'task_id' => $taskId,

@@ -16,6 +16,8 @@ services:
     arguments:
       - '@logger.factory'
 
+  Drupal\compute_orchestrator\Service\SshProbeExecutorInterface: '@compute_orchestrator.ssh_probe_executor'
+
   compute_orchestrator.ssh_key_path_resolver:
     class: Drupal\compute_orchestrator\Service\SshKeyPathResolver
 
@@ -85,6 +87,8 @@ services:
       - 3
       - 10
       - '@logger.factory'
+
+  Drupal\compute_orchestrator\Service\VllmPoolLeaseBrokerInterface: '@compute_orchestrator.vllm_pool_manager'
 
   compute_orchestrator.framesmith_transcription_task_store:
     class: Drupal\compute_orchestrator\Service\FramesmithTranscriptionTaskStore

@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../../src/Exception/AcquirePendingException.php';
 require_once __DIR__ . '/../../../src/Exception/WorkloadReadinessException.php';
 require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
 require_once __DIR__ . '/../../../src/Service/BadHostRegistry.php';
+require_once __DIR__ . '/../../../src/Service/VllmPoolLeaseBrokerInterface.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolManager.php';
 require_once __DIR__ . '/../../../src/Service/GenericVllmRuntimeManagerInterface.php';
 require_once __DIR__ . '/../../../src/Service/VastInstanceLifecycleClientInterface.php';
@@ -15,6 +16,7 @@ require_once __DIR__ . '/../../../src/Service/VastRestClientInterface.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolRepositoryInterface.php';
 require_once __DIR__ . '/../../../src/Service/VllmWorkloadCatalogInterface.php';
 
+use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
 use Drupal\compute_orchestrator\Service\BadHostRegistry;
 use Drupal\compute_orchestrator\Service\GenericVllmRuntimeManagerInterface;
 use Drupal\compute_orchestrator\Service\VastInstanceLifecycleClientInterface;
@@ -22,6 +24,7 @@ use Drupal\compute_orchestrator\Service\VastRestClientInterface;
 use Drupal\compute_orchestrator\Service\VllmPoolManager;
 use Drupal\compute_orchestrator\Service\VllmPoolRepositoryInterface;
 use Drupal\compute_orchestrator\Service\VllmWorkloadCatalogInterface;
+use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 use Drupal\Core\State\StateInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -600,6 +603,207 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('leased', $record['lease_status']);
     $this->assertSame('available', $records['123']['lease_status']);
     $this->assertStringContainsString('429 Too Many Requests', (string) $records['123']['last_error']);
+  }
+
+  /**
+   * Tests SSH refusal during workload warmup remains retryable.
+   */
+  public function testAcquireKeepsRunningInstanceBootstrappingOnSshRefusedDuringWarmup(): void {
+    $repository = $this->newInMemoryRepository([
+      '123' => $this->poolRecord(
+        '123',
+        'whisper',
+        'openai/whisper-large-v3-turbo',
+      ),
+    ]);
+
+    $catalog = $this->catalogForWorkload('whisper', 'openai/whisper-large-v3-turbo');
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('waitForWorkloadReady')
+      ->with('123')
+      ->willThrowException(new \RuntimeException(
+        'ssh: connect to host ssh6.vast.ai port 16908: Connection refused'
+      ));
+    $runtimeManager->expects($this->never())->method('startWorkload');
+
+    $manager = $this->managerForRepository(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $this->showRunningClient('123'),
+    );
+
+    try {
+      $manager->acquire('whisper', NULL, FALSE, 10, 10);
+      $this->fail('Expected retryable acquire-pending exception.');
+    }
+    catch (\RuntimeException $exception) {
+      $this->assertStringContainsString('connection refused', strtolower($exception->getMessage()));
+    }
+
+    $record = $repository->get('123');
+    $this->assertNotNull($record);
+    $this->assertSame('bootstrapping', $record['lease_status']);
+    $this->assertSame('workload_ready_probe', $record['last_phase']);
+    $this->assertSame('probe /v1/models (skip start; mode already matched)', $record['last_action']);
+    $this->assertStringContainsString('waiting for vllm api', strtolower((string) $record['last_error']));
+  }
+
+  /**
+   * Tests SSH timeout during workload warmup remains retryable.
+   */
+  public function testAcquireKeepsRunningInstanceBootstrappingOnSshTimeoutDuringWarmup(): void {
+    $repository = $this->newInMemoryRepository([
+      '123' => $this->poolRecord(
+        '123',
+        'whisper',
+        'openai/whisper-large-v3-turbo',
+      ),
+    ]);
+
+    $catalog = $this->catalogForWorkload('whisper', 'openai/whisper-large-v3-turbo');
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('waitForWorkloadReady')
+      ->with('123')
+      ->willThrowException(new \RuntimeException(
+        'ssh: connect to host ssh6.vast.ai port 16908: Connection timed out'
+      ));
+
+    $manager = $this->managerForRepository(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $this->showRunningClient('123'),
+    );
+
+    try {
+      $manager->acquire('whisper', NULL, FALSE, 10, 10);
+      $this->fail('Expected retryable acquire-pending exception.');
+    }
+    catch (\RuntimeException $exception) {
+      $this->assertStringContainsString('timed out', strtolower($exception->getMessage()));
+    }
+
+    $record = $repository->get('123');
+    $this->assertNotNull($record);
+    $this->assertSame('bootstrapping', $record['lease_status']);
+    $this->assertSame('workload_ready_probe', $record['last_phase']);
+    $this->assertStringContainsString('timed out', strtolower((string) $record['last_error']));
+  }
+
+  /**
+   * Tests mixed warmup diagnostics remain retryable.
+   */
+  public function testAcquireKeepsMixedWarmupProbeSignalsRetryable(): void {
+    $repository = $this->newInMemoryRepository([
+      '123' => $this->poolRecord(
+        '123',
+        'whisper',
+        'openai/whisper-large-v3-turbo',
+      ),
+    ]);
+
+    $catalog = $this->catalogForWorkload('whisper', 'openai/whisper-large-v3-turbo');
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('waitForWorkloadReady')
+      ->with('123')
+      ->willThrowException(new WorkloadReadinessException(
+        FailureClass::WARMUP,
+        'executor_echo ok; models_8000 connection refused; processes show vllm loading; next retry'
+      ));
+
+    $manager = $this->managerForRepository(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $this->showRunningClient('123'),
+    );
+
+    try {
+      $manager->acquire('whisper', NULL, FALSE, 10, 10);
+      $this->fail('Expected retryable acquire-pending exception.');
+    }
+    catch (\RuntimeException $exception) {
+      $this->assertStringContainsString('Waiting for vLLM API', $exception->getMessage());
+    }
+
+    $record = $repository->get('123');
+    $this->assertNotNull($record);
+    $this->assertSame('bootstrapping', $record['lease_status']);
+    $this->assertSame('workload_ready_probe', $record['last_phase']);
+    $this->assertStringContainsString('Waiting for vLLM API', (string) $record['last_error']);
+  }
+
+  /**
+   * Tests start-model SSH refusal is retryable during wake/start acquire.
+   */
+  public function testAcquireKeepsWokenInstanceBootstrappingWhenStartModelSshRefuses(): void {
+    $repository = $this->newInMemoryRepository([
+      '123' => $this->poolRecord('123', 'whisper', 'openai/whisper-large-v3-turbo', 'stopped'),
+    ]);
+
+    $catalog = $this->catalogForWorkload('whisper', 'openai/whisper-large-v3-turbo');
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('waitForSshBootstrap')
+      ->with('123')
+      ->willReturn($this->runningInfo('123'));
+    $runtimeManager->expects($this->once())
+      ->method('startWorkload')
+      ->willThrowException(new \RuntimeException(implode(' ', [
+        'Remote start-model failed: probe=start_model',
+        'host=ssh6.vast.ai port=16908 exit_code=255',
+        'stderr=ssh: connect to host ssh6.vast.ai port 16908:',
+        'Connection refused',
+      ])));
+    $runtimeManager->expects($this->never())->method('waitForWorkloadReady');
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->once())
+      ->method('startInstance')
+      ->with('123')
+      ->willReturn(['success' => TRUE]);
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->exactly(2))
+      ->method('showInstance')
+      ->with('123')
+      ->willReturnOnConsecutiveCalls(
+        [
+          'id' => '123',
+          'cur_state' => 'stopped',
+          'actual_status' => 'stopped',
+        ],
+        $this->runningInfo('123'),
+      );
+
+    $manager = $this->managerForRepository(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $vastClient,
+      $lifecycleClient,
+    );
+
+    try {
+      $manager->acquire('whisper', NULL, FALSE, 10, 10);
+      $this->fail('Expected retryable acquire-pending exception.');
+    }
+    catch (\RuntimeException $exception) {
+      $this->assertStringContainsString('starting vllm server', strtolower($exception->getMessage()));
+      $this->assertStringContainsString('check /v1/models', strtolower($exception->getMessage()));
+    }
+
+    $record = $repository->get('123');
+    $this->assertNotNull($record);
+    $this->assertSame('bootstrapping', $record['lease_status']);
+    $this->assertSame('starting', $record['runtime_state']);
+    $this->assertSame('start_workload', $record['last_phase']);
+    $this->assertSame('start workload', $record['last_action']);
+    $this->assertStringContainsString('connection refused', strtolower((string) $record['last_error']));
   }
 
   /**
@@ -1285,8 +1489,16 @@ final class VllmPoolManagerTest extends TestCase {
     $vastClient->expects($this->never())
       ->method('showInstance');
 
+    $stateValues = [];
     $state = $this->createMock(StateInterface::class);
-    $state->method('get')->willReturn([]);
+    $state->method('get')->willReturnCallback(
+      static fn (string $key, mixed $default = NULL): mixed => $stateValues[$key] ?? $default,
+    );
+    $state->method('set')->willReturnCallback(
+      static function (string $key, mixed $value) use (&$stateValues): void {
+        $stateValues[$key] = $value;
+      }
+    );
 
     $manager = new VllmPoolManager(
       $repository,
@@ -1317,6 +1529,12 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('', $record['cleanup_error']);
     $this->assertSame('host-42', $record['host_id']);
     $this->assertSame('host-42', $record['bad_host_id']);
+    $this->assertContains('host-42', $stateValues['compute_orchestrator.bad_hosts'] ?? []);
+    $this->assertContains('host-42', $stateValues['compute_orchestrator.global_bad_hosts'] ?? []);
+    $this->assertContains(
+      'host-42',
+      $stateValues['compute_orchestrator.workload_bad_hosts']['qwen-vl'] ?? [],
+    );
   }
 
   /**
@@ -1590,6 +1808,76 @@ final class VllmPoolManagerTest extends TestCase {
   }
 
   /**
+   * Tests Vast 429 during idle reap keeps live capacity reap-eligible.
+   */
+  public function testReapIdleAvailableInstancesKeepsRateLimitedStopEligible(): void {
+    $repository = $this->newInMemoryRepository([
+      '123' => [
+        'contract_id' => '123',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'whisper',
+        'current_model' => 'openai/whisper-large-v3-turbo',
+        'lease_status' => 'available',
+        'runtime_state' => 'running',
+        'host' => '1.2.3.4',
+        'port' => '22097',
+        'url' => 'http://1.2.3.4:22097',
+        'source' => 'manual',
+        'last_seen_at' => 1,
+        'last_used_at' => time() - 601,
+        'last_error' => '',
+      ],
+    ]);
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->exactly(4))
+      ->method('stopInstance')
+      ->with('123')
+      ->willThrowException(new \RuntimeException(
+        'Vast API error response: {"code":"429 Too Many Requests","message":"API requests too frequent"}'
+      ));
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('123')
+      ->willReturn([
+        'id' => '123',
+        'cur_state' => 'running',
+        'actual_status' => 'running',
+      ]);
+
+    $state = $this->createMock(StateInterface::class);
+    $state->method('get')->willReturnCallback(
+      static fn (string $key, mixed $default = NULL): mixed => str_contains($key, 'state_change_spacing') ? 0 : $default,
+    );
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->createMock(VllmWorkloadCatalogInterface::class),
+      $this->createMock(GenericVllmRuntimeManagerInterface::class),
+      $lifecycleClient,
+      $vastClient,
+      $state,
+      new BadHostRegistry($this->createMock(StateInterface::class)),
+      3,
+      0,
+    );
+
+    $results = $manager->reapIdleAvailableInstances(600);
+    $record = $repository->get('123');
+
+    $this->assertSame('failed', $results[0]['action']);
+    $this->assertNotNull($record);
+    $this->assertSame('available', $record['lease_status']);
+    $this->assertSame('running', $record['runtime_state']);
+    $this->assertSame('idle_reap', $record['last_phase']);
+    $this->assertSame('failed', $record['last_action']);
+    $this->assertStringContainsString('429 Too Many Requests', (string) $record['last_error']);
+    $this->assertStringContainsString('429 Too Many Requests', $results[0]['message']);
+  }
+
+  /**
    * Tests reap idle available instances honours dry run.
    */
   public function testReapIdleAvailableInstancesHonoursDryRun(): void {
@@ -1715,6 +2003,110 @@ final class VllmPoolManagerTest extends TestCase {
       $this->assertSame('Vast readback unavailable', $record['last_error']);
       $this->assertArrayHasKey('last_provider_unavailable_at', $record);
     }
+  }
+
+  /**
+   * Builds a standard pool record for provisioning state-machine tests.
+   *
+   * @return array<string,mixed>
+   *   Pool record.
+   */
+  private function poolRecord(
+    string $contractId,
+    string $workload,
+    string $model,
+    string $runtimeState = 'running',
+  ): array {
+    return [
+      'contract_id' => $contractId,
+      'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+      'current_workload_mode' => $workload,
+      'current_model' => $model,
+      'lease_status' => 'available',
+      'runtime_state' => $runtimeState,
+      'host' => '1.2.3.4',
+      'port' => '22097',
+      'url' => 'http://1.2.3.4:22097',
+      'source' => 'manual',
+      'last_seen_at' => 1,
+      'last_used_at' => 1,
+      'last_error' => '',
+    ];
+  }
+
+  /**
+   * Builds a workload catalog mock for one workload definition.
+   */
+  private function catalogForWorkload(string $workload, string $model): VllmWorkloadCatalogInterface {
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with($workload, NULL)
+      ->willReturn([
+        'mode' => $workload,
+        'model' => $model,
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+    return $catalog;
+  }
+
+  /**
+   * Builds instance metadata for a running Vast contract.
+   *
+   * @return array<string,mixed>
+   *   Vast instance metadata.
+   */
+  private function runningInfo(string $contractId): array {
+    return [
+      'id' => $contractId,
+      'cur_state' => 'running',
+      'actual_status' => 'running',
+      'public_ipaddr' => '1.2.3.4',
+      'ssh_host' => 'ssh6.vast.ai',
+      'ssh_port' => 16908,
+      'ssh_user' => 'root',
+      'ports' => [
+        '8000/tcp' => [
+          ['HostPort' => '22097'],
+        ],
+      ],
+    ];
+  }
+
+  /**
+   * Builds a Vast client mock that reports a running instance.
+   */
+  private function showRunningClient(string $contractId): VastRestClientInterface {
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with($contractId)
+      ->willReturn($this->runningInfo($contractId));
+    return $vastClient;
+  }
+
+  /**
+   * Builds a pool manager around supplied test doubles.
+   */
+  private function managerForRepository(
+    VllmPoolRepositoryInterface $repository,
+    VllmWorkloadCatalogInterface $catalog,
+    GenericVllmRuntimeManagerInterface $runtimeManager,
+    VastRestClientInterface $vastClient,
+    ?VastInstanceLifecycleClientInterface $lifecycleClient = NULL,
+  ): VllmPoolManager {
+    return new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient ?? $this->createMock(VastInstanceLifecycleClientInterface::class),
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
+      3,
+      0,
+    );
   }
 
   /**

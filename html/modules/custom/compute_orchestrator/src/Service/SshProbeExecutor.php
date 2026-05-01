@@ -11,7 +11,7 @@ use Symfony\Component\Process\Process;
 /**
  * Executes probe commands over SSH.
  */
-final class SshProbeExecutor {
+final class SshProbeExecutor implements SshProbeExecutorInterface {
 
   private const JSONL_LOG_PATH = '/tmp/compute-orchestrator-ssh-probes.log';
 

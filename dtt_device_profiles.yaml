@@ -1,6 +1,7 @@
 offsmall_mobile:
   - "chrome"
-  - chromeOptions:
+  - acceptInsecureCerts: true
+    chromeOptions:
       mobileEmulation: { deviceName: "Pixel 2" }
       args:
         - "--window-size=412,732"
@@ -16,14 +17,16 @@ offsmall_mobile:
 
 small_mobile:
   - "chrome"
-  - chromeOptions:
+  - acceptInsecureCerts: true
+    chromeOptions:
       mobileEmulation: { deviceName: "Pixel 2" }
       args: ["--window-size=412,732", "--disable-gpu", "--no-sandbox"]
   - "http://selenium-chrome:4444/wd/hub"
 
 desktop:
   - "chrome"
-  - chromeOptions:
+  - acceptInsecureCerts: true
+    chromeOptions:
       args: ["--window-size=1920,1080", "--disable-gpu", "--no-sandbox"]
   - "http://selenium-chrome:4444/wd/hub"
 

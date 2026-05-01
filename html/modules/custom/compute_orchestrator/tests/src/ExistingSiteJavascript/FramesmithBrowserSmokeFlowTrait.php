@@ -50,6 +50,7 @@ trait FramesmithBrowserSmokeFlowTrait {
     $this->installFramesmithUploadStressHarness();
 
     $this->getSession()->getPage()->pressButton('Transcribe');
+    $this->waitForFramesmithUploadToLeaveAwaitingUpload();
 
     $this->assertSession()->waitForText('Captions ready', $timeoutSeconds * 1000);
 
@@ -149,18 +150,39 @@ trait FramesmithBrowserSmokeFlowTrait {
       const parsed = new URL(url, window.location.href);
       const index = Number(parsed.searchParams.get('index'));
       const total = Number(parsed.searchParams.get('total'));
-      state.calls.push({
+      const uploadCall = {
         index,
         total,
         uploadId: parsed.searchParams.get('upload_id') || '',
-        at: Date.now()
-      });
+        at: Date.now(),
+        completedAt: 0,
+        simulatedDrop: false,
+        responseOk: null,
+        responseStatus: null,
+        error: ''
+      };
+      state.calls.push(uploadCall);
       if (state.delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, state.delayMs));
       }
-      if (state.dropFirstUploadChunk && !state.failedOnce) {
+      if (state.dropFirstUploadChunk && !state.failedOnce && index === 0) {
         state.failedOnce = true;
-        throw new TypeError('Simulated mobile network drop during Framesmith upload chunk');
+        uploadCall.simulatedDrop = true;
+        uploadCall.completedAt = Date.now();
+        uploadCall.error = 'Simulated mobile network drop during Framesmith upload chunk';
+        throw new TypeError(uploadCall.error);
+      }
+      try {
+        const response = await originalFetch(resource, init);
+        uploadCall.completedAt = Date.now();
+        uploadCall.responseOk = response.ok;
+        uploadCall.responseStatus = response.status;
+        return response;
+      }
+      catch (error) {
+        uploadCall.completedAt = Date.now();
+        uploadCall.error = error && error.message ? error.message : String(error);
+        throw error;
       }
     }
     return originalFetch(resource, init);
@@ -172,6 +194,132 @@ JS,
     );
 
     $this->getSession()->executeScript($script);
+  }
+
+  /**
+   * Fails early when the chunked upload phase stops making useful progress.
+   *
+   * Local/dev smoke runs use the same browser and HTTPS shape as staging, but
+   * the upload leg is loopback-fast. Once the frontend has a task ID, Drupal's
+   * task status exposes received chunk counts. That lets the test distinguish
+   * upload retry bugs from later provisioning/transcription waits instead of
+   * burning the full smoke timeout on a task stuck at awaiting_upload.
+   */
+  private function waitForFramesmithUploadToLeaveAwaitingUpload(): void {
+    $timeoutMs = $this->envInt('FRAMESMITH_SMOKE_UPLOAD_PROGRESS_TIMEOUT_MS', 90000);
+    $idleMs = $this->envInt('FRAMESMITH_SMOKE_UPLOAD_IDLE_TIMEOUT_MS', 15000);
+    $deadline = microtime(TRUE) + ($timeoutMs / 1000);
+    $lastProgressSignature = '';
+    $lastProgressAt = microtime(TRUE);
+    $lastDiagnostic = [];
+
+    while (microtime(TRUE) < $deadline) {
+      $diagnostic = $this->getFramesmithUploadDiagnosticState();
+      $lastDiagnostic = $diagnostic;
+      $statusText = (string) ($diagnostic['statusText'] ?? '');
+
+      if (str_contains($statusText, 'Transcription failed:')) {
+        $this->fail('Framesmith upload failed before provisioning: ' . $this->formatFramesmithUploadDiagnostic($diagnostic));
+      }
+
+      $taskStatus = strtolower((string) ($diagnostic['taskStatus'] ?? ''));
+      $localAudioPath = trim((string) ($diagnostic['localAudioPath'] ?? ''));
+      if ($localAudioPath !== '' || !in_array($taskStatus, ['', 'created', 'awaiting_upload'], TRUE)) {
+        return;
+      }
+
+      $signature = $this->framesmithUploadProgressSignature($diagnostic);
+      if ($signature !== $lastProgressSignature) {
+        $lastProgressSignature = $signature;
+        $lastProgressAt = microtime(TRUE);
+      }
+
+      $hasStartedUpload = (int) ($diagnostic['browserUploadCallCount'] ?? 0) > 0
+        || (int) ($diagnostic['backendReceivedCount'] ?? 0) > 0;
+      if ($hasStartedUpload && ((microtime(TRUE) - $lastProgressAt) * 1000) > $idleMs) {
+        $this->fail('Framesmith upload stopped making progress: ' . $this->formatFramesmithUploadDiagnostic($diagnostic));
+      }
+
+      usleep(250000);
+    }
+
+    $this->fail('Framesmith upload did not leave awaiting_upload before timeout: ' . $this->formatFramesmithUploadDiagnostic($lastDiagnostic));
+  }
+
+  /**
+   * Returns browser and Drupal-side upload progress in one diagnostic payload.
+   *
+   * The synchronous XHR is intentionally test-only. It uses the browser's
+   * authenticated same-origin session, so it verifies the exact cookies and
+   * origin shape used by the upload instead of trusting PHP-side state alone.
+   *
+   * @return array<string,mixed>
+   *   Upload diagnostic state.
+   */
+  private function getFramesmithUploadDiagnosticState(): array {
+    $diagnostic = $this->getSession()->evaluateScript(<<<'JS'
+(function () {
+  const state = window.__framesmithSmokeUpload || { calls: [] };
+  const calls = Array.isArray(state.calls) ? state.calls : [];
+  const taskId = String(window.__lastWhisperDrupalTaskId || '');
+  let statusPayload = null;
+  let statusError = '';
+  if (taskId.length > 0) {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/framesmith/transcription/status?task_id=' + encodeURIComponent(taskId), false);
+      xhr.withCredentials = true;
+      xhr.send(null);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        statusPayload = JSON.parse(xhr.responseText || '{}');
+      }
+      else {
+        statusError = 'status endpoint returned HTTP ' + xhr.status;
+      }
+    }
+    catch (error) {
+      statusError = error && error.message ? error.message : String(error);
+    }
+  }
+  const task = statusPayload && statusPayload.task ? statusPayload.task : null;
+  const progress = task && task.upload_progress ? task.upload_progress : null;
+  return {
+    taskId,
+    statusText: document.querySelector('#videoSourceStatus')?.textContent || '',
+    browserUploadCallCount: calls.length,
+    browserCalls: calls.slice(-5),
+    taskStatus: task ? String(task.status || '') : '',
+    localAudioPath: task ? String(task.local_audio_path || '') : '',
+    backendReceivedCount: progress ? Number(progress.received_count || 0) : 0,
+    backendTotal: progress ? Number(progress.total || 0) : 0,
+    backendComplete: progress ? Boolean(progress.complete) : false,
+    uploadProgress: progress,
+    statusError
+  };
+}())
+JS);
+
+    return is_array($diagnostic) ? $diagnostic : [];
+  }
+
+  /**
+   * Returns the values that mean upload progress advanced.
+   */
+  private function framesmithUploadProgressSignature(array $diagnostic): string {
+    return implode('|', [
+      (string) ($diagnostic['taskId'] ?? ''),
+      (string) ($diagnostic['browserUploadCallCount'] ?? 0),
+      (string) ($diagnostic['backendReceivedCount'] ?? 0),
+      (string) ($diagnostic['taskStatus'] ?? ''),
+      (string) ($diagnostic['localAudioPath'] ?? ''),
+    ]);
+  }
+
+  /**
+   * Formats upload diagnostics for a failed smoke assertion.
+   */
+  private function formatFramesmithUploadDiagnostic(array $diagnostic): string {
+    return json_encode($diagnostic, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '(unavailable)';
   }
 
   /**
@@ -213,6 +361,19 @@ JS,
       count($calls),
       'Framesmith upload smoke expected multiple upload requests.',
     );
+    if ($this->envFlag('FRAMESMITH_SMOKE_DROP_FIRST_UPLOAD_CHUNK')) {
+      $droppedFirstChunk = FALSE;
+      $retriedFirstChunk = 0;
+      foreach ($calls as $call) {
+        if (!is_array($call) || (int) ($call['index'] ?? -1) !== 0) {
+          continue;
+        }
+        $retriedFirstChunk++;
+        $droppedFirstChunk = $droppedFirstChunk || (($call['simulatedDrop'] ?? FALSE) === TRUE);
+      }
+      $this->assertTrue($droppedFirstChunk, 'Framesmith upload smoke did not simulate a first-chunk network drop.');
+      $this->assertGreaterThan(1, $retriedFirstChunk, 'Framesmith did not retry the first chunk after a simulated network drop.');
+    }
     $this->assertGreaterThan(
       1,
       count($indices),

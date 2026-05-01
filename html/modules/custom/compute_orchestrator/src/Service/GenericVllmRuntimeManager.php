@@ -20,7 +20,7 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
 
   public function __construct(
     private readonly VastRestClientInterface $vastClient,
-    private readonly SshProbeExecutor $sshProbeExecutor,
+    private readonly SshProbeExecutorInterface $sshProbeExecutor,
     private readonly SshKeyPathResolverInterface $sshKeyPathResolver,
     private readonly ConfigFactoryInterface $configFactory,
     LoggerChannelFactoryInterface $loggerFactory,
@@ -256,7 +256,7 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
     ));
 
     if (($startResult['ok'] ?? FALSE) !== TRUE) {
-      throw new \RuntimeException('Remote start-model failed: ' . trim((string) ($startResult['stderr'] ?? $startResult['stdout'] ?? 'unknown error')));
+      throw new \RuntimeException($this->buildStartWorkloadFailureMessage($context, $startCommand, $startResult));
     }
   }
 
@@ -274,6 +274,65 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
     if (($stopResult['transport_ok'] ?? FALSE) !== TRUE) {
       throw new \RuntimeException('Remote stop-model transport failed: ' . trim((string) ($stopResult['exception'] ?? 'unknown error')));
     }
+  }
+
+  /**
+   * Builds an actionable failure message for the remote start-model probe.
+   *
+   * The SSH process can fail with an empty stderr/stdout pair, especially when
+   * a remote port flakes during Vast warmup. Operators still need the probe
+   * name, exit code, SSH target, and command to decide whether this was network
+   * flakiness, an image bug, or a bad workload command.
+   *
+   * @param \Drupal\compute_orchestrator\Service\SshConnectionContext $context
+   *   SSH target used for the failed probe.
+   * @param string $startCommand
+   *   Remote start command sent to the instance.
+   * @param array<string,mixed> $startResult
+   *   Normalized SSH probe result.
+   */
+  private function buildStartWorkloadFailureMessage(
+    SshConnectionContext $context,
+    string $startCommand,
+    array $startResult,
+  ): string {
+    $details = [
+      'probe=start_model',
+      'host=' . $context->host,
+      'port=' . (string) $context->port,
+      'user=' . $context->user,
+      'transport_ok=' . $this->formatProbeBoolean($startResult['transport_ok'] ?? NULL),
+      'failure_kind=' . (string) ($startResult['failure_kind'] ?? 'unknown'),
+      'exit_code=' . $this->formatProbeValue($startResult['exit_code'] ?? NULL),
+      'stderr=' . $this->formatProbeValue($startResult['stderr'] ?? ''),
+      'stdout=' . $this->formatProbeValue($startResult['stdout'] ?? ''),
+      'exception=' . $this->formatProbeValue($startResult['exception'] ?? ''),
+      'command=' . $startCommand,
+    ];
+    return 'Remote start-model failed: ' . implode(' ', $details);
+  }
+
+  /**
+   * Formats nullable probe values without losing that they were empty.
+   */
+  private function formatProbeValue(mixed $value): string {
+    if ($value === NULL || $value === '') {
+      return '(empty)';
+    }
+    return str_replace(["\n", "\r"], ' ', trim((string) $value));
+  }
+
+  /**
+   * Formats a normalized SSH probe boolean field.
+   */
+  private function formatProbeBoolean(mixed $value): string {
+    if ($value === TRUE) {
+      return 'true';
+    }
+    if ($value === FALSE) {
+      return 'false';
+    }
+    return '(unknown)';
   }
 
   /**

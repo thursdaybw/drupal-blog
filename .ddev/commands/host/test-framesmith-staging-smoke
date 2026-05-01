@@ -12,7 +12,7 @@ TARGET="${1:-${FRAMESMITH_SMOKE_TARGET:-staging}}"
 case "${TARGET}" in
   dev|local)
     TARGET="dev"
-    BASE_URL="${FRAMESMITH_SMOKE_BASE_URL:-${FRAMESMITH_DEV_BASE_URL:-https://dev.bevansbench.com}}"
+    BASE_URL="${FRAMESMITH_SMOKE_BASE_URL:-${FRAMESMITH_DEV_BASE_URL:-https://bevansbench.com.ddev.site}}"
     REMOTE_EXEC="ddev exec"
     DRUSH_CMD="vendor/bin/drush"
     VERIFY_REAP_DEFAULT="1"
@@ -145,7 +145,9 @@ ddev exec bash -lc \
 
 if [[ "${VERIFY_REAP}" == "1" ]]; then
   echo "== capture latest completed Framesmith contract =="
-  TASK_SUMMARY="$(remote_script /tmp/framesmith_latest_task.php <<PHP
+  TASK_SUMMARY=""
+  for attempt in $(seq 1 24); do
+    if TASK_SUMMARY="$(remote_script /tmp/framesmith_latest_task.php <<PHP
 <?php
 \$run_started_at = ${RUN_STARTED_AT};
 \$tasks = \Drupal::state()->get('compute_orchestrator.framesmith_transcription.tasks', []);
@@ -161,13 +163,22 @@ foreach (array_reverse(\$tasks, true) as \$id => \$task) {
       'status' => (string) \$task['status'],
       'updated_at' => \$updated_at,
     ], JSON_UNESCAPED_SLASHES) . PHP_EOL;
-    exit(0);
+    return;
   }
 }
-fwrite(STDERR, "No completed Framesmith task from this run with runtime_contract_id found.\n");
-exit(1);
+fwrite(STDERR, "No completed Framesmith task from this run with runtime_contract_id found yet.\n");
+throw new \RuntimeException("No completed Framesmith task from this run with runtime_contract_id found yet.");
 PHP
-)"
+)"; then
+      break
+    fi
+    if [[ "${attempt}" == "24" ]]; then
+      echo "No completed Framesmith task from this run with runtime_contract_id found after polling." >&2
+      exit 1
+    fi
+    echo "completed task not visible yet; retrying capture (${attempt}/24)"
+    sleep 5
+  done
   echo "${TASK_SUMMARY}"
   CONTRACT_ID="$(printf '%s' "${TASK_SUMMARY}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo $j["contract_id"] ?? "";')"
   if [[ -z "${CONTRACT_ID}" ]]; then
@@ -190,7 +201,7 @@ if (!is_array(\$record)) {
     'contract_id' => \$contract_id,
     'error' => "Pool record not found for contract {\$contract_id}.",
   ], JSON_UNESCAPED_SLASHES) . PHP_EOL;
-  exit(0);
+  return;
 }
 \$summary = [
   'contract_id' => \$contract_id,

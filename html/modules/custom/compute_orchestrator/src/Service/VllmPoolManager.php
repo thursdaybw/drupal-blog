@@ -15,7 +15,7 @@ use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 /**
  * Provides pooled acquire/release semantics for generic vLLM instances.
  */
-final class VllmPoolManager {
+final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
 
   /**
    * Module logger channel.

@@ -249,7 +249,7 @@ print_failure_diagnostics() {
   echo "upload_id=${UPLOAD_ID}" >&2
   echo "last_endpoint=${LAST_ENDPOINT}" >&2
   echo "last_http_status=${LAST_HTTP_STATUS}" >&2
-  echo "last_failed_chunk_index=${LAST_FAILED_CHUNK_INDEX:-unknown}" >&2
+  echo "last_failed_offset=${LAST_FAILED_CHUNK_INDEX:-unknown}" >&2
   echo "failure_class=${FAILURE_CLASS:-unknown}" >&2
   echo "fault_exercised=${FAULT_EXERCISED}" >&2
   echo "chunk_zero_reached=${CHUNK_ZERO_REACHED}" >&2
@@ -266,24 +266,19 @@ print_failure_diagnostics() {
     remote_script /tmp/framesmith_transport_task_diag.php <<PHP >&2 || true
 <?php
 \$taskId = '${TASK_ID}';
-\$failedChunk = '${LAST_FAILED_CHUNK_INDEX}';
+\$failedOffset = '${LAST_FAILED_CHUNK_INDEX}';
 \$tasks = \Drupal::state()->get('compute_orchestrator.framesmith_transcription.tasks', []);
 \$task = \$tasks[\$taskId] ?? NULL;
 \$progress = is_array(\$task['upload_progress'] ?? NULL) ? \$task['upload_progress'] : [];
-\$received = array_values(array_map('intval', \$progress['received_indices'] ?? []));
-\$total = (int) (\$progress['total'] ?? 0);
-\$receivedCount = count(\$received);
+\$ranges = is_array(\$progress['ranges'] ?? NULL) ? \$progress['ranges'] : [];
+\$total = (int) (\$progress['total_size'] ?? 0);
+\$receivedCount = (int) (\$progress['received_bytes'] ?? 0);
 \$missingChunk = NULL;
-if (\$failedChunk !== '' && ctype_digit(\$failedChunk)) {
-  \$missingChunk = (int) \$failedChunk;
+if (\$failedOffset !== '' && ctype_digit(\$failedOffset)) {
+  \$missingChunk = (int) \$failedOffset;
 }
 else {
-  for (\$i = 0; \$i < \$total; \$i++) {
-    if (!in_array(\$i, \$received, TRUE)) {
-      \$missingChunk = \$i;
-      break;
-    }
-  }
+  \$missingChunk = (int) (\$progress['next_offset'] ?? 0);
 }
 \$status = (string) (\$task['status'] ?? 'missing');
 \$lastError = (string) (\$task['last_error'] ?? '');
@@ -292,7 +287,7 @@ else {
 \$userCategory = \$partialUpload ? 'partial_upload_retrying' : 'upload_failed_retry_available';
 \$userAbandoned = \$partialUpload && \$status === 'awaiting_upload' && \$lastError === '';
 \$recommendedMessage = \$partialUpload
-  ? 'Poor network detected. Uploaded ' . \$receivedCount . '/' . \$total . ' chunks; retry or resume upload for missing chunk ' . (\$missingChunk ?? 'unknown') . '.'
+  ? 'Poor network detected. Uploaded ' . \$receivedCount . '/' . \$total . ' bytes; retry or resume upload from byte ' . (\$missingChunk ?? 'unknown') . '.'
   : 'Upload has not completed. Retry upload or start over.';
 echo json_encode([
   'task_id' => \$taskId,
@@ -307,10 +302,10 @@ echo json_encode([
   'user_facing_assessment' => [
     'message_category' => \$userCategory,
     'partial_upload' => \$partialUpload,
-    'received_count' => \$receivedCount,
+    'received_bytes' => \$receivedCount,
     'total' => \$total,
-    'last_received_index' => \$progress['last_received_index'] ?? NULL,
-    'missing_chunk' => \$missingChunk,
+    'next_offset' => \$progress['next_offset'] ?? NULL,
+    'missing_offset' => \$missingChunk,
     'user_abandoned_by_current_task_state' => \$userAbandoned,
     'recommended_user_message' => \$recommendedMessage,
   ],
@@ -438,7 +433,9 @@ with src.open('rb') as f:
     data = f.read(count)
 out.write_bytes(data)
 PY
-  local endpoint="${BASE_URL}/api/framesmith/transcription/upload?task_id=${TASK_ID}&upload_id=${UPLOAD_ID}&index=${index}&total=${total_chunks}"
+  local actual_size
+  actual_size=$(wc -c < "${chunk_path}" | tr -d ' ')
+  local endpoint="${BASE_URL}/api/framesmith/transcription/upload?task_id=${TASK_ID}&upload_id=${UPLOAD_ID}&offset=${start}&size=${actual_size}&total_size=${fixture_size}"
   LAST_ENDPOINT="${endpoint}"
   local curl_args=(-k -sS -c "${COOKIE_JAR}" -b "${COOKIE_JAR}" -H "Origin: ${BASE_URL}" -H "Referer: ${BASE_URL}/framesmith/" -F "file=@${chunk_path};type=audio/wav" -F "task_id=${TASK_ID}" -F "auto_launch=0")
   if [[ -n "${LIMIT_RATE}" && "${abort_attempt}" == "0" ]]; then
@@ -471,7 +468,8 @@ for line in Path('${meta_path}').read_text().splitlines():
         k, v = line.split('=', 1)
         meta[k] = v
 print(json.dumps({
-    'chunk_index': ${index},
+    'range_ordinal': ${index},
+    'offset': ${start},
     'abort_attempt': bool(${abort_attempt}),
     'curl_status': ${curl_status},
     'http_code': meta.get('http_code', ''),
@@ -502,41 +500,41 @@ chunk_zero_deadline=$(( $(date +%s%3N) + CHUNK_ZERO_TIMEOUT_MS ))
 for (( index=0; index<chunks_to_upload; index++ )); do
   if [[ "${ABORT_UPLOAD_CHUNK_INDEX}" == "${index}" ]]; then
     for (( attempt=1; attempt<=ABORT_UPLOAD_CHUNK_ATTEMPTS; attempt++ )); do
-      echo "chunk ${index}: intentional retryable abort attempt ${attempt}/${ABORT_UPLOAD_CHUNK_ATTEMPTS}"
+      echo "range ${index}: intentional retryable abort attempt ${attempt}/${ABORT_UPLOAD_CHUNK_ATTEMPTS}"
       if upload_chunk "${index}" 1; then
         FAULT_EXERCISED=1
       else
         fail "requested retryable abort attempt unexpectedly completed successfully"
       fi
     done
-    echo "chunk ${index}: retryable abort/failure observed; retrying real upload"
+    echo "range ${index}: retryable abort/failure observed; retrying real upload"
   fi
   if [[ "${PERMANENT_FAIL_UPLOAD_CHUNK_INDEX}" == "${index}" ]]; then
     for (( attempt=1; attempt<=PERMANENT_FAIL_UPLOAD_ATTEMPTS; attempt++ )); do
-      echo "chunk ${index}: intentional permanent failure attempt ${attempt}/${PERMANENT_FAIL_UPLOAD_ATTEMPTS}"
+      echo "range ${index}: intentional permanent failure attempt ${attempt}/${PERMANENT_FAIL_UPLOAD_ATTEMPTS}"
       if upload_chunk "${index}" 1; then
         FAULT_EXERCISED=1
       else
         fail "requested permanent failure attempt unexpectedly completed successfully"
       fi
     done
-    LAST_FAILED_CHUNK_INDEX="${index}"
-    FAILURE_CLASS="transport_before_drupal_chunk_after_partial_progress"
-    fail "chunk ${index} repeatedly failed before reaching Drupal"
+    LAST_FAILED_CHUNK_INDEX="$(( index * CHUNK_SIZE_BYTES ))"
+    FAILURE_CLASS="transport_before_drupal_range_after_partial_progress"
+    fail "range ${index} repeatedly failed before reaching Drupal"
   fi
-  echo "chunk ${index}: upload attempt"
+  echo "range ${index}: upload attempt"
   if ! upload_chunk "${index}" 0; then
-    LAST_FAILED_CHUNK_INDEX="${index}"
-    FAILURE_CLASS="chunk_upload_failed"
-    fail "chunk ${index} upload failed"
+    LAST_FAILED_CHUNK_INDEX="$(( index * CHUNK_SIZE_BYTES ))"
+    FAILURE_CLASS="range_upload_failed"
+    fail "range ${index} upload failed"
   fi
   progress_json="$(check_progress)"
   echo "progress_after_chunk_${index}=${progress_json}"
   if python3 - <<PY
 import json, sys
 p = json.loads('''${progress_json}''')
-indices = (((p.get('upload_progress') or {}).get('received_indices')) or [])
-sys.exit(0 if 0 in indices else 1)
+progress = p.get('upload_progress') or {}
+sys.exit(0 if int(progress.get('contiguous_bytes') or 0) > 0 else 1)
 PY
   then
     CHUNK_ZERO_REACHED=1
@@ -544,8 +542,8 @@ PY
   if python3 - <<PY
 import json, sys
 p = json.loads('''${progress_json}''')
-indices = (((p.get('upload_progress') or {}).get('received_indices')) or [])
-sys.exit(0 if any(int(i) > 0 for i in indices) else 1)
+progress = p.get('upload_progress') or {}
+sys.exit(0 if int(progress.get('contiguous_bytes') or 0) > ${CHUNK_SIZE_BYTES} else 1)
 PY
   then
     LATER_CHUNK_REACHED=1
@@ -554,8 +552,8 @@ PY
     now_ms="$(date +%s%3N)"
     if (( now_ms > chunk_zero_deadline )); then
       LAST_FAILED_CHUNK_INDEX="0"
-      FAILURE_CLASS="chunk_zero_timeout_before_drupal"
-      fail "chunk 0 did not reach Drupal before deadline"
+      FAILURE_CLASS="range_zero_timeout_before_drupal"
+      fail "range 0 did not reach Drupal before deadline"
     fi
   fi
 done

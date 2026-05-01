@@ -135,8 +135,9 @@ final class FramesmithTranscriptionController extends ControllerBase {
    */
   private function isChunkedUploadRequest(Request $request): bool {
     return $request->query->has('upload_id')
-      || $request->query->has('index')
-      || $request->query->has('total');
+      || $request->query->has('offset')
+      || $request->query->has('size')
+      || $request->query->has('total_size');
   }
 
   /**
@@ -169,48 +170,82 @@ final class FramesmithTranscriptionController extends ControllerBase {
    */
   private function storeChunkedUpload(Request $request, string $taskId, UploadedFile $uploadedFile): JsonResponse {
     $uploadId = $this->sanitizeUploadId((string) $request->query->get('upload_id', ''));
-    $index = $request->query->has('index') ? (int) $request->query->get('index') : NULL;
-    $total = $request->query->has('total') ? (int) $request->query->get('total') : NULL;
+    $offset = $request->query->has('offset') ? (int) $request->query->get('offset') : NULL;
+    $size = $request->query->has('size') ? (int) $request->query->get('size') : NULL;
+    $totalSize = $request->query->has('total_size') ? (int) $request->query->get('total_size') : NULL;
 
     if ($uploadId === '') {
-      return new JsonResponse(['ok' => FALSE, 'error' => 'upload_id is required for chunked uploads.'], Response::HTTP_BAD_REQUEST);
+      return new JsonResponse(['ok' => FALSE, 'error' => 'upload_id is required for ranged uploads.'], Response::HTTP_BAD_REQUEST);
     }
-    if ($index === NULL || $index < 0) {
-      return new JsonResponse(['ok' => FALSE, 'error' => 'index must be a non-negative integer.'], Response::HTTP_BAD_REQUEST);
+    if ($offset === NULL || $offset < 0) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'offset must be a non-negative integer.'], Response::HTTP_BAD_REQUEST);
     }
-    if ($total === NULL || $total < 1) {
-      return new JsonResponse(['ok' => FALSE, 'error' => 'total must be greater than zero.'], Response::HTTP_BAD_REQUEST);
+    if ($size === NULL || $size < 1) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'size must be greater than zero.'], Response::HTTP_BAD_REQUEST);
     }
-    if ($index >= $total) {
-      return new JsonResponse(['ok' => FALSE, 'error' => 'index is out of range for total chunks.'], Response::HTTP_BAD_REQUEST);
+    if ($totalSize === NULL || $totalSize < 1) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'total_size must be greater than zero.'], Response::HTTP_BAD_REQUEST);
+    }
+    if ($offset >= $totalSize || $offset + $size > $totalSize) {
+      return new JsonResponse(['ok' => FALSE, 'error' => 'offset and size are out of range for total_size.'], Response::HTTP_BAD_REQUEST);
     }
 
     $chunkDirectory = $this->chunkDirectory($taskId, $uploadId);
     if (!is_dir($chunkDirectory) && !mkdir($chunkDirectory, 0775, TRUE) && !is_dir($chunkDirectory)) {
-      return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to prepare chunk upload directory.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+      return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to prepare ranged upload directory.'], Response::HTTP_INTERNAL_SERVER_ERROR);
     }
 
     $sourcePath = $uploadedFile->getRealPath();
     if (!is_string($sourcePath) || $sourcePath === '' || !is_readable($sourcePath)) {
-      return new JsonResponse(['ok' => FALSE, 'error' => 'Uploaded chunk has no readable source path.'], Response::HTTP_BAD_REQUEST);
+      return new JsonResponse(['ok' => FALSE, 'error' => 'Uploaded range has no readable source path.'], Response::HTTP_BAD_REQUEST);
     }
 
-    $partPath = $chunkDirectory . '/part-' . str_pad((string) $index, 8, '0', STR_PAD_LEFT) . '.bin';
+    $actualSize = filesize($sourcePath);
+    if ($actualSize !== $size) {
+      return new JsonResponse([
+        'ok' => FALSE,
+        'error' => 'Uploaded range size does not match declared size.',
+        'declared_size' => $size,
+        'actual_size' => $actualSize,
+      ], Response::HTTP_BAD_REQUEST);
+    }
+
+    $manifest = $this->loadRangeUploadManifest($chunkDirectory, $uploadId, $totalSize);
+    $rangeError = $this->validateNewUploadRange($manifest, $offset, $size);
+    if ($rangeError !== NULL) {
+      return new JsonResponse([
+        'ok' => FALSE,
+        'error' => $rangeError,
+        'upload_progress' => $this->buildRangeUploadProgress($manifest, $offset, $size),
+      ], Response::HTTP_BAD_REQUEST);
+    }
+
+    $partPath = $this->rangePartPath($chunkDirectory, $offset, $size);
     if (!copy($sourcePath, $partPath)) {
-      return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to store uploaded chunk.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+      return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to store uploaded range.'], Response::HTTP_INTERNAL_SERVER_ERROR);
     }
 
-    $uploadProgress = $this->recordChunkUploadProgress($taskId, $uploadId, $chunkDirectory, $index, $total);
+    $manifest['ranges'][] = [
+      'offset' => $offset,
+      'size' => $size,
+      'path' => basename($partPath),
+    ];
+    usort($manifest['ranges'], static function (array $a, array $b): int {
+      return ($a['offset'] ?? 0) <=> ($b['offset'] ?? 0);
+    });
+    $this->saveRangeUploadManifest($chunkDirectory, $manifest);
 
-    if ($index + 1 < $total) {
+    $uploadProgress = $this->recordRangeUploadProgress($taskId, $manifest, $offset, $size);
+    if (!$uploadProgress['complete']) {
       return new JsonResponse([
         'ok' => TRUE,
         'task_id' => $taskId,
         'status' => 'partial',
-        'mode' => 'chunked',
+        'mode' => 'ranged',
         'upload_id' => $uploadId,
-        'index' => $index,
-        'total' => $total,
+        'offset' => $offset,
+        'size' => $size,
+        'total_size' => $totalSize,
         'upload_progress' => $uploadProgress,
       ]);
     }
@@ -218,19 +253,19 @@ final class FramesmithTranscriptionController extends ControllerBase {
     $assembledPath = $chunkDirectory . '/audio.wav';
     $assembled = @fopen($assembledPath, 'wb');
     if ($assembled === FALSE) {
-      return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to assemble uploaded chunks.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+      return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to assemble uploaded ranges.'], Response::HTTP_INTERNAL_SERVER_ERROR);
     }
 
     try {
-      for ($partIndex = 0; $partIndex < $total; $partIndex++) {
-        $currentPartPath = $chunkDirectory . '/part-' . str_pad((string) $partIndex, 8, '0', STR_PAD_LEFT) . '.bin';
+      foreach ($manifest['ranges'] as $range) {
+        $currentPartPath = $chunkDirectory . '/' . (string) $range['path'];
         if (!is_file($currentPartPath) || !is_readable($currentPartPath)) {
           fclose($assembled);
           @unlink($assembledPath);
           return new JsonResponse([
             'ok' => FALSE,
-            'error' => 'Missing uploaded chunk.',
-            'missing_index' => $partIndex,
+            'error' => 'Missing uploaded range.',
+            'missing_offset' => (int) ($range['offset'] ?? 0),
             'upload_progress' => $uploadProgress,
           ], Response::HTTP_BAD_REQUEST);
         }
@@ -238,7 +273,7 @@ final class FramesmithTranscriptionController extends ControllerBase {
         if ($part === FALSE) {
           fclose($assembled);
           @unlink($assembledPath);
-          return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to read uploaded chunk.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+          return new JsonResponse(['ok' => FALSE, 'error' => 'Failed to read uploaded range.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
         stream_copy_to_stream($part, $assembled);
         fclose($part);
@@ -273,28 +308,158 @@ final class FramesmithTranscriptionController extends ControllerBase {
    * @return array<string,mixed>
    *   Upload progress payload stored on the task.
    */
-  private function recordChunkUploadProgress(string $taskId, string $uploadId, string $chunkDirectory, int $index, int $total): array {
-    $receivedIndices = [];
-    for ($partIndex = 0; $partIndex < $total; $partIndex++) {
-      $partPath = $chunkDirectory . '/part-' . str_pad((string) $partIndex, 8, '0', STR_PAD_LEFT) . '.bin';
-      if (is_file($partPath)) {
-        $receivedIndices[] = $partIndex;
-      }
+  private function loadRangeUploadManifest(string $chunkDirectory, string $uploadId, int $totalSize): array {
+    $manifestPath = $chunkDirectory . '/manifest.json';
+    if (!is_file($manifestPath)) {
+      return [
+        'mode' => 'ranged',
+        'upload_id' => $uploadId,
+        'total_size' => $totalSize,
+        'ranges' => [],
+      ];
     }
 
-    $progress = [
-      'mode' => 'chunked',
-      'upload_id' => $uploadId,
-      'last_received_index' => $index,
-      'total' => $total,
-      'received_indices' => $receivedIndices,
-      'received_count' => count($receivedIndices),
-      'complete' => count($receivedIndices) >= $total,
-      'updated_at' => time(),
-    ];
+    $decoded = json_decode((string) file_get_contents($manifestPath), TRUE);
+    if (!is_array($decoded)) {
+      return [
+        'mode' => 'ranged',
+        'upload_id' => $uploadId,
+        'total_size' => $totalSize,
+        'ranges' => [],
+      ];
+    }
 
+    if ((string) ($decoded['upload_id'] ?? '') !== $uploadId || (int) ($decoded['total_size'] ?? 0) !== $totalSize) {
+      return [
+        'mode' => 'ranged',
+        'upload_id' => $uploadId,
+        'total_size' => $totalSize,
+        'ranges' => [],
+      ];
+    }
+
+    $decoded['ranges'] = is_array($decoded['ranges'] ?? NULL) ? $decoded['ranges'] : [];
+    return $decoded;
+  }
+
+  /**
+   * Saves the byte-range upload manifest.
+   *
+   * @param string $chunkDirectory
+   *   Directory containing the upload ranges.
+   * @param array<string,mixed> $manifest
+   *   Manifest payload.
+   */
+  private function saveRangeUploadManifest(string $chunkDirectory, array $manifest): void {
+    file_put_contents($chunkDirectory . '/manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+  }
+
+  /**
+   * Rejects byte ranges that would overlap already stored bytes.
+   *
+   * @param array<string,mixed> $manifest
+   *   Manifest payload.
+   * @param int $offset
+   *   First byte offset for the incoming range.
+   * @param int $size
+   *   Size in bytes for the incoming range.
+   */
+  private function validateNewUploadRange(array $manifest, int $offset, int $size): ?string {
+    $end = $offset + $size;
+    foreach ($manifest['ranges'] ?? [] as $range) {
+      $rangeOffset = (int) ($range['offset'] ?? 0);
+      $rangeSize = (int) ($range['size'] ?? 0);
+      $rangeEnd = $rangeOffset + $rangeSize;
+      $overlaps = $offset < $rangeEnd && $end > $rangeOffset;
+      if ($overlaps) {
+        return 'Uploaded range overlaps already stored bytes.';
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * Records backend-visible progress for an in-flight ranged upload.
+   *
+   * @param string $taskId
+   *   Framesmith transcription task ID.
+   * @param array<string,mixed> $manifest
+   *   Manifest payload.
+   * @param int $offset
+   *   First byte offset for the received range.
+   * @param int $size
+   *   Size in bytes for the received range.
+   *
+   * @return array<string,mixed>
+   *   Upload progress payload stored on the task.
+   */
+  private function recordRangeUploadProgress(string $taskId, array $manifest, int $offset, int $size): array {
+    $progress = $this->buildRangeUploadProgress($manifest, $offset, $size);
     $this->taskStore->merge($taskId, ['upload_progress' => $progress]);
     return $progress;
+  }
+
+  /**
+   * Builds byte-range upload progress from the manifest.
+   *
+   * @param array<string,mixed> $manifest
+   *   Manifest payload.
+   * @param int $offset
+   *   First byte offset for the received range.
+   * @param int $size
+   *   Size in bytes for the received range.
+   *
+   * @return array<string,mixed>
+   *   Upload progress payload.
+   */
+  private function buildRangeUploadProgress(array $manifest, int $offset, int $size): array {
+    $ranges = $manifest['ranges'] ?? [];
+    usort($ranges, static function (array $a, array $b): int {
+      return ($a['offset'] ?? 0) <=> ($b['offset'] ?? 0);
+    });
+
+    $contiguousBytes = 0;
+    foreach ($ranges as $range) {
+      $rangeOffset = (int) ($range['offset'] ?? 0);
+      $rangeSize = (int) ($range['size'] ?? 0);
+      if ($rangeOffset !== $contiguousBytes) {
+        break;
+      }
+      $contiguousBytes += $rangeSize;
+    }
+
+    $totalSize = (int) ($manifest['total_size'] ?? 0);
+    $receivedBytes = 0;
+    foreach ($ranges as $range) {
+      $receivedBytes += (int) ($range['size'] ?? 0);
+    }
+
+    return [
+      'mode' => 'ranged',
+      'upload_id' => (string) ($manifest['upload_id'] ?? ''),
+      'last_received_offset' => $offset,
+      'last_received_size' => $size,
+      'total_size' => $totalSize,
+      'received_bytes' => $receivedBytes,
+      'contiguous_bytes' => $contiguousBytes,
+      'next_offset' => $contiguousBytes,
+      'ranges' => array_map(static function (array $range): array {
+        return [
+          'offset' => (int) ($range['offset'] ?? 0),
+          'size' => (int) ($range['size'] ?? 0),
+        ];
+      }, $ranges),
+      'range_count' => count($ranges),
+      'complete' => $totalSize > 0 && $contiguousBytes >= $totalSize,
+      'updated_at' => time(),
+    ];
+  }
+
+  /**
+   * Builds the part path for a byte-range upload.
+   */
+  private function rangePartPath(string $chunkDirectory, int $offset, int $size): string {
+    return $chunkDirectory . '/range-' . str_pad((string) $offset, 16, '0', STR_PAD_LEFT) . '-' . $size . '.bin';
   }
 
   /**

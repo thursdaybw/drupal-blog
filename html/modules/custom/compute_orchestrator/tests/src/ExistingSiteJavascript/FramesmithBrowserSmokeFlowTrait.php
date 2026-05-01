@@ -153,11 +153,13 @@ trait FramesmithBrowserSmokeFlowTrait {
       : (resource && typeof resource.url === 'string' ? resource.url : '');
     if (url.includes('/api/framesmith/transcription/upload')) {
       const parsed = new URL(url, window.location.href);
-      const index = Number(parsed.searchParams.get('index'));
-      const total = Number(parsed.searchParams.get('total'));
+      const offset = Number(parsed.searchParams.get('offset'));
+      const size = Number(parsed.searchParams.get('size'));
+      const totalSize = Number(parsed.searchParams.get('total_size'));
       const uploadCall = {
-        index,
-        total,
+        offset,
+        size,
+        totalSize,
         uploadId: parsed.searchParams.get('upload_id') || '',
         at: Date.now(),
         completedAt: 0,
@@ -170,12 +172,12 @@ trait FramesmithBrowserSmokeFlowTrait {
       if (state.delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, state.delayMs));
       }
-      if (state.simulatedDropCount < state.dropFirstUploadChunkAttempts && index === 0) {
+      if (state.simulatedDropCount < state.dropFirstUploadChunkAttempts && offset === 0) {
         state.failedOnce = true;
         state.simulatedDropCount += 1;
         uploadCall.simulatedDrop = true;
         uploadCall.completedAt = Date.now();
-        uploadCall.error = 'Simulated mobile network drop during Framesmith upload chunk';
+        uploadCall.error = 'Simulated mobile network drop during Framesmith upload range';
         throw new TypeError(uploadCall.error);
       }
       try {
@@ -296,8 +298,9 @@ JS,
     browserCalls: calls.slice(-5),
     taskStatus: task ? String(task.status || '') : '',
     localAudioPath: task ? String(task.local_audio_path || '') : '',
-    backendReceivedCount: progress ? Number(progress.received_count || 0) : 0,
-    backendTotal: progress ? Number(progress.total || 0) : 0,
+    backendReceivedBytes: progress ? Number(progress.received_bytes || 0) : 0,
+    backendContiguousBytes: progress ? Number(progress.contiguous_bytes || 0) : 0,
+    backendTotalSize: progress ? Number(progress.total_size || 0) : 0,
     backendComplete: progress ? Boolean(progress.complete) : false,
     uploadProgress: progress,
     statusError
@@ -315,7 +318,8 @@ JS);
     return implode('|', [
       (string) ($diagnostic['taskId'] ?? ''),
       (string) ($diagnostic['browserUploadCallCount'] ?? 0),
-      (string) ($diagnostic['backendReceivedCount'] ?? 0),
+      (string) ($diagnostic['backendReceivedBytes'] ?? 0),
+      (string) ($diagnostic['backendContiguousBytes'] ?? 0),
       (string) ($diagnostic['taskStatus'] ?? ''),
       (string) ($diagnostic['localAudioPath'] ?? ''),
     ]);
@@ -329,7 +333,7 @@ JS);
   }
 
   /**
-   * Asserts the browser-side upload stress harness saw chunked upload behavior.
+   * Asserts the browser-side upload stress harness saw ranged upload behavior.
    */
   private function assertFramesmithUploadStressHarness(): void {
     if (!$this->envFlag('FRAMESMITH_SMOKE_REQUIRE_CHUNKED_UPLOAD')) {
@@ -343,24 +347,24 @@ JS);
     $this->assertIsArray($calls, 'Framesmith upload smoke harness did not record calls.');
     $this->assertNotEmpty($calls, 'Framesmith upload smoke harness saw no upload calls.');
 
-    $maxTotal = 0;
-    $indices = [];
+    $offsets = [];
+    $maxTotalSize = 0;
     foreach ($calls as $call) {
       if (!is_array($call)) {
         continue;
       }
-      $total = (int) ($call['total'] ?? 0);
-      $index = (int) ($call['index'] ?? -1);
-      $maxTotal = max($maxTotal, $total);
-      if ($index >= 0) {
-        $indices[$index] = TRUE;
+      $offset = (int) ($call['offset'] ?? -1);
+      $totalSize = (int) ($call['totalSize'] ?? 0);
+      $maxTotalSize = max($maxTotalSize, $totalSize);
+      if ($offset >= 0) {
+        $offsets[$offset] = TRUE;
       }
     }
 
     $this->assertGreaterThan(
-      1,
-      $maxTotal,
-      'Framesmith uploaded the transcription audio as a single request, not chunks.',
+      0,
+      $maxTotalSize,
+      'Framesmith upload smoke did not record total byte size.',
     );
     $this->assertGreaterThan(
       1,
@@ -375,7 +379,7 @@ JS);
       $droppedFirstChunk = 0;
       $retriedFirstChunk = 0;
       foreach ($calls as $call) {
-        if (!is_array($call) || (int) ($call['index'] ?? -1) !== 0) {
+        if (!is_array($call) || (int) ($call['offset'] ?? -1) !== 0) {
           continue;
         }
         $retriedFirstChunk++;
@@ -391,13 +395,13 @@ JS);
       $this->assertGreaterThan(
         $dropFirstChunkAttempts,
         $retriedFirstChunk,
-        'Framesmith did not retry the first chunk after simulated network drops.',
+        'Framesmith did not retry the first upload range after simulated network drops.',
       );
     }
     $this->assertGreaterThan(
       1,
-      count($indices),
-      'Framesmith upload smoke expected multiple chunk indexes.',
+      count($offsets),
+      'Framesmith upload smoke expected multiple byte-range offsets.',
     );
 
     if ($dropFirstChunkAttempts > 0) {
@@ -407,7 +411,7 @@ JS);
         'Framesmith upload smoke did not simulate the requested network drops.',
       );
       $this->assertGreaterThan(
-        $maxTotal,
+        1,
         count($calls),
         'Framesmith upload did not retry after the simulated network drop.',
       );

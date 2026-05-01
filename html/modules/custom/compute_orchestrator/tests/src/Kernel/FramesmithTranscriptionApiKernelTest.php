@@ -39,7 +39,29 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    $this->installSchema('system', ['sequences']);
+    $this->installSequencesTable();
+  }
+
+  /**
+   * Installs the sequences table without KernelTestBase::installSchema().
+   */
+  private function installSequencesTable(): void {
+    $schema = $this->container->get('database')->schema();
+    if ($schema->tableExists('sequences')) {
+      return;
+    }
+
+    $schema->createTable('sequences', [
+      'description' => 'Stores IDs.',
+      'fields' => [
+        'value' => [
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ],
+      ],
+      'primary key' => ['value'],
+    ]);
   }
 
   /**
@@ -70,7 +92,7 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
   /**
    * Verifies chunked upload finalizes audio on the last chunk.
    */
-  public function testChunkedUploadFinalizesAudioOnLastChunk(): void {
+  public function testRangedUploadFinalizesAudioWhenAllBytesArrive(): void {
     $taskStore = $this->container->get('compute_orchestrator.framesmith_transcription_task_store');
     assert($taskStore instanceof FramesmithTranscriptionTaskStoreInterface);
     $task = $taskStore->create(['video_id' => 'vid-chunked']);
@@ -81,7 +103,8 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
       $task['task_id'],
       'upload-test-1',
       0,
-      2,
+      4,
+      8,
       'RIFF',
       'part-0.bin',
     ));
@@ -89,19 +112,36 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
 
     $this->assertTrue($firstPayload['ok']);
     $this->assertSame('partial', $firstPayload['status']);
-    $this->assertSame('chunked', $firstPayload['mode']);
-    $this->assertSame(0, $firstPayload['index']);
+    $this->assertSame('ranged', $firstPayload['mode']);
+    $this->assertSame(0, $firstPayload['offset']);
+    $this->assertSame(4, $firstPayload['size']);
 
     $storedAfterFirstChunk = $taskStore->get($task['task_id']);
     $this->assertSame('', $storedAfterFirstChunk['local_audio_path']);
 
+    $secondResponse = $controller->upload($this->buildChunkUploadRequest(
+      $task['task_id'],
+      'upload-test-1',
+      4,
+      2,
+      8,
+      'WA',
+      'part-1.bin',
+    ));
+    $secondPayload = json_decode($secondResponse->getContent() ?: '{}', TRUE, 512, JSON_THROW_ON_ERROR);
+
+    $this->assertTrue($secondPayload['ok']);
+    $this->assertSame('partial', $secondPayload['status']);
+    $this->assertSame(6, $secondPayload['upload_progress']['next_offset']);
+
     $finalResponse = $controller->upload($this->buildChunkUploadRequest(
       $task['task_id'],
       'upload-test-1',
-      1,
+      6,
       2,
-      'WAVE',
-      'part-1.bin',
+      8,
+      'VE',
+      'part-2.bin',
     ));
     $finalPayload = json_decode($finalResponse->getContent() ?: '{}', TRUE, 512, JSON_THROW_ON_ERROR);
 
@@ -259,8 +299,9 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
   private function buildChunkUploadRequest(
     string $taskId,
     string $uploadId,
-    int $index,
-    int $total,
+    int $offset,
+    int $size,
+    int $totalSize,
     string $contents,
     string $filename,
   ): Request {
@@ -283,8 +324,9 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
     $request->query->replace([
       'task_id' => $taskId,
       'upload_id' => $uploadId,
-      'index' => $index,
-      'total' => $total,
+      'offset' => $offset,
+      'size' => $size,
+      'total_size' => $totalSize,
     ]);
     return $request;
   }

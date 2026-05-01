@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\compute_orchestrator\Service;
 
 use Drupal\Component\Uuid\UuidInterface;
+use Drupal\Core\File\FileExists;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\State\StateInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -197,7 +198,7 @@ final class FramesmithTranscriptionTaskStore implements FramesmithTranscriptionT
     }
 
     $destination = $directory . '/audio.' . $extension;
-    $storedPath = $this->fileSystem->move($sourcePath, $destination, FileSystemInterface::EXISTS_REPLACE);
+    $storedPath = $this->fileSystem->move($sourcePath, $destination, FileExists::Replace);
     if (!is_string($storedPath) || $storedPath === '') {
       throw new \RuntimeException('Failed to store uploaded audio file.');
     }

@@ -1,0 +1,597 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+## Description: Probe deployed Framesmith HTTPS chunk upload transport without launching a runtime.
+## Usage: test-framesmith-upload-transport [dev|staging|production] [options]
+## Example: ddev test-framesmith-upload-transport staging --chunks-to-upload=3 --abort-upload-chunk-index=0 --require-fault-exercised
+
+TARGET="${1:-staging}"
+if [[ "${TARGET}" == "--help" || "${TARGET}" == "-h" || "${TARGET}" == "help" ]]; then
+  TARGET="staging"
+  SHOW_HELP=1
+else
+  SHOW_HELP=0
+  if [[ "$#" -gt 0 && "${1}" != --* ]]; then
+    shift
+  fi
+fi
+
+BASE_URL=""
+FIXTURE_PATH="html/framesmith-browser-smoke-real.mp4"
+CHUNK_SIZE_BYTES=262144
+CHUNKS_TO_UPLOAD=3
+FULL_ASSEMBLY=0
+ABORT_UPLOAD_CHUNK_INDEX=""
+ABORT_UPLOAD_CHUNK_ATTEMPTS=1
+PERMANENT_FAIL_UPLOAD_CHUNK_INDEX=""
+PERMANENT_FAIL_UPLOAD_ATTEMPTS=0
+REQUIRE_FAULT_EXERCISED=0
+LIMIT_RATE=""
+CHUNK_ZERO_TIMEOUT_MS=30000
+KEEP_TEMP=0
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ddev test-framesmith-upload-transport [dev|staging|production] [options]
+
+Purpose:
+  Create an authenticated Framesmith transcription task on the target, upload
+  real chunks to /api/framesmith/transcription/upload over deployed HTTPS, and
+  verify Drupal records chunk 0 and later-chunk progress. The default is
+  upload-only and does not launch a billable runtime.
+
+Targets:
+  dev | local           https://bevansbench.com.ddev.site
+  staging | stage       https://bb-drupal-staging.bevansbench.com
+  production | prod     https://www.bevansbench.com
+
+Options:
+  --help, -h
+  --target=<target>                     Alternative to positional target.
+  --base-url=<url>                      Override target base URL.
+  --fixture-path=<path>                 Local fixture file path.
+  --chunk-size-bytes=<bytes>            Default: 262144.
+  --chunks-to-upload=<count>            Default: 3. Ignored by --full-assembly.
+  --full-assembly                       Upload every chunk and verify assembly.
+  --abort-upload-chunk-index=<index>    Abort upload attempts for this chunk, then retry.
+  --abort-upload-chunk-attempts=<n>     Number of abort attempts before retry success. Default: 1.
+  --permanent-fail-upload-chunk-index=<index>
+                                         Make this chunk fail repeatedly and never send success.
+  --permanent-fail-upload-attempts=<n>  Number of repeated failed attempts. Default: 4 when permanent fail is set.
+  --require-fault-exercised             Fail if requested abort/fault was not observed.
+  --limit-rate=<curl-rate>              Passed to curl, e.g. 64k, 256k. Applies successful uploads.
+  --chunk-zero-timeout-ms=<ms>          Default: 30000.
+  --keep-temp                           Keep local temp directory for debugging.
+
+Examples:
+  ddev test-framesmith-upload-transport staging \
+    --chunks-to-upload=3 \
+    --abort-upload-chunk-index=0 \
+    --abort-upload-chunk-attempts=4 \
+    --require-fault-exercised
+
+  # Red-first hostile shape: chunks 0 and 1 land, chunk 2 repeatedly fails,
+  # and the probe exits non-zero with diagnostics.
+  ddev test-framesmith-upload-transport staging \
+    --chunks-to-upload=17 \
+    --permanent-fail-upload-chunk-index=2 \
+    --permanent-fail-upload-attempts=4 \
+    --require-fault-exercised
+
+  ddev test-framesmith-upload-transport staging \
+    --full-assembly \
+    --chunk-size-bytes=262144 \
+    --limit-rate=128k
+EOF
+}
+
+for arg in "$@"; do
+  case "${arg}" in
+    --help|-h)
+      SHOW_HELP=1
+      ;;
+    --target=*)
+      TARGET="${arg#*=}"
+      ;;
+    --base-url=*)
+      BASE_URL="${arg#*=}"
+      ;;
+    --fixture-path=*)
+      FIXTURE_PATH="${arg#*=}"
+      ;;
+    --chunk-size-bytes=*)
+      CHUNK_SIZE_BYTES="${arg#*=}"
+      ;;
+    --chunks-to-upload=*)
+      CHUNKS_TO_UPLOAD="${arg#*=}"
+      ;;
+    --full-assembly)
+      FULL_ASSEMBLY=1
+      ;;
+    --abort-upload-chunk-index=*)
+      ABORT_UPLOAD_CHUNK_INDEX="${arg#*=}"
+      ;;
+    --abort-upload-chunk-attempts=*)
+      ABORT_UPLOAD_CHUNK_ATTEMPTS="${arg#*=}"
+      ;;
+    --permanent-fail-upload-chunk-index=*)
+      PERMANENT_FAIL_UPLOAD_CHUNK_INDEX="${arg#*=}"
+      ;;
+    --permanent-fail-upload-attempts=*)
+      PERMANENT_FAIL_UPLOAD_ATTEMPTS="${arg#*=}"
+      ;;
+    --require-fault-exercised)
+      REQUIRE_FAULT_EXERCISED=1
+      ;;
+    --limit-rate=*)
+      LIMIT_RATE="${arg#*=}"
+      ;;
+    --chunk-zero-timeout-ms=*)
+      CHUNK_ZERO_TIMEOUT_MS="${arg#*=}"
+      ;;
+    --keep-temp)
+      KEEP_TEMP=1
+      ;;
+    *)
+      echo "Unknown option: ${arg}" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ "${SHOW_HELP}" == "1" ]]; then
+  usage
+  exit 0
+fi
+
+case "${TARGET}" in
+  dev|local)
+    TARGET="dev"
+    BASE_URL="${BASE_URL:-https://bevansbench.com.ddev.site}"
+    REMOTE_EXEC="ddev exec"
+    DRUSH_CMD="vendor/bin/drush"
+    ;;
+  staging|stage)
+    TARGET="staging"
+    BASE_URL="${BASE_URL:-https://bb-drupal-staging.bevansbench.com}"
+    REMOTE_EXEC="ddev exec-stage"
+    DRUSH_CMD="../vendor/bin/drush"
+    ;;
+  production|prod)
+    TARGET="production"
+    BASE_URL="${BASE_URL:-https://www.bevansbench.com}"
+    REMOTE_EXEC="ddev exec-prod"
+    DRUSH_CMD="../vendor/bin/drush"
+    ;;
+  *)
+    echo "Unknown target: ${TARGET}" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
+for numeric in CHUNK_SIZE_BYTES CHUNKS_TO_UPLOAD CHUNK_ZERO_TIMEOUT_MS; do
+  value="${!numeric}"
+  if ! [[ "${value}" =~ ^[0-9]+$ ]] || [[ "${value}" == "0" ]]; then
+    echo "${numeric} must be a positive integer." >&2
+    exit 2
+  fi
+done
+if [[ "${ABORT_UPLOAD_CHUNK_INDEX}" != "" ]] && ! [[ "${ABORT_UPLOAD_CHUNK_INDEX}" =~ ^[0-9]+$ ]]; then
+  echo "--abort-upload-chunk-index must be a non-negative integer." >&2
+  exit 2
+fi
+if ! [[ "${ABORT_UPLOAD_CHUNK_ATTEMPTS}" =~ ^[0-9]+$ ]] || [[ "${ABORT_UPLOAD_CHUNK_ATTEMPTS}" == "0" ]]; then
+  echo "--abort-upload-chunk-attempts must be a positive integer." >&2
+  exit 2
+fi
+if [[ "${PERMANENT_FAIL_UPLOAD_CHUNK_INDEX}" != "" ]] && ! [[ "${PERMANENT_FAIL_UPLOAD_CHUNK_INDEX}" =~ ^[0-9]+$ ]]; then
+  echo "--permanent-fail-upload-chunk-index must be a non-negative integer." >&2
+  exit 2
+fi
+if [[ "${PERMANENT_FAIL_UPLOAD_CHUNK_INDEX}" != "" && "${PERMANENT_FAIL_UPLOAD_ATTEMPTS}" == "0" ]]; then
+  PERMANENT_FAIL_UPLOAD_ATTEMPTS=4
+fi
+if ! [[ "${PERMANENT_FAIL_UPLOAD_ATTEMPTS}" =~ ^[0-9]+$ ]]; then
+  echo "--permanent-fail-upload-attempts must be a non-negative integer." >&2
+  exit 2
+fi
+if [[ "${ABORT_UPLOAD_CHUNK_INDEX}" != "" && "${PERMANENT_FAIL_UPLOAD_CHUNK_INDEX}" != "" && "${ABORT_UPLOAD_CHUNK_INDEX}" == "${PERMANENT_FAIL_UPLOAD_CHUNK_INDEX}" ]]; then
+  echo "Do not combine retryable abort and permanent failure on the same chunk." >&2
+  exit 2
+fi
+if [[ ! -f "${FIXTURE_PATH}" ]]; then
+  echo "Fixture not found: ${FIXTURE_PATH}" >&2
+  exit 2
+fi
+
+remote_script() {
+  local script_path="$1"
+  ${REMOTE_EXEC} "cat > ${script_path} && ${DRUSH_CMD} php:script ${script_path}; status=\$?; rm -f ${script_path}; exit \$status"
+}
+
+TASK_ID=""
+UPLOAD_ID="framesmith-transport-$(date +%s)-$RANDOM"
+TMP_DIR="$(mktemp -d -t framesmith-upload-transport.XXXXXX)"
+COOKIE_JAR="${TMP_DIR}/cookies.txt"
+LOGIN_FILE="${TMP_DIR}/login-url.txt"
+EVENT_LOG="${TMP_DIR}/events.jsonl"
+FAULT_EXERCISED=0
+CHUNK_ZERO_REACHED=0
+LATER_CHUNK_REACHED=0
+LAST_HTTP_STATUS=""
+LAST_RESPONSE_BODY=""
+LAST_ENDPOINT=""
+LAST_FAILED_CHUNK_INDEX=""
+FAILURE_CLASS=""
+
+cleanup() {
+  if [[ "${KEEP_TEMP}" == "1" ]]; then
+    echo "temp_dir=${TMP_DIR}"
+  else
+    rm -rf "${TMP_DIR}"
+  fi
+}
+trap cleanup EXIT
+
+print_failure_diagnostics() {
+  local reason="$1"
+  echo "== Framesmith upload transport probe FAILED ==" >&2
+  echo "reason=${reason}" >&2
+  echo "target=${TARGET}" >&2
+  echo "base_url=${BASE_URL}" >&2
+  echo "fixture_path=${FIXTURE_PATH}" >&2
+  echo "chunk_size_bytes=${CHUNK_SIZE_BYTES}" >&2
+  echo "task_id=${TASK_ID}" >&2
+  echo "upload_id=${UPLOAD_ID}" >&2
+  echo "last_endpoint=${LAST_ENDPOINT}" >&2
+  echo "last_http_status=${LAST_HTTP_STATUS}" >&2
+  echo "last_failed_chunk_index=${LAST_FAILED_CHUNK_INDEX:-unknown}" >&2
+  echo "failure_class=${FAILURE_CLASS:-unknown}" >&2
+  echo "fault_exercised=${FAULT_EXERCISED}" >&2
+  echo "chunk_zero_reached=${CHUNK_ZERO_REACHED}" >&2
+  echo "later_chunk_reached=${LATER_CHUNK_REACHED}" >&2
+  if [[ -n "${LAST_RESPONSE_BODY}" ]]; then
+    echo "last_response_body=${LAST_RESPONSE_BODY}" >&2
+  fi
+  if [[ -s "${EVENT_LOG}" ]]; then
+    echo "-- request events --" >&2
+    tail -40 "${EVENT_LOG}" >&2 || true
+  fi
+  if [[ -n "${TASK_ID}" ]]; then
+    echo "-- Drupal task and user-facing state --" >&2
+    remote_script /tmp/framesmith_transport_task_diag.php <<PHP >&2 || true
+<?php
+\$taskId = '${TASK_ID}';
+\$failedChunk = '${LAST_FAILED_CHUNK_INDEX}';
+\$tasks = \Drupal::state()->get('compute_orchestrator.framesmith_transcription.tasks', []);
+\$task = \$tasks[\$taskId] ?? NULL;
+\$progress = is_array(\$task['upload_progress'] ?? NULL) ? \$task['upload_progress'] : [];
+\$received = array_values(array_map('intval', \$progress['received_indices'] ?? []));
+\$total = (int) (\$progress['total'] ?? 0);
+\$receivedCount = count(\$received);
+\$missingChunk = NULL;
+if (\$failedChunk !== '' && ctype_digit(\$failedChunk)) {
+  \$missingChunk = (int) \$failedChunk;
+}
+else {
+  for (\$i = 0; \$i < \$total; \$i++) {
+    if (!in_array(\$i, \$received, TRUE)) {
+      \$missingChunk = \$i;
+      break;
+    }
+  }
+}
+\$status = (string) (\$task['status'] ?? 'missing');
+\$lastError = (string) (\$task['last_error'] ?? '');
+\$runtimeContract = (string) (\$task['runtime_contract_id'] ?? '');
+\$partialUpload = \$receivedCount > 0 && (\$progress['complete'] ?? FALSE) !== TRUE;
+\$userCategory = \$partialUpload ? 'partial_upload_retrying' : 'upload_failed_retry_available';
+\$userAbandoned = \$partialUpload && \$status === 'awaiting_upload' && \$lastError === '';
+\$recommendedMessage = \$partialUpload
+  ? 'Poor network detected. Uploaded ' . \$receivedCount . '/' . \$total . ' chunks; retry or resume upload for missing chunk ' . (\$missingChunk ?? 'unknown') . '.'
+  : 'Upload has not completed. Retry upload or start over.';
+echo json_encode([
+  'task_id' => \$taskId,
+  'exists' => \$task !== NULL,
+  'status' => \$status,
+  'runtime_contract_id' => \$runtimeContract,
+  'runtime_acquired' => \$runtimeContract !== '',
+  'last_error' => \$lastError,
+  'upload_progress' => \$progress,
+  'local_audio_path' => \$task['local_audio_path'] ?? NULL,
+  'history_tail' => \$task ? array_slice(\$task['history'] ?? [], -10) : [],
+  'user_facing_assessment' => [
+    'message_category' => \$userCategory,
+    'partial_upload' => \$partialUpload,
+    'received_count' => \$receivedCount,
+    'total' => \$total,
+    'last_received_index' => \$progress['last_received_index'] ?? NULL,
+    'missing_chunk' => \$missingChunk,
+    'user_abandoned_by_current_task_state' => \$userAbandoned,
+    'recommended_user_message' => \$recommendedMessage,
+  ],
+], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+PHP
+    echo "-- Drupal dblog tail --" >&2
+    ${REMOTE_EXEC} "${DRUSH_CMD} watchdog:show --count=120 --fields=wid,date,type,severity,message --format=table" 2>/dev/null \
+      | grep -Ei "${TASK_ID}|framesmith|transcri|upload|failed|error|warning" \
+      | tail -80 >&2 || true
+  fi
+}
+
+fail() {
+  print_failure_diagnostics "$1"
+  exit 1
+}
+
+fixture_size=$(wc -c < "${FIXTURE_PATH}" | tr -d ' ')
+total_chunks=$(( (fixture_size + CHUNK_SIZE_BYTES - 1) / CHUNK_SIZE_BYTES ))
+if [[ "${FULL_ASSEMBLY}" == "1" ]]; then
+  chunks_to_upload="${total_chunks}"
+else
+  chunks_to_upload="${CHUNKS_TO_UPLOAD}"
+fi
+if (( chunks_to_upload > total_chunks )); then
+  chunks_to_upload="${total_chunks}"
+fi
+if (( chunks_to_upload < 2 )); then
+  fail "probe requires at least two chunks so it can prove chunk 0 and a later chunk reached Drupal"
+fi
+
+cat <<EOF
+== Framesmith deployed HTTPS upload transport probe ==
+target=${TARGET}
+base_url=${BASE_URL}
+fixture_path=${FIXTURE_PATH}
+fixture_size=${fixture_size}
+chunk_size_bytes=${CHUNK_SIZE_BYTES}
+total_chunks=${total_chunks}
+chunks_to_upload=${chunks_to_upload}
+full_assembly=${FULL_ASSEMBLY}
+upload_only=1
+upload_id=${UPLOAD_ID}
+abort_upload_chunk_index=${ABORT_UPLOAD_CHUNK_INDEX:-none}
+abort_upload_chunk_attempts=${ABORT_UPLOAD_CHUNK_ATTEMPTS}
+permanent_fail_upload_chunk_index=${PERMANENT_FAIL_UPLOAD_CHUNK_INDEX:-none}
+permanent_fail_upload_attempts=${PERMANENT_FAIL_UPLOAD_ATTEMPTS}
+require_fault_exercised=${REQUIRE_FAULT_EXERCISED}
+limit_rate=${LIMIT_RATE:-none}
+chunk_zero_timeout_ms=${CHUNK_ZERO_TIMEOUT_MS}
+EOF
+
+echo "== generate one-time ${TARGET} login URL, hidden =="
+${REMOTE_EXEC} "${DRUSH_CMD} uli --uri=${BASE_URL}" | tail -1 > "${LOGIN_FILE}"
+if ! grep -q "^${BASE_URL}/" "${LOGIN_FILE}"; then
+  fail "unexpected login URL shape"
+fi
+
+echo "== establish authenticated HTTPS session =="
+login_http=$(curl -k -sS -L -c "${COOKIE_JAR}" -b "${COOKIE_JAR}" -o "${TMP_DIR}/login.html" -w '%{http_code}' "$(cat "${LOGIN_FILE}")")
+if [[ "${login_http}" != "200" ]]; then
+  LAST_HTTP_STATUS="${login_http}"
+  fail "login did not return HTTP 200"
+fi
+
+echo "== create upload-only Framesmith task =="
+start_body="${TMP_DIR}/start.json"
+start_http=$(curl -k -sS -c "${COOKIE_JAR}" -b "${COOKIE_JAR}" \
+  -H 'Content-Type: application/json' \
+  -H "Origin: ${BASE_URL}" \
+  -H "Referer: ${BASE_URL}/framesmith/" \
+  -X POST "${BASE_URL}/api/framesmith/transcription/start" \
+  --data "{\"video_id\":\"transport-probe-${UPLOAD_ID}\",\"auto_launch\":false}" \
+  -o "${start_body}" -w '%{http_code}')
+LAST_HTTP_STATUS="${start_http}"
+LAST_RESPONSE_BODY="$(tr -d '\n' < "${start_body}" | cut -c1-1000)"
+if [[ "${start_http}" != "200" ]]; then
+  fail "task creation failed"
+fi
+TASK_ID="$(python3 - <<PY
+import json
+from pathlib import Path
+payload = json.loads(Path('${start_body}').read_text())
+print(payload.get('task_id', ''))
+PY
+)"
+if [[ -z "${TASK_ID}" ]]; then
+  fail "task creation response did not include task_id"
+fi
+echo "task_id=${TASK_ID}"
+
+check_progress() {
+  remote_script /tmp/framesmith_transport_progress.php <<PHP
+<?php
+\$taskId = '${TASK_ID}';
+\$tasks = \Drupal::state()->get('compute_orchestrator.framesmith_transcription.tasks', []);
+\$task = \$tasks[\$taskId] ?? NULL;
+echo json_encode([
+  'task_id' => \$taskId,
+  'exists' => \$task !== NULL,
+  'status' => \$task['status'] ?? NULL,
+  'upload_progress' => \$task['upload_progress'] ?? NULL,
+  'local_audio_path' => \$task['local_audio_path'] ?? NULL,
+  'launch_ready' => \$task['launch_ready'] ?? NULL,
+], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+PHP
+}
+
+upload_chunk() {
+  local index="$1"
+  local abort_attempt="$2"
+  local start=$(( index * CHUNK_SIZE_BYTES ))
+  local count="${CHUNK_SIZE_BYTES}"
+  local chunk_path="${TMP_DIR}/chunk-${index}.bin"
+  local response_path="${TMP_DIR}/upload-${index}-${abort_attempt}-$(date +%s%N).json"
+  local meta_path="${TMP_DIR}/upload-${index}-${abort_attempt}-$(date +%s%N).meta"
+  python3 - <<PY
+from pathlib import Path
+src = Path('${FIXTURE_PATH}')
+out = Path('${chunk_path}')
+start = ${start}
+count = ${count}
+with src.open('rb') as f:
+    f.seek(start)
+    data = f.read(count)
+out.write_bytes(data)
+PY
+  local endpoint="${BASE_URL}/api/framesmith/transcription/upload?task_id=${TASK_ID}&upload_id=${UPLOAD_ID}&index=${index}&total=${total_chunks}"
+  LAST_ENDPOINT="${endpoint}"
+  local curl_args=(-k -sS -c "${COOKIE_JAR}" -b "${COOKIE_JAR}" -H "Origin: ${BASE_URL}" -H "Referer: ${BASE_URL}/framesmith/" -F "file=@${chunk_path};type=audio/wav" -F "task_id=${TASK_ID}" -F "auto_launch=0")
+  if [[ -n "${LIMIT_RATE}" && "${abort_attempt}" == "0" ]]; then
+    curl_args+=(--limit-rate "${LIMIT_RATE}")
+  fi
+  if [[ "${abort_attempt}" == "1" ]]; then
+    # Deliberately force a client-side abort on a real HTTPS upload attempt.
+    # The very low max-time plus rate limit should fail before the request can
+    # complete, proving the retry path runs after a transport-level failure.
+    curl_args+=(--limit-rate 8k --max-time 1)
+  fi
+  set +e
+  curl "${curl_args[@]}" "${endpoint}" -o "${response_path}" -w 'http_code=%{http_code}\ntime_total=%{time_total}\nsize_upload=%{size_upload}\nsize_download=%{size_download}\nredirect_url=%{redirect_url}\n' > "${meta_path}"
+  local curl_status=$?
+  set -e
+  local http_code
+  http_code="$(grep '^http_code=' "${meta_path}" | cut -d= -f2 || true)"
+  LAST_HTTP_STATUS="${http_code}"
+  if [[ -f "${response_path}" ]]; then
+    LAST_RESPONSE_BODY="$(tr -d '\n' < "${response_path}" | cut -c1-1000 || true)"
+  else
+    LAST_RESPONSE_BODY=""
+  fi
+  python3 - <<PY >> "${EVENT_LOG}"
+import json
+from pathlib import Path
+meta = {}
+for line in Path('${meta_path}').read_text().splitlines():
+    if '=' in line:
+        k, v = line.split('=', 1)
+        meta[k] = v
+print(json.dumps({
+    'chunk_index': ${index},
+    'abort_attempt': bool(${abort_attempt}),
+    'curl_status': ${curl_status},
+    'http_code': meta.get('http_code', ''),
+    'time_total': meta.get('time_total', ''),
+    'size_upload': meta.get('size_upload', ''),
+    'size_download': meta.get('size_download', ''),
+    'redirect_url': meta.get('redirect_url', ''),
+    'response': Path('${response_path}').read_text(errors='replace')[:500] if Path('${response_path}').exists() else '',
+}))
+PY
+  if [[ "${abort_attempt}" == "1" ]]; then
+    if [[ "${curl_status}" == "0" && "${http_code}" =~ ^2 ]]; then
+      return 2
+    fi
+    return 0
+  fi
+  if [[ "${curl_status}" != "0" ]]; then
+    return 1
+  fi
+  if [[ ! "${http_code}" =~ ^2 ]]; then
+    return 1
+  fi
+  return 0
+}
+
+echo "== upload chunks over HTTPS =="
+chunk_zero_deadline=$(( $(date +%s%3N) + CHUNK_ZERO_TIMEOUT_MS ))
+for (( index=0; index<chunks_to_upload; index++ )); do
+  if [[ "${ABORT_UPLOAD_CHUNK_INDEX}" == "${index}" ]]; then
+    for (( attempt=1; attempt<=ABORT_UPLOAD_CHUNK_ATTEMPTS; attempt++ )); do
+      echo "chunk ${index}: intentional retryable abort attempt ${attempt}/${ABORT_UPLOAD_CHUNK_ATTEMPTS}"
+      if upload_chunk "${index}" 1; then
+        FAULT_EXERCISED=1
+      else
+        fail "requested retryable abort attempt unexpectedly completed successfully"
+      fi
+    done
+    echo "chunk ${index}: retryable abort/failure observed; retrying real upload"
+  fi
+  if [[ "${PERMANENT_FAIL_UPLOAD_CHUNK_INDEX}" == "${index}" ]]; then
+    for (( attempt=1; attempt<=PERMANENT_FAIL_UPLOAD_ATTEMPTS; attempt++ )); do
+      echo "chunk ${index}: intentional permanent failure attempt ${attempt}/${PERMANENT_FAIL_UPLOAD_ATTEMPTS}"
+      if upload_chunk "${index}" 1; then
+        FAULT_EXERCISED=1
+      else
+        fail "requested permanent failure attempt unexpectedly completed successfully"
+      fi
+    done
+    LAST_FAILED_CHUNK_INDEX="${index}"
+    FAILURE_CLASS="transport_before_drupal_chunk_after_partial_progress"
+    fail "chunk ${index} repeatedly failed before reaching Drupal"
+  fi
+  echo "chunk ${index}: upload attempt"
+  if ! upload_chunk "${index}" 0; then
+    LAST_FAILED_CHUNK_INDEX="${index}"
+    FAILURE_CLASS="chunk_upload_failed"
+    fail "chunk ${index} upload failed"
+  fi
+  progress_json="$(check_progress)"
+  echo "progress_after_chunk_${index}=${progress_json}"
+  if python3 - <<PY
+import json, sys
+p = json.loads('''${progress_json}''')
+indices = (((p.get('upload_progress') or {}).get('received_indices')) or [])
+sys.exit(0 if 0 in indices else 1)
+PY
+  then
+    CHUNK_ZERO_REACHED=1
+  fi
+  if python3 - <<PY
+import json, sys
+p = json.loads('''${progress_json}''')
+indices = (((p.get('upload_progress') or {}).get('received_indices')) or [])
+sys.exit(0 if any(int(i) > 0 for i in indices) else 1)
+PY
+  then
+    LATER_CHUNK_REACHED=1
+  fi
+  if [[ "${CHUNK_ZERO_REACHED}" != "1" ]]; then
+    now_ms="$(date +%s%3N)"
+    if (( now_ms > chunk_zero_deadline )); then
+      LAST_FAILED_CHUNK_INDEX="0"
+      FAILURE_CLASS="chunk_zero_timeout_before_drupal"
+      fail "chunk 0 did not reach Drupal before deadline"
+    fi
+  fi
+done
+
+if [[ "${REQUIRE_FAULT_EXERCISED}" == "1" && "${FAULT_EXERCISED}" != "1" ]]; then
+  fail "required transport fault was not exercised"
+fi
+if [[ "${CHUNK_ZERO_REACHED}" != "1" ]]; then
+  fail "chunk 0 did not reach Drupal"
+fi
+if [[ "${LATER_CHUNK_REACHED}" != "1" ]]; then
+  fail "no later chunk reached Drupal"
+fi
+
+final_progress="$(check_progress)"
+echo "== final task progress =="
+echo "${final_progress}" | python3 -m json.tool
+
+if [[ "${FULL_ASSEMBLY}" == "1" ]]; then
+  if ! python3 - <<PY
+import json, sys
+p = json.loads('''${final_progress}''')
+if p.get('status') == 'ready_to_launch' and p.get('local_audio_path'):
+    sys.exit(0)
+sys.exit(1)
+PY
+  then
+    fail "full assembly did not produce ready_to_launch task with local_audio_path"
+  fi
+else
+  echo "partial_upload_mode=1"
+fi
+
+echo "== Framesmith upload transport probe passed =="
+echo "task_id=${TASK_ID}"
+echo "upload_id=${UPLOAD_ID}"
+echo "chunk_zero_reached=${CHUNK_ZERO_REACHED}"
+echo "later_chunk_reached=${LATER_CHUNK_REACHED}"
+echo "fault_exercised=${FAULT_EXERCISED}"

@@ -848,6 +848,11 @@ if (getenv('IS_DDEV_PROJECT') == 'true' && file_exists(__DIR__ . '/settings.ddev
   include __DIR__ . '/settings.ddev.php';
 }
 
+// Enable local-only config split when running under DDEV.
+if (getenv('IS_DDEV_PROJECT') == 'true') {
+  $config['config_split.config_split.local_dev']['status'] = TRUE;
+}
+
 /**
  * Load local development override configuration, if available.
  *

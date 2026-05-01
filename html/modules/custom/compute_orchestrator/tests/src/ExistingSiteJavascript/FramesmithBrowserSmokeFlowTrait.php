@@ -243,8 +243,10 @@ JS,
       }
 
       $hasStartedUpload = (int) ($diagnostic['browserUploadCallCount'] ?? 0) > 0
-        || (int) ($diagnostic['backendReceivedCount'] ?? 0) > 0;
-      if ($hasStartedUpload && ((microtime(TRUE) - $lastProgressAt) * 1000) > $idleMs) {
+        || (int) ($diagnostic['backendReceivedBytes'] ?? 0) > 0;
+      $visibleRetryBackoff = str_contains($statusText, 'Retrying')
+        && str_contains($statusText, 'Please keep this tab open');
+      if ($hasStartedUpload && !$visibleRetryBackoff && ((microtime(TRUE) - $lastProgressAt) * 1000) > $idleMs) {
         $this->fail('Framesmith upload stopped making progress: ' . $this->formatFramesmithUploadDiagnostic($diagnostic));
       }
 
@@ -414,6 +416,35 @@ JS);
         1,
         count($calls),
         'Framesmith upload did not retry after the simulated network drop.',
+      );
+    }
+
+    if ($this->envFlag('FRAMESMITH_SMOKE_REQUIRE_RANGE_REDUCTION')) {
+      $initialSize = NULL;
+      $reducedSize = NULL;
+      foreach ($calls as $call) {
+        if (!is_array($call) || (int) ($call['offset'] ?? -1) !== 0) {
+          continue;
+        }
+        $size = (int) ($call['size'] ?? 0);
+        if ($size <= 0) {
+          continue;
+        }
+        $initialSize ??= $size;
+        if ($initialSize !== NULL && $size < $initialSize) {
+          $reducedSize = $size;
+          break;
+        }
+      }
+
+      $this->assertNotNull(
+        $reducedSize,
+        'Framesmith upload smoke expected browser upload range size to shrink after repeated first-range failures. Calls: ' . $this->formatFramesmithUploadDiagnostic(['browserCalls' => $calls]),
+      );
+      $this->assertLessThan(
+        $initialSize,
+        $reducedSize,
+        'Framesmith upload range size did not shrink after repeated simulated failures.',
       );
     }
   }

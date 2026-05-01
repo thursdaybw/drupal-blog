@@ -32,6 +32,15 @@ compute_orchestrator.framesmith_transcription_upload:
     _permission: 'use framesmith transcription api'
   methods: [POST]
 
+
+compute_orchestrator.framesmith_transcription_upload_failure:
+  path: '/api/framesmith/transcription/upload-failure'
+  defaults:
+    _controller: '\Drupal\compute_orchestrator\Controller\FramesmithTranscriptionController::uploadFailure'
+  methods: [POST]
+  requirements:
+    _permission: 'use framesmith transcription api'
+
 compute_orchestrator.framesmith_transcription_status:
   path: '/api/framesmith/transcription/status'
   defaults:

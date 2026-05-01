@@ -500,6 +500,67 @@ final class FramesmithTranscriptionController extends ControllerBase {
   }
 
   /**
+   * Records an exhausted upload failure for a task.
+   */
+  public function uploadFailure(Request $request): JsonResponse {
+    $payload = json_decode($request->getContent(), TRUE);
+    if (!is_array($payload)) {
+      $payload = $request->request->all();
+    }
+
+    $taskId = trim((string) ($payload['task_id'] ?? ''));
+    if ($taskId === '') {
+      return new JsonResponse([
+        'ok' => FALSE,
+        'error' => 'task_id is required.',
+      ], Response::HTTP_BAD_REQUEST);
+    }
+
+    $task = $this->taskStore->get($taskId);
+    if ($task === NULL) {
+      return new JsonResponse([
+        'ok' => FALSE,
+        'error' => 'Unknown task_id.',
+      ], Response::HTTP_NOT_FOUND);
+    }
+
+    $uploadProgress = is_array($task['upload_progress'] ?? NULL) ? $task['upload_progress'] : [];
+    $failure = [
+      'message' => trim((string) ($payload['message'] ?? 'Audio upload failed after retry attempts were exhausted.')),
+      'upload_id' => trim((string) ($payload['upload_id'] ?? ($uploadProgress['upload_id'] ?? ''))),
+      'failed_offset' => isset($payload['failed_offset']) ? (int) $payload['failed_offset'] : ($uploadProgress['next_offset'] ?? NULL),
+      'range_size' => isset($payload['range_size']) ? (int) $payload['range_size'] : NULL,
+      'attempts' => isset($payload['attempts']) ? (int) $payload['attempts'] : NULL,
+      'received_bytes' => (int) ($uploadProgress['received_bytes'] ?? 0),
+      'contiguous_bytes' => (int) ($uploadProgress['contiguous_bytes'] ?? 0),
+      'total_size' => (int) ($uploadProgress['total_size'] ?? 0),
+      'reported_at' => time(),
+    ];
+
+    $message = $failure['message'] !== ''
+      ? $failure['message']
+      : 'Audio upload failed after retry attempts were exhausted.';
+
+    $task = $this->taskStore->transition(
+      $taskId,
+      'upload_failed_retryable',
+      [
+        'last_error' => $message,
+        'upload_failure' => $failure,
+        'launch_ready' => FALSE,
+      ],
+      'Upload failed after retry attempts were exhausted.',
+    );
+
+    return new JsonResponse([
+      'ok' => TRUE,
+      'task_id' => $taskId,
+      'status' => $task['status'] ?? 'unknown',
+      'task' => $this->buildTaskPayload($task),
+    ]);
+  }
+
+  /**
    * Returns task status.
    */
   public function status(Request $request): JsonResponse {

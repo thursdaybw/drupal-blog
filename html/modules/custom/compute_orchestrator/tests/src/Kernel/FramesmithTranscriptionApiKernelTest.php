@@ -159,6 +159,57 @@ final class FramesmithTranscriptionApiKernelTest extends KernelTestBase {
   }
 
   /**
+   * Verifies exhausted upload failure records retryable user state.
+   */
+  public function testUploadFailureRecordsRetryableState(): void {
+    $taskStore = $this->container->get('compute_orchestrator.framesmith_transcription_task_store');
+    assert($taskStore instanceof FramesmithTranscriptionTaskStoreInterface);
+    $task = $taskStore->create(['video_id' => 'vid-upload-failure']);
+
+    $taskStore->merge($task['task_id'], [
+      'upload_progress' => [
+        'mode' => 'ranged',
+        'upload_id' => 'upload-failure-test',
+        'received_bytes' => 524288,
+        'contiguous_bytes' => 524288,
+        'next_offset' => 524288,
+        'total_size' => 173826642,
+        'complete' => FALSE,
+      ],
+    ]);
+
+    $controller = FramesmithTranscriptionController::create($this->container);
+    $response = $controller->uploadFailure(Request::create(
+      '/api/framesmith/transcription/upload-failure',
+      'POST',
+      [],
+      [],
+      [],
+      [],
+      json_encode([
+        'task_id' => $task['task_id'],
+        'upload_id' => 'upload-failure-test',
+        'message' => 'Poor network detected; retry upload from byte 524288.',
+        'failed_offset' => 524288,
+        'range_size' => 65536,
+        'attempts' => 8,
+      ], JSON_THROW_ON_ERROR),
+    ));
+    $payload = json_decode($response->getContent() ?: '{}', TRUE, 512, JSON_THROW_ON_ERROR);
+
+    $this->assertTrue($payload['ok']);
+    $this->assertSame('upload_failed_retryable', $payload['status']);
+
+    $stored = $taskStore->get($task['task_id']);
+    $this->assertSame('upload_failed_retryable', $stored['status']);
+    $this->assertSame('Poor network detected; retry upload from byte 524288.', $stored['last_error']);
+    $this->assertFalse($stored['launch_ready']);
+    $this->assertSame(524288, $stored['upload_failure']['failed_offset']);
+    $this->assertSame(524288, $stored['upload_failure']['received_bytes']);
+    $this->assertSame(173826642, $stored['upload_failure']['total_size']);
+  }
+
+  /**
    * Verifies start launches an existing task with uploaded audio.
    */
   public function testStartLaunchesWhenTaskAlreadyHasUploadedAudio(): void {

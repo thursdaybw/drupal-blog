@@ -4,4 +4,3 @@ mode: simple
 ignored_config_entities:
   - ebay_connector.settings
   - recaptcha.settings
-  - video_forge.settings

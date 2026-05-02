@@ -834,6 +834,18 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
         return $this->markLeased($record, $readyInfo, $definition);
       }
       catch (\Throwable $exception) {
+        if ($this->isRuntimeLostFailure($exception)) {
+          $this->recordRuntimeLostAcquireFailure(
+            $record,
+            $contractId,
+            $phase,
+            $action,
+            $exception,
+            $definition,
+          );
+          return NULL;
+        }
+
         if ($this->shouldKeepInstanceBootstrapping($exception, TRUE, $workloadStartIssued)) {
           $progress = $this->buildRetryableProgressSnapshot($phase, $action, $exception);
           $status = $this->formatRetryableStatusLine($contractId, $progress);
@@ -891,6 +903,17 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
     catch (\Throwable $exception) {
       if ($wakeAttempted && !$bootstrapCompleted && !$workloadStartIssued && $this->isWakeRateLimitFailure($exception)) {
         return $this->handleWakeRateLimitFallback($record, $contractId, $exception);
+      }
+      if ($this->isRuntimeLostFailure($exception)) {
+        $this->recordRuntimeLostAcquireFailure(
+          $record,
+          $contractId,
+          $phase,
+          $action,
+          $exception,
+          $definition,
+        );
+        return NULL;
       }
       if ($this->shouldKeepInstanceBootstrapping($exception, $bootstrapCompleted, $workloadStartIssued)) {
         $progress = $this->buildRetryableProgressSnapshot($phase, $action, $exception);
@@ -989,6 +1012,20 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
       return $this->markLeased($record, $readyInfo, $definition);
     }
     catch (\Throwable $exception) {
+      if ($this->isRuntimeLostFailure($exception)) {
+        return $this->handleFreshRuntimeLostRetry(
+          $record,
+          $contractId,
+          $phase,
+          $action,
+          $exception,
+          $definition,
+          $bootstrapTimeoutSeconds,
+          $workloadTimeoutSeconds,
+          $freshBootstrapRetriesRemaining,
+        );
+      }
+
       if ($this->shouldKeepInstanceBootstrapping($exception, $bootstrapCompleted, $workloadStartIssued)) {
         $progress = $this->buildRetryableProgressSnapshot($phase, $action, $exception);
         $status = $this->formatRetryableStatusLine($contractId, $progress);
@@ -1122,6 +1159,136 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
         'action' => $action,
         'message' => $message,
       ],
+    );
+  }
+
+  /**
+   * Records a runtime that disappeared while it was actively needed.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   * @param string $contractId
+   *   Vast contract ID.
+   * @param string $phase
+   *   Acquire phase that failed.
+   * @param string $action
+   *   Acquire action that failed.
+   * @param \Throwable $exception
+   *   Runtime-lost failure.
+   * @param array<string,int|string> $definition
+   *   Requested workload definition.
+   */
+  private function recordRuntimeLostAcquireFailure(
+    array $record,
+    string $contractId,
+    string $phase,
+    string $action,
+    \Throwable $exception,
+    array $definition,
+  ): array {
+    try {
+      $this->instanceLifecycleClient->stopInstance($contractId);
+      $record['runtime_state'] = 'stopped';
+      $record['last_stopped_at'] = time();
+    }
+    catch (\Throwable) {
+      $record['runtime_state'] = 'unknown';
+    }
+
+    $hostId = trim((string) ($this->extractHostIdFromRecordOrProvider($record, $contractId) ?? ''));
+    if ($hostId !== '') {
+      $this->recordWorkloadBadHost((string) ($definition['mode'] ?? ''), $hostId);
+      $record['bad_host_id'] = $hostId;
+    }
+
+    $record['lease_status'] = 'unavailable';
+    $record['last_error'] = $exception->getMessage();
+    $record['last_phase'] = 'runtime_lost';
+    $record['last_action'] = 'runtime_lost';
+    $record['runtime_lost_phase'] = $phase;
+    $record['runtime_lost_action'] = $action;
+    $record['last_runtime_lost_at'] = time();
+    $record['last_seen_at'] = time();
+    $this->clearLeaseMetadata($record);
+    $this->poolRepository->save($record);
+
+    $this->logger->warning(
+      'POOL runtime lost contract={contract} phase={phase} action={action} message={message}',
+      [
+        'contract' => $contractId,
+        'phase' => $phase,
+        'action' => $action,
+        'message' => $exception->getMessage(),
+      ],
+    );
+
+    return $record;
+  }
+
+  /**
+   * Handles runtime loss from a fresh fallback by cleanup and retry.
+   *
+   * @param array<string,mixed> $record
+   *   Fresh pool record.
+   * @param string $contractId
+   *   Vast contract ID.
+   * @param string $phase
+   *   Acquire phase that failed.
+   * @param string $action
+   *   Acquire action that failed.
+   * @param \Throwable $exception
+   *   Runtime-lost failure.
+   * @param array<string,int|string> $definition
+   *   Requested workload definition.
+   * @param int $bootstrapTimeoutSeconds
+   *   SSH bootstrap timeout for replacement acquire.
+   * @param int $workloadTimeoutSeconds
+   *   Workload readiness timeout for replacement acquire.
+   * @param int $freshBootstrapRetriesRemaining
+   *   Number of additional fresh retries allowed.
+   *
+   * @return array<string,mixed>
+   *   Replacement acquired record.
+   */
+  private function handleFreshRuntimeLostRetry(
+    array $record,
+    string $contractId,
+    string $phase,
+    string $action,
+    \Throwable $exception,
+    array $definition,
+    int $bootstrapTimeoutSeconds,
+    int $workloadTimeoutSeconds,
+    int $freshBootstrapRetriesRemaining,
+  ): array {
+    $record = $this->recordRuntimeLostAcquireFailure(
+      $record,
+      $contractId,
+      $phase,
+      $action,
+      $exception,
+      $definition,
+    );
+    $cleanup = $this->destroyFreshFailedContract($contractId, $record);
+    $record = $cleanup['record'];
+    $record['last_error'] = $exception->getMessage() . ' Cleanup: ' . $cleanup['message'];
+    $record['last_seen_at'] = time();
+    $this->poolRepository->save($record);
+
+    if ($freshBootstrapRetriesRemaining > 0) {
+      return $this->acquireFreshInstance(
+        $definition,
+        $bootstrapTimeoutSeconds,
+        $workloadTimeoutSeconds,
+        $freshBootstrapRetriesRemaining - 1,
+      );
+    }
+
+    throw new \RuntimeException(
+      'Fresh fallback contract ' . $contractId . ' lost runtime and retry budget is exhausted: '
+      . $exception->getMessage(),
+      0,
+      $exception,
     );
   }
 
@@ -1417,6 +1584,35 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
       'bad gateway',
       'service unavailable',
       'gateway timeout',
+    ] as $needle) {
+      if (str_contains($message, $needle)) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Detects a runtime that disappeared while actively needed.
+   */
+  private function isRuntimeLostFailure(\Throwable $exception): bool {
+    if ($exception instanceof WorkloadReadinessException) {
+      if ($exception->getFailureClass() === FailureClass::RUNTIME_LOST) {
+        return TRUE;
+      }
+    }
+
+    $message = strtolower($exception->getMessage());
+    foreach ([
+      'runtime lost',
+      'instance entered failure state',
+      'connectivity loss',
+      'ssh probe unavailable',
+      'ssh never became reachable',
+      'connection closed by remote host',
+      'connection reset by peer',
+      'remote host closed',
     ] as $needle) {
       if (str_contains($message, $needle)) {
         return TRUE;

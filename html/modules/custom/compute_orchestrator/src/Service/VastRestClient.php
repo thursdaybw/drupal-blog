@@ -273,8 +273,9 @@ final class VastRestClient implements VastRestClientInterface {
       // Hard fail: explicit failure states unless Vast is lagging behind a
       // successful SSH runtime startup report.
       if ($isFailureState && !$isStatusMismatch) {
-        throw new \RuntimeException(
-          'Instance entered failure state: ' . $actualStatus . ' — ' . $statusMsg
+        throw new WorkloadReadinessException(
+          FailureClass::RUNTIME_LOST,
+          'Runtime lost: Instance entered failure state: ' . $actualStatus . ' — ' . $statusMsg
         );
       }
 
@@ -324,10 +325,16 @@ final class VastRestClient implements VastRestClientInterface {
             throw new \RuntimeException('SSH port forwarding stuck: ' . $why);
           }
           if (!$sshWasReachable && $sshUnavailableFor >= $sshNeverReadyThresholdSeconds) {
-            throw new \RuntimeException('SSH never became reachable after workload container reported running for ' . $sshUnavailableFor . ' seconds. Last SSH probe: ' . $why);
+            throw new WorkloadReadinessException(
+              FailureClass::RUNTIME_LOST,
+              'Runtime lost: SSH never became reachable after workload container reported running for ' . $sshUnavailableFor . ' seconds. Last SSH probe: ' . $why,
+            );
           }
           if ($sshWasReachable && $sshLossSeconds >= $sshLossThresholdSeconds) {
-            throw new \RuntimeException('Connectivity loss: SSH probe unavailable for ' . $sshLossSeconds . ' seconds.');
+            throw new WorkloadReadinessException(
+              FailureClass::RUNTIME_LOST,
+              'Runtime lost: Connectivity loss, SSH probe unavailable for ' . $sshLossSeconds . ' seconds.',
+            );
           }
           sleep($pollIntervalSeconds);
           continue;

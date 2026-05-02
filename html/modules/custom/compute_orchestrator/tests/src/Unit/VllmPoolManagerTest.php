@@ -2006,6 +2006,163 @@ final class VllmPoolManagerTest extends TestCase {
   }
 
   /**
+   * Tests acquire abandons a runtime lost during readiness and tries the next.
+   */
+  public function testAcquireFallsBackWhenExistingRuntimeIsLostDuringReadiness(): void {
+    $lostRecord = $this->poolRecord('111', 'whisper', 'openai/whisper-large-v3-turbo');
+    $lostRecord['host_id'] = 'host-lost-during-readiness';
+    $goodRecord = $this->poolRecord('222', 'whisper', 'openai/whisper-large-v3-turbo');
+    $goodRecord['host_id'] = 'host-good-runtime';
+    $repository = $this->newInMemoryRepository([
+      '111' => $lostRecord,
+      '222' => $goodRecord,
+    ]);
+
+    $firstInfo = $this->runningInfo('111');
+    $firstInfo['host_id'] = 'host-lost-during-readiness';
+    $secondInfo = $this->runningInfo('222');
+    $secondInfo['host_id'] = 'host-good-runtime';
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->exactly(2))
+      ->method('showInstance')
+      ->willReturnMap([
+        ['111', $firstInfo],
+        ['222', $secondInfo],
+      ]);
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->never())->method('startWorkload');
+    $runtimeManager->expects($this->exactly(2))
+      ->method('waitForWorkloadReady')
+      ->willReturnCallback(function (string $contractId) use ($secondInfo): array {
+        if ($contractId === '111') {
+          throw new \RuntimeException('Runtime lost: Instance entered failure state: actual_status=exited, cur_state=stopped');
+        }
+        return $secondInfo;
+      });
+
+    $state = new PoolManagerTestState();
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->catalogForWorkload('whisper', 'openai/whisper-large-v3-turbo'),
+      $runtimeManager,
+      $this->createMock(VastInstanceLifecycleClientInterface::class),
+      $vastClient,
+      $state,
+      new BadHostRegistry($state),
+      3,
+      0,
+    );
+
+    $leased = $manager->acquire('whisper', NULL, FALSE);
+    $lost = $repository->get('111');
+
+    $this->assertSame('222', $leased['contract_id']);
+    $this->assertNotNull($lost);
+    $this->assertSame('unavailable', $lost['lease_status']);
+    $this->assertSame('runtime_lost', $lost['last_phase']);
+    $this->assertSame('runtime_lost', $lost['last_action']);
+    $this->assertSame('host-lost-during-readiness', $lost['bad_host_id']);
+    $this->assertSame(
+      ['host-lost-during-readiness'],
+      $state->get('compute_orchestrator.workload_bad_hosts', [])['whisper'] ?? [],
+    );
+    $this->assertSame([], $state->get('compute_orchestrator.global_bad_hosts', []));
+  }
+
+  /**
+   * Tests acquire retries fresh provisioning when a fresh runtime is lost.
+   */
+  public function testAcquireRetriesFreshRuntimeLostDuringReadiness(): void {
+    $repository = $this->newInMemoryRepository([]);
+
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('whisper', NULL)
+      ->willReturn([
+        'mode' => 'whisper',
+        'model' => 'openai/whisper-large-v3-turbo',
+        'gpu_ram_gte' => 20,
+      ]);
+    $catalog->expects($this->exactly(2))
+      ->method('getDefaultGenericImage')
+      ->willReturn('thursdaybw/vllm-generic:2026-04-generic-node');
+
+    $lostInfo = $this->runningInfo('900');
+    $lostInfo['host_id'] = 'host-fresh-runtime-lost';
+    $readyInfo = $this->runningInfo('901');
+    $readyInfo['host_id'] = 'host-fresh-runtime-good';
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->exactly(2))
+      ->method('provisionFresh')
+      ->willReturnOnConsecutiveCalls(
+        [
+          'contract_id' => '900',
+          'instance_info' => $lostInfo,
+        ],
+        [
+          'contract_id' => '901',
+          'instance_info' => $readyInfo,
+        ],
+      );
+    $runtimeManager->expects($this->exactly(2))->method('startWorkload');
+    $runtimeManager->expects($this->exactly(2))
+      ->method('waitForWorkloadReady')
+      ->willReturnCallback(function (string $contractId) use ($readyInfo): array {
+        if ($contractId === '900') {
+          throw new \RuntimeException('Runtime lost: Connectivity loss after start-model succeeded.');
+        }
+        return $readyInfo;
+      });
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->once())
+      ->method('stopInstance')
+      ->with('900')
+      ->willReturn(['success' => TRUE]);
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('destroyInstance')
+      ->with('900')
+      ->willReturn(['success' => TRUE]);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('900')
+      ->willThrowException(new \RuntimeException('instance not found'));
+
+    $state = new PoolManagerTestState();
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $state,
+      new BadHostRegistry($state),
+      3,
+      0,
+    );
+
+    $leased = $manager->acquire('whisper');
+    $lost = $repository->get('900');
+
+    $this->assertSame('901', $leased['contract_id']);
+    $this->assertSame('leased', $leased['lease_status']);
+    $this->assertNotNull($lost);
+    $this->assertSame('destroyed', $lost['lease_status']);
+    $this->assertSame('host-fresh-runtime-lost', $lost['bad_host_id']);
+    $this->assertSame(
+      ['host-fresh-runtime-lost'],
+      $state->get('compute_orchestrator.workload_bad_hosts', [])['whisper'] ?? [],
+    );
+    $this->assertSame([], $state->get('compute_orchestrator.global_bad_hosts', []));
+  }
+
+  /**
    * Builds a standard pool record for provisioning state-machine tests.
    *
    * @return array<string,mixed>
@@ -2165,6 +2322,86 @@ final class VllmPoolManagerTest extends TestCase {
       }
 
     };
+  }
+
+}
+
+/**
+ * Minimal in-memory Drupal state implementation for pool manager tests.
+ */
+final class PoolManagerTestState implements StateInterface {
+
+  /**
+   * Constructs the state store.
+   *
+   * @param array<string,mixed> $values
+   *   Initial state values.
+   */
+  public function __construct(
+    private array $values = [],
+  ) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public function get($key, $default = NULL) {
+    return $this->values[$key] ?? $default;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getMultiple(array $keys) {
+    $out = [];
+    foreach ($keys as $key) {
+      if (array_key_exists($key, $this->values)) {
+        $out[$key] = $this->values[$key];
+      }
+    }
+    return $out;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function set($key, $value) {
+    $this->values[$key] = $value;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setMultiple(array $data) {
+    foreach ($data as $key => $value) {
+      $this->values[$key] = $value;
+    }
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function delete($key) {
+    unset($this->values[$key]);
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function deleteMultiple(array $keys) {
+    foreach ($keys as $key) {
+      unset($this->values[$key]);
+    }
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function resetCache() {
+    return $this;
   }
 
 }

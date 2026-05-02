@@ -58,6 +58,20 @@ final class FailureClass {
   public const WORKLOAD_INCOMPATIBLE = 'workload_incompatible';
 
   /**
+   * Runtime disappeared while provisioning or executing a workload.
+   *
+   * Examples:
+   * - Vast reports stopped/exited after SSH or start-model succeeded
+   * - SSH was reachable, then repeatedly times out during active startup.
+   *
+   * Reaction:
+   * - Mark this runtime attempt unavailable
+   * - Record workload-scoped host suspicion
+   * - Fall back while retry budget remains.
+   */
+  public const RUNTIME_LOST = 'runtime_lost';
+
+  /**
    * Workload is still warming up.
    *
    * Examples:

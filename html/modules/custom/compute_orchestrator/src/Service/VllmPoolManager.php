@@ -9,8 +9,6 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Drupal\compute_orchestrator\Exception\AcquirePendingException;
-use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
-use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 
 /**
  * Provides pooled acquire/release semantics for generic vLLM instances.
@@ -21,6 +19,11 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
    * Module logger channel.
    */
   private LoggerInterface $logger;
+
+  /**
+   * Converts noisy provider/runtime failures into state-machine decisions.
+   */
+  private readonly VllmAcquireFailureClassifier $acquireFailureClassifier;
 
   private const DEFAULT_IDLE_SHUTDOWN_SECONDS = 600;
   private const DEFAULT_LEASE_TTL_SECONDS = 600;
@@ -48,6 +51,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
     private readonly int $wakeSchedulingProbeAttempts = 3,
     private readonly int $wakeSchedulingProbeDelaySeconds = 10,
     LoggerChannelFactoryInterface|LoggerInterface|null $logger = NULL,
+    ?VllmAcquireFailureClassifier $acquireFailureClassifier = NULL,
   ) {
     if ($logger instanceof LoggerChannelFactoryInterface) {
       $this->logger = $logger->get('compute_orchestrator');
@@ -58,6 +62,8 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
     else {
       $this->logger = new NullLogger();
     }
+
+    $this->acquireFailureClassifier = $acquireFailureClassifier ?? new VllmAcquireFailureClassifier();
   }
 
   /**
@@ -863,7 +869,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
         return $this->markLeased($record, $readyInfo, $definition);
       }
       catch (\Throwable $exception) {
-        if ($this->isRuntimeLostFailure($exception)) {
+        if ($this->isRuntimeLostFailure($exception, TRUE, $workloadStartIssued)) {
           $this->recordRuntimeLostAcquireFailure(
             $record,
             $contractId,
@@ -933,7 +939,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
       if ($wakeAttempted && !$bootstrapCompleted && !$workloadStartIssued && $this->isWakeRateLimitFailure($exception)) {
         return $this->handleWakeRateLimitFallback($record, $contractId, $exception);
       }
-      if ($this->isRuntimeLostFailure($exception)) {
+      if ($this->isRuntimeLostFailure($exception, $bootstrapCompleted, $workloadStartIssued)) {
         $this->recordRuntimeLostAcquireFailure(
           $record,
           $contractId,
@@ -1041,7 +1047,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
       return $this->markLeased($record, $readyInfo, $definition);
     }
     catch (\Throwable $exception) {
-      if ($this->isRuntimeLostFailure($exception)) {
+      if ($this->isRuntimeLostFailure($exception, $bootstrapCompleted, $workloadStartIssued)) {
         return $this->handleFreshRuntimeLostRetry(
           $record,
           $contractId,
@@ -1625,30 +1631,16 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
   /**
    * Detects a runtime that disappeared while actively needed.
    */
-  private function isRuntimeLostFailure(\Throwable $exception): bool {
-    if ($exception instanceof WorkloadReadinessException) {
-      if ($exception->getFailureClass() === FailureClass::RUNTIME_LOST) {
-        return TRUE;
-      }
-    }
-
-    $message = strtolower($exception->getMessage());
-    foreach ([
-      'runtime lost',
-      'instance entered failure state',
-      'connectivity loss',
-      'ssh probe unavailable',
-      'ssh never became reachable',
-      'connection closed by remote host',
-      'connection reset by peer',
-      'remote host closed',
-    ] as $needle) {
-      if (str_contains($message, $needle)) {
-        return TRUE;
-      }
-    }
-
-    return FALSE;
+  private function isRuntimeLostFailure(
+    \Throwable $exception,
+    bool $bootstrapCompleted,
+    bool $workloadStartIssued,
+  ): bool {
+    return $this->acquireFailureClassifier->isRuntimeLost(
+      $exception,
+      $bootstrapCompleted,
+      $workloadStartIssued,
+    );
   }
 
   /**
@@ -1659,43 +1651,11 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
     bool $bootstrapCompleted,
     bool $workloadStartIssued,
   ): bool {
-    return $this->isPendingStartupFailure($exception)
-      || (($bootstrapCompleted || $workloadStartIssued) && $this->isWarmupLikeFailure($exception));
-  }
-
-  /**
-   * Detects "still warming/bootstrapping" failures that should be retried.
-   */
-  private function isPendingStartupFailure(\Throwable $exception): bool {
-    if ($exception instanceof AcquirePendingException) {
-      return TRUE;
-    }
-
-    if ($exception instanceof WorkloadReadinessException) {
-      $failureClass = $exception->getFailureClass();
-      if ($failureClass === FailureClass::WARMUP || $failureClass === FailureClass::UNKNOWN) {
-        return TRUE;
-      }
-    }
-
-    $message = strtolower($exception->getMessage());
-    foreach ([
-      'bootstrap timeout',
-      'absolute safety timeout',
-      'stalled before ssh bootstrap',
-      'connection refused',
-      'failed to connect',
-      'workload not ready',
-      'warmup',
-      'timed out',
-      'operation timed out',
-    ] as $needle) {
-      if (str_contains($message, $needle)) {
-        return TRUE;
-      }
-    }
-
-    return FALSE;
+    return $this->acquireFailureClassifier->isWarmupPending(
+      $exception,
+      $bootstrapCompleted,
+      $workloadStartIssued,
+    );
   }
 
   /**
@@ -1882,29 +1842,6 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
       $exception->getMessage(),
     );
     return NULL;
-  }
-
-  /**
-   * Detects startup failures that are still warmup-like.
-   */
-  private function isWarmupLikeFailure(\Throwable $exception): bool {
-    $message = strtolower($exception->getMessage());
-    foreach ([
-      'actual_status=exited',
-      'success, running',
-      'connection refused',
-      'failed to connect',
-      'workload not ready',
-      'warmup',
-      'timed out',
-      'operation timed out',
-    ] as $needle) {
-      if (str_contains($message, $needle)) {
-        return TRUE;
-      }
-    }
-
-    return FALSE;
   }
 
   /**

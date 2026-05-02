@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../../src/Exception/AcquirePendingException.php';
 require_once __DIR__ . '/../../../src/Exception/WorkloadReadinessException.php';
 require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
 require_once __DIR__ . '/../../../src/Service/BadHostRegistry.php';
+require_once __DIR__ . '/../../../src/Service/VllmAcquireFailureClassifier.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolLeaseBrokerInterface.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolManager.php';
 require_once __DIR__ . '/../../../src/Service/GenericVllmRuntimeManagerInterface.php';
@@ -16,6 +17,7 @@ require_once __DIR__ . '/../../../src/Service/VastRestClientInterface.php';
 require_once __DIR__ . '/../../../src/Service/VllmPoolRepositoryInterface.php';
 require_once __DIR__ . '/../../../src/Service/VllmWorkloadCatalogInterface.php';
 
+use Drupal\compute_orchestrator\Exception\AcquirePendingException;
 use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
 use Drupal\compute_orchestrator\Service\BadHostRegistry;
 use Drupal\compute_orchestrator\Service\GenericVllmRuntimeManagerInterface;
@@ -2003,6 +2005,72 @@ final class VllmPoolManagerTest extends TestCase {
       $this->assertSame('Vast readback unavailable', $record['last_error']);
       $this->assertArrayHasKey('last_provider_unavailable_at', $record);
     }
+  }
+
+  /**
+   * Tests warmup slice timeouts stay pending even with noisy SSH text.
+   */
+  public function testAcquireKeepsWarmupSliceTimeoutPendingOnSameContract(): void {
+    $repository = $this->newInMemoryRepository([
+      '333' => $this->poolRecord('333', 'whisper', 'openai/whisper-large-v3-turbo'),
+      '444' => $this->poolRecord('444', 'whisper', 'openai/whisper-large-v3-turbo'),
+    ]);
+
+    $firstInfo = $this->runningInfo('333');
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('333')
+      ->willReturn($firstInfo);
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->never())->method('startWorkload');
+    $runtimeManager->expects($this->once())
+      ->method('waitForWorkloadReady')
+      ->with('333', $this->anything())
+      ->willThrowException(new \RuntimeException(
+        'Readiness polling slice timed out after 10 seconds for workload vllm. '
+        . 'Last probe failure (workload): class=warmup | '
+        . 'models_8000(ok=0 transport_ok=1 kind=command exit=7 stderr=curl: (7) Failed to connect to 127.0.0.1 port 8000) | '
+        . 'processes(ok=1 transport_ok=1 kind=none exit=0 stderr=(empty)) | '
+        . 'gpu(ok=1 transport_ok=1 kind=none exit=0 stderr=(empty)) | '
+        . 'logs(ok=1 transport_ok=1 kind=none exit=0 stderr=(empty)) | '
+        . 'previous transient ssh stderr=kex_exchange_identification: read: Connection reset by peer'
+      ));
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->never())->method('stopInstance');
+
+    $state = new PoolManagerTestState();
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->catalogForWorkload('whisper', 'openai/whisper-large-v3-turbo'),
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $state,
+      new BadHostRegistry($state),
+      3,
+      0,
+    );
+
+    try {
+      $manager->acquire('whisper', NULL, FALSE);
+      $this->fail('Warmup slice timeout should keep acquire pending.');
+    }
+    catch (AcquirePendingException $exception) {
+      $this->assertSame('333', $exception->getContractId());
+    }
+
+    $warming = $repository->get('333');
+    $candidate = $repository->get('444');
+    $this->assertNotNull($warming);
+    $this->assertSame('bootstrapping', $warming['lease_status']);
+    $this->assertSame('workload_ready_probe', $warming['last_phase']);
+    $this->assertStringContainsString('Step 4/4', $warming['last_error']);
+    $this->assertSame('available', $candidate['lease_status']);
+    $this->assertSame([], $state->get('compute_orchestrator.workload_bad_hosts', []));
+    $this->assertSame([], $state->get('compute_orchestrator.global_bad_hosts', []));
   }
 
   /**

@@ -23,5 +23,6 @@ function compute_orchestrator_cron(): void {
 
   /** @var \Drupal\compute_orchestrator\Service\VllmPoolManager $pool */
   $pool = \Drupal::service('compute_orchestrator.vllm_pool_manager');
+  $pool->reconcile();
   $pool->reapIdleAvailableInstances();
 }

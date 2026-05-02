@@ -365,6 +365,25 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
         $info = $this->vastClient->showInstance((string) $contractId);
       }
       catch (\Throwable $exception) {
+        if ($this->isProviderMissingReconcileFailure($exception)) {
+          $updated = $record;
+          $updated['lease_status'] = 'destroyed';
+          $updated['runtime_state'] = 'destroyed';
+          $updated['last_phase'] = 'state_reconcile';
+          $updated['last_action'] = 'provider_missing';
+          $updated['last_error'] = $exception->getMessage();
+          $updated['last_seen_at'] = time();
+          if (!$dryRun) {
+            $this->poolRepository->save($updated);
+          }
+          $results[] = [
+            'contract_id' => (string) $contractId,
+            'action' => $dryRun ? 'would_mark_destroyed' : 'marked_destroyed',
+            'message' => 'Tracked record is missing from Vast provider state.',
+          ];
+          continue;
+        }
+
         $results[] = [
           'contract_id' => (string) $contractId,
           'action' => 'inspect_failed',
@@ -384,7 +403,17 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
       $action = 'unchanged';
       $message = 'Record already matched live Vast state.';
 
-      if ($this->shouldNormalizeToAvailable($record, $runtimeState)) {
+      if ($this->shouldRecordUnexpectedIdleExit($record, $runtimeState)) {
+        $updated['lease_status'] = 'available';
+        $updated['last_error'] = '';
+        $updated['last_phase'] = 'state_reconcile';
+        $updated['last_action'] = 'unexpected_idle_exit';
+        $updated['unexpected_idle_exit_count'] = (int) ($record['unexpected_idle_exit_count'] ?? 0) + 1;
+        $updated['last_unexpected_idle_exit_at'] = time();
+        $action = 'unexpected_idle_exit';
+        $message = 'Available or idle instance disappeared before reap.';
+      }
+      elseif ($this->shouldNormalizeToAvailable($record, $runtimeState)) {
         $updated['lease_status'] = 'available';
         $updated['last_error'] = '';
         $updated['last_phase'] = 'state_reconcile';
@@ -1792,6 +1821,59 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
     }
 
     return 'unknown';
+  }
+
+  /**
+   * Detects provider readback failures that mean a tracked record is gone.
+   */
+  private function isProviderMissingReconcileFailure(\Throwable $exception): bool {
+    $message = strtolower($exception->getMessage());
+    foreach ([
+      'no_such_instance',
+      'no such instance',
+      'instance not found',
+      'instance missing',
+      'not found',
+      '404',
+    ] as $needle) {
+      if (str_contains($message, $needle)) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
+   * Detects a previously running idle record whose backing runtime vanished.
+   *
+   * This is a soft health signal: the completed user task is not failed and the
+   * host is not immediately poisoned, but operators should be able to see that
+   * the idle/grace runtime disappeared before reap.
+   *
+   * @param array<string,mixed> $record
+   *   Stored pool record.
+   * @param string $runtimeState
+   *   Normalized runtime state derived from Vast.
+   */
+  private function shouldRecordUnexpectedIdleExit(array $record, string $runtimeState): bool {
+    if ($runtimeState !== 'stopped') {
+      return FALSE;
+    }
+
+    if ($this->hasActiveLeaseMetadata($record)) {
+      return FALSE;
+    }
+
+    $leaseStatus = (string) ($record['lease_status'] ?? '');
+    if (!in_array($leaseStatus, ['available'], TRUE)) {
+      return FALSE;
+    }
+
+    if ((string) ($record['runtime_state'] ?? '') !== 'running') {
+      return FALSE;
+    }
+
+    return (string) ($record['last_action'] ?? '') !== 'unexpected_idle_exit';
   }
 
   /**

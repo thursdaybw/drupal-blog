@@ -2006,6 +2006,125 @@ final class VllmPoolManagerTest extends TestCase {
   }
 
   /**
+   * Tests reconcile records unexpected idle exits without poisoning the host.
+   */
+  public function testReconcileRecordsUnexpectedIdleExitWithoutMarkingHostBad(): void {
+    $repository = $this->newInMemoryRepository([
+      '35456908' => [
+        'contract_id' => '35456908',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'whisper',
+        'current_model' => 'openai/whisper-large-v3-turbo',
+        'lease_status' => 'available',
+        'runtime_state' => 'running',
+        'host_id' => 'host-week-good-until-today',
+        'host' => '180.21.170.235',
+        'port' => '16908',
+        'url' => 'http://180.21.170.235:16908',
+        'source' => 'manual',
+        'released_at' => time() - 30,
+        'last_seen_at' => time() - 60,
+        'last_used_at' => time() - 60,
+        'last_error' => '',
+      ],
+    ]);
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('35456908')
+      ->willReturn([
+        'id' => '35456908',
+        'cur_state' => 'stopped',
+        'actual_status' => 'exited',
+        'status_msg' => 'success, running thursdaybw/vllm-generic/ssh',
+        'host_id' => 'host-week-good-until-today',
+        'public_ipaddr' => '180.21.170.235',
+        'ssh_host' => 'ssh6.vast.ai',
+        'ssh_port' => 16908,
+      ]);
+
+    $state = new PoolManagerTestState();
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->createMock(VllmWorkloadCatalogInterface::class),
+      $this->createMock(GenericVllmRuntimeManagerInterface::class),
+      $this->createMock(VastInstanceLifecycleClientInterface::class),
+      $vastClient,
+      $state,
+      new BadHostRegistry($state),
+      3,
+      0,
+    );
+
+    $results = $manager->reconcile();
+    $record = $repository->get('35456908');
+
+    $this->assertSame('unexpected_idle_exit', $results[0]['action']);
+    $this->assertNotNull($record);
+    $this->assertSame('available', $record['lease_status']);
+    $this->assertSame('stopped', $record['runtime_state']);
+    $this->assertSame('state_reconcile', $record['last_phase']);
+    $this->assertSame('unexpected_idle_exit', $record['last_action']);
+    $this->assertSame(1, $record['unexpected_idle_exit_count']);
+    $this->assertArrayHasKey('last_unexpected_idle_exit_at', $record);
+    $this->assertSame([], $state->get('compute_orchestrator.bad_hosts', []));
+    $this->assertSame([], $state->get('compute_orchestrator.global_bad_hosts', []));
+  }
+
+  /**
+   * Tests reconcile marks tracked records destroyed when Vast says missing.
+   */
+  public function testReconcileMarksMissingProviderRecordDestroyed(): void {
+    $repository = $this->newInMemoryRepository([
+      '35456909' => [
+        'contract_id' => '35456909',
+        'image' => 'thursdaybw/vllm-generic:2026-04-generic-node',
+        'current_workload_mode' => 'whisper',
+        'current_model' => 'openai/whisper-large-v3-turbo',
+        'lease_status' => 'available',
+        'runtime_state' => 'running',
+        'host' => '180.21.170.236',
+        'port' => '16909',
+        'url' => 'http://180.21.170.236:16909',
+        'source' => 'manual',
+        'last_seen_at' => time() - 60,
+        'last_used_at' => time() - 60,
+        'last_error' => '',
+      ],
+    ]);
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('showInstance')
+      ->with('35456909')
+      ->willThrowException(new \RuntimeException('Vast API error response: {"success":false,"msg":"Not found"}'));
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->createMock(VllmWorkloadCatalogInterface::class),
+      $this->createMock(GenericVllmRuntimeManagerInterface::class),
+      $this->createMock(VastInstanceLifecycleClientInterface::class),
+      $vastClient,
+      $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
+      3,
+      0,
+    );
+
+    $results = $manager->reconcile();
+    $record = $repository->get('35456909');
+
+    $this->assertSame('marked_destroyed', $results[0]['action']);
+    $this->assertNotNull($record);
+    $this->assertSame('destroyed', $record['lease_status']);
+    $this->assertSame('destroyed', $record['runtime_state']);
+    $this->assertSame('state_reconcile', $record['last_phase']);
+    $this->assertSame('provider_missing', $record['last_action']);
+    $this->assertStringContainsString('Not found', $record['last_error']);
+  }
+
+  /**
    * Builds a standard pool record for provisioning state-machine tests.
    *
    * @return array<string,mixed>
@@ -2165,6 +2284,86 @@ final class VllmPoolManagerTest extends TestCase {
       }
 
     };
+  }
+
+}
+
+/**
+ * Minimal in-memory Drupal state implementation for pool manager tests.
+ */
+final class PoolManagerTestState implements StateInterface {
+
+  /**
+   * Constructs the state store.
+   *
+   * @param array<string,mixed> $values
+   *   Initial state values.
+   */
+  public function __construct(
+    private array $values = [],
+  ) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public function get($key, $default = NULL) {
+    return $this->values[$key] ?? $default;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getMultiple(array $keys) {
+    $out = [];
+    foreach ($keys as $key) {
+      if (array_key_exists($key, $this->values)) {
+        $out[$key] = $this->values[$key];
+      }
+    }
+    return $out;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function set($key, $value) {
+    $this->values[$key] = $value;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setMultiple(array $data) {
+    foreach ($data as $key => $value) {
+      $this->values[$key] = $value;
+    }
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function delete($key) {
+    unset($this->values[$key]);
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function deleteMultiple(array $keys) {
+    foreach ($keys as $key) {
+      unset($this->values[$key]);
+    }
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function resetCache() {
+    return $this;
   }
 
 }

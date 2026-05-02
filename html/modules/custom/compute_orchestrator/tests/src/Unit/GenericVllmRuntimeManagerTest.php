@@ -99,6 +99,124 @@ final class GenericVllmRuntimeManagerTest extends TestCase {
   }
 
   /**
+   * @covers ::startWorkload
+   */
+  public function testStartWorkloadDoesNotRestartMatchingWarmupProcessWhenStatusIsStale(): void {
+    $probeExecutor = new RecordingSshProbeExecutor([
+      [
+        'ok' => TRUE,
+        'transport_ok' => TRUE,
+        'failure_kind' => 'none',
+        'exit_code' => 0,
+        'stdout' => "state=stale
+",
+        'stderr' => '',
+        'exception' => NULL,
+      ],
+      [
+        'ok' => TRUE,
+        'transport_ok' => TRUE,
+        'failure_kind' => 'none',
+        'exit_code' => 0,
+        'stdout' => "root 115 1 59 04:03 ? 00:00:07 python3 -m vllm.entrypoints.openai.api_server --model openai/whisper-large-v3-turbo --host 0.0.0.0 --port 8000 --dtype float16 --download-dir /opt/hf-cache
+",
+        'stderr' => '',
+        'exception' => NULL,
+      ],
+    ]);
+
+    $manager = new GenericVllmRuntimeManager(
+      $this->createMock(VastRestClientInterface::class),
+      $probeExecutor,
+      $this->keyPathResolver('/tmp/test-key'),
+      $this->createMock(ConfigFactoryInterface::class),
+      $this->loggerFactory(),
+    );
+
+    $manager->startWorkload(
+      [
+        'ssh_host' => 'ssh6.vast.ai',
+        'ssh_port' => 16908,
+        'ssh_user' => 'root',
+      ],
+      [
+        'mode' => 'whisper',
+        'model' => 'openai/whisper-large-v3-turbo',
+      ],
+    );
+
+    self::assertSame(
+      ['status_before_start', 'processes_before_start'],
+      $probeExecutor->probeNames(),
+      'A stale status with a matching warming vLLM process must not restart the model.',
+    );
+  }
+
+  /**
+   * @covers ::startWorkload
+   */
+  public function testStartWorkloadStillStartsWhenStaleProcessDoesNotMatchRequestedModel(): void {
+    $probeExecutor = new RecordingSshProbeExecutor([
+      [
+        'ok' => TRUE,
+        'transport_ok' => TRUE,
+        'failure_kind' => 'none',
+        'exit_code' => 0,
+        'stdout' => "state=stale
+",
+        'stderr' => '',
+        'exception' => NULL,
+      ],
+      [
+        'ok' => TRUE,
+        'transport_ok' => TRUE,
+        'failure_kind' => 'none',
+        'exit_code' => 0,
+        'stdout' => "root 99 1 python3 -m vllm.entrypoints.openai.api_server --model Qwen/Qwen2-VL-7B-Instruct --port 8000
+",
+        'stderr' => '',
+        'exception' => NULL,
+      ],
+      [
+        'ok' => TRUE,
+        'transport_ok' => TRUE,
+        'failure_kind' => 'none',
+        'exit_code' => 0,
+        'stdout' => "Started model server: mode=whisper model=openai/whisper-large-v3-turbo pid=116
+",
+        'stderr' => '',
+        'exception' => NULL,
+      ],
+    ]);
+
+    $manager = new GenericVllmRuntimeManager(
+      $this->createMock(VastRestClientInterface::class),
+      $probeExecutor,
+      $this->keyPathResolver('/tmp/test-key'),
+      $this->createMock(ConfigFactoryInterface::class),
+      $this->loggerFactory(),
+    );
+
+    $manager->startWorkload(
+      [
+        'ssh_host' => 'ssh6.vast.ai',
+        'ssh_port' => 16908,
+        'ssh_user' => 'root',
+      ],
+      [
+        'mode' => 'whisper',
+        'model' => 'openai/whisper-large-v3-turbo',
+      ],
+    );
+
+    self::assertSame(
+      ['status_before_start', 'processes_before_start', 'start_model'],
+      $probeExecutor->probeNames(),
+      'A stale status without a matching process should still start the model.',
+    );
+  }
+
+  /**
    * Builds a key-path resolver stub.
    */
   private function keyPathResolver(string $path): SshKeyPathResolverInterface {

@@ -236,8 +236,28 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
       '/opt/vllm/bin/status.sh || true',
       30,
     ));
-    if (($statusResult['stdout'] ?? '') !== '') {
-      $this->logger->info('Remote status before start: {status}', ['status' => trim((string) $statusResult['stdout'])]);
+    $statusOutput = trim((string) ($statusResult['stdout'] ?? ''));
+    if ($statusOutput !== '') {
+      $this->logger->info('Remote status before start: {status}', ['status' => $statusOutput]);
+    }
+
+    if ($this->shouldProbeForMatchingWarmupProcess($statusOutput)) {
+      $processResult = $this->sshProbeExecutor->run($context, new SshProbeRequest(
+        'processes_before_start',
+        "ps -ef | grep -E 'vllm|api_server|openai' | grep -v grep || true",
+        30,
+      ));
+      $processOutput = (string) ($processResult['stdout'] ?? '');
+      if ($this->processOutputContainsRequestedModel($processOutput, $model)) {
+        $this->logger->info(
+          'Skipping start-model because requested model is already warming.',
+          [
+            'mode' => $mode,
+            'model' => $model,
+          ],
+        );
+        return;
+      }
     }
 
     $startCommand = '';
@@ -258,6 +278,36 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
     if (($startResult['ok'] ?? FALSE) !== TRUE) {
       throw new \RuntimeException($this->buildStartWorkloadFailureMessage($context, $startCommand, $startResult));
     }
+  }
+
+  /**
+   * Determines whether remote status should be checked for warming processes.
+   */
+  private function shouldProbeForMatchingWarmupProcess(string $statusOutput): bool {
+    if ($statusOutput === '') {
+      return FALSE;
+    }
+    return preg_match('/(^|\s)state=stale(\s|$)/', $statusOutput) === 1;
+  }
+
+  /**
+   * Checks whether a process listing contains the requested vLLM model.
+   */
+  private function processOutputContainsRequestedModel(string $output, string $model): bool {
+    if (trim($output) === '' || trim($model) === '') {
+      return FALSE;
+    }
+
+    foreach (preg_split('/\R/', $output) as $line) {
+      if (stripos($line, 'vllm') === FALSE && stripos($line, 'api_server') === FALSE) {
+        continue;
+      }
+      if (str_contains($line, '--model ' . $model) || str_contains($line, '--model=' . $model)) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
   }
 
   /**

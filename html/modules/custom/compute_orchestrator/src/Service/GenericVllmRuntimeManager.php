@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\compute_orchestrator\Service;
 
+use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
+use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Psr\Log\LoggerInterface;
@@ -257,6 +259,13 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
           ],
         );
         return;
+      }
+
+      if (!empty($workloadDefinition['fail_stale_without_process_after_warmup'])) {
+        throw new WorkloadReadinessException(
+          FailureClass::RUNTIME_LOST,
+          'Runtime lost: status.sh reported stale and no matching vLLM process exists after warmup progress was observed.',
+        );
       }
     }
 

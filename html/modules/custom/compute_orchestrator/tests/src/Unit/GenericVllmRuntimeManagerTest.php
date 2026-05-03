@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\compute_orchestrator\Unit;
 
+require_once __DIR__ . '/../../../src/Exception/WorkloadReadinessException.php';
+require_once __DIR__ . '/../../../src/Service/Workload/FailureClass.php';
 require_once __DIR__ . '/../../../src/Service/GenericVllmRuntimeManagerInterface.php';
 require_once __DIR__ . '/../../../src/Service/VastRestClientInterface.php';
 require_once __DIR__ . '/../../../src/Service/SshConnectionContext.php';
@@ -12,12 +14,14 @@ require_once __DIR__ . '/../../../src/Service/SshProbeExecutorInterface.php';
 require_once __DIR__ . '/../../../src/Service/SshKeyPathResolverInterface.php';
 require_once __DIR__ . '/../../../src/Service/GenericVllmRuntimeManager.php';
 
+use Drupal\compute_orchestrator\Exception\WorkloadReadinessException;
 use Drupal\compute_orchestrator\Service\GenericVllmRuntimeManager;
 use Drupal\compute_orchestrator\Service\SshConnectionContext;
 use Drupal\compute_orchestrator\Service\SshKeyPathResolverInterface;
 use Drupal\compute_orchestrator\Service\SshProbeExecutorInterface;
 use Drupal\compute_orchestrator\Service\SshProbeRequest;
 use Drupal\compute_orchestrator\Service\VastRestClientInterface;
+use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use PHPUnit\Framework\TestCase;
@@ -213,6 +217,67 @@ final class GenericVllmRuntimeManagerTest extends TestCase {
       ['status_before_start', 'processes_before_start', 'start_model'],
       $probeExecutor->probeNames(),
       'A stale status without a matching process should still start the model.',
+    );
+  }
+
+  /**
+   * @covers ::startWorkload
+   */
+  public function testStartWorkloadTreatsStaleMissingProcessAfterWarmupAsRuntimeLost(): void {
+    $probeExecutor = new RecordingSshProbeExecutor([
+      [
+        'ok' => TRUE,
+        'transport_ok' => TRUE,
+        'failure_kind' => 'none',
+        'exit_code' => 0,
+        'stdout' => "state=stale
+",
+        'stderr' => '',
+        'exception' => NULL,
+      ],
+      [
+        'ok' => TRUE,
+        'transport_ok' => TRUE,
+        'failure_kind' => 'none',
+        'exit_code' => 0,
+        'stdout' => '',
+        'stderr' => '',
+        'exception' => NULL,
+      ],
+    ]);
+
+    $manager = new GenericVllmRuntimeManager(
+      $this->createMock(VastRestClientInterface::class),
+      $probeExecutor,
+      $this->keyPathResolver('/tmp/test-key'),
+      $this->createMock(ConfigFactoryInterface::class),
+      $this->loggerFactory(),
+    );
+
+    try {
+      $manager->startWorkload(
+        [
+          'ssh_host' => 'ssh6.vast.ai',
+          'ssh_port' => 16908,
+          'ssh_user' => 'root',
+        ],
+        [
+          'mode' => 'whisper',
+          'model' => 'openai/whisper-large-v3-turbo',
+          'fail_stale_without_process_after_warmup' => TRUE,
+        ],
+      );
+      $this->fail('Expected missing warmup process to be treated as runtime lost.');
+    }
+    catch (WorkloadReadinessException $exception) {
+      self::assertSame(FailureClass::RUNTIME_LOST, $exception->getFailureClass());
+      self::assertStringContainsString('no matching vLLM process', $exception->getMessage());
+    }
+
+    self::assertSame(
+      ['status_before_start', 'processes_before_start'],
+      $probeExecutor->probeNames(),
+      'A stale status with lost warmup process must not call start-model again.',
     );
   }
 

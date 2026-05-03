@@ -267,6 +267,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
     $record['vast_actual_status'] = (string) ($info['actual_status'] ?? '');
     $record['last_seen_at'] = time();
     $record['last_error'] = '';
+    $this->clearWarmupProgressMetadata($record);
     $this->poolRepository->save($record);
     return $record;
   }
@@ -857,7 +858,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
           $this->runtimeManager->stopWorkload($info);
           $phase = 'start_workload';
           $action = 'start workload (mode change)';
-          $this->runtimeManager->startWorkload($info, $definition);
+          $this->runtimeManager->startWorkload($info, $this->workloadDefinitionForStart($definition, $record));
           $workloadStartIssued = TRUE;
         }
 
@@ -889,6 +890,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
           $record['last_phase'] = $phase;
           $record['last_action'] = $action;
           $record['last_seen_at'] = time();
+          $this->recordWarmupProgressIfObserved($record, $exception);
           $this->poolRepository->save($record);
           throw AcquirePendingException::fromProgress($status, $contractId, $progress, $exception);
         }
@@ -928,7 +930,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
       $bootstrapCompleted = TRUE;
       $phase = 'start_workload';
       $action = 'start workload';
-      $this->runtimeManager->startWorkload($bootInfo, $definition);
+      $this->runtimeManager->startWorkload($bootInfo, $this->workloadDefinitionForStart($definition, $record));
       $workloadStartIssued = TRUE;
       $phase = 'workload_ready_probe';
       $action = 'probe /v1/models (after start)';
@@ -959,6 +961,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
         $record['last_phase'] = $phase;
         $record['last_action'] = $action;
         $record['last_seen_at'] = time();
+        $this->recordWarmupProgressIfObserved($record, $exception);
         $this->poolRepository->save($record);
         throw AcquirePendingException::fromProgress($status, $contractId, $progress, $exception);
       }
@@ -1039,7 +1042,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
       $phase = 'start_workload';
       $action = 'start workload';
       $bootInfo = $instanceInfo;
-      $this->runtimeManager->startWorkload($bootInfo, $definition);
+      $this->runtimeManager->startWorkload($bootInfo, $this->workloadDefinitionForStart($definition, $record));
       $workloadStartIssued = TRUE;
       $phase = 'workload_ready_probe';
       $action = 'probe /v1/models (after start)';
@@ -1070,6 +1073,7 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
         $record['last_phase'] = $phase;
         $record['last_action'] = $action;
         $record['last_seen_at'] = time();
+        $this->recordWarmupProgressIfObserved($record, $exception);
         $this->poolRepository->save($record);
         throw AcquirePendingException::fromProgress($status, $contractId, $progress, $exception);
       }
@@ -1626,6 +1630,76 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
     }
 
     return FALSE;
+  }
+
+  /**
+   * Adds a runtime-start guard when prior warmup progress was lost.
+   *
+   * When the same workload previously reached warmup/progress on a contract,
+   * a later `state=stale` with no matching vLLM process means the process died
+   * before readiness. In that case start-model should not be retried forever on
+   * the same host; the runtime manager should report runtime-lost so the pool
+   * can mark the host bad for this workload and move on.
+   *
+   * @param array<string,int|string> $definition
+   *   Requested workload definition.
+   * @param array<string,mixed> $record
+   *   Candidate pool record.
+   *
+   * @return array<string,int|string|bool>
+   *   Definition passed to the runtime manager.
+   */
+  private function workloadDefinitionForStart(array $definition, array $record): array {
+    $decorated = $definition;
+    if ($this->recordHasWarmupProgressForDefinition($record, $definition)) {
+      $decorated['fail_stale_without_process_after_warmup'] = TRUE;
+    }
+    return $decorated;
+  }
+
+  /**
+   * Records that this contract reached model warmup before API readiness.
+   */
+  private function recordWarmupProgressIfObserved(array &$record, \Throwable $exception): void {
+    if (!$this->acquireFailureClassifier->hasWarmupForwardProgress($exception)) {
+      return;
+    }
+
+    $record['warmup_progress_seen'] = TRUE;
+    $record['last_warmup_progress_at'] = time();
+    $record['last_warmup_progress_message'] = $this->summarizeRetryableResult($exception);
+  }
+
+  /**
+   * Detects warmup progress relevant to the requested workload/model.
+   *
+   * @param array<string,mixed> $record
+   *   Candidate pool record.
+   * @param array<string,int|string> $definition
+   *   Requested workload definition.
+   */
+  private function recordHasWarmupProgressForDefinition(array $record, array $definition): bool {
+    if (empty($record['warmup_progress_seen'])) {
+      return FALSE;
+    }
+    if ((string) ($record['current_workload_mode'] ?? '') !== (string) ($definition['mode'] ?? '')) {
+      return FALSE;
+    }
+    if ((string) ($record['current_model'] ?? '') !== (string) ($definition['model'] ?? '')) {
+      return FALSE;
+    }
+    return (int) ($record['last_warmup_progress_at'] ?? 0) > 0;
+  }
+
+  /**
+   * Clears warmup-progress markers once the runtime became ready.
+   */
+  private function clearWarmupProgressMetadata(array &$record): void {
+    unset(
+      $record['warmup_progress_seen'],
+      $record['last_warmup_progress_at'],
+      $record['last_warmup_progress_message'],
+    );
   }
 
   /**

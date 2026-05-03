@@ -2068,9 +2068,101 @@ final class VllmPoolManagerTest extends TestCase {
     $this->assertSame('bootstrapping', $warming['lease_status']);
     $this->assertSame('workload_ready_probe', $warming['last_phase']);
     $this->assertStringContainsString('Step 4/4', $warming['last_error']);
+    $this->assertTrue((bool) $warming['warmup_progress_seen']);
+    $this->assertArrayHasKey('last_warmup_progress_at', $warming);
     $this->assertSame('available', $candidate['lease_status']);
     $this->assertSame([], $state->get('compute_orchestrator.workload_bad_hosts', []));
     $this->assertSame([], $state->get('compute_orchestrator.global_bad_hosts', []));
+  }
+
+  /**
+   * Tests prior warmup progress makes stale missing process a bad runtime.
+   */
+  public function testAcquireFallsBackWhenWarmupProgressProcessDisappears(): void {
+    $lostRecord = $this->poolRecord('555', 'whisper', 'openai/whisper-large-v3-turbo');
+    $lostRecord['host_id'] = 'host-loses-process-after-warmup';
+    $lostRecord['warmup_progress_seen'] = TRUE;
+    $lostRecord['last_warmup_progress_at'] = time() - 60;
+    $goodRecord = $this->poolRecord('666', 'whisper', 'openai/whisper-large-v3-turbo');
+    $goodRecord['host_id'] = 'host-good-after-process-loss';
+    $repository = $this->newInMemoryRepository([
+      '555' => $lostRecord,
+      '666' => $goodRecord,
+    ]);
+
+    $lostInfo = $this->runningInfo('555');
+    $lostInfo['host_id'] = 'host-loses-process-after-warmup';
+    $stoppedLostInfo = $lostInfo;
+    $stoppedLostInfo['cur_state'] = 'stopped';
+    $stoppedLostInfo['actual_status'] = 'stopped';
+    $goodInfo = $this->runningInfo('666');
+    $goodInfo['host_id'] = 'host-good-after-process-loss';
+
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->exactly(3))
+      ->method('showInstance')
+      ->willReturnMap([
+        ['555', $stoppedLostInfo],
+        ['666', $goodInfo],
+      ]);
+
+    $lifecycleClient = $this->createMock(VastInstanceLifecycleClientInterface::class);
+    $lifecycleClient->expects($this->once())
+      ->method('startInstance')
+      ->with('555')
+      ->willReturn(['success' => TRUE]);
+    $lifecycleClient->expects($this->once())
+      ->method('stopInstance')
+      ->with('555')
+      ->willReturn(['success' => TRUE]);
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('waitForSshBootstrap')
+      ->with('555', $this->anything())
+      ->willReturn($lostInfo);
+    $runtimeManager->expects($this->once())
+      ->method('startWorkload')
+      ->with(
+        $this->anything(),
+        $this->callback(static function (array $definition): bool {
+          return ($definition['fail_stale_without_process_after_warmup'] ?? FALSE) === TRUE;
+        }),
+      )
+      ->willThrowException(new WorkloadReadinessException(
+        FailureClass::RUNTIME_LOST,
+        'Runtime lost: status.sh reported stale and no matching vLLM process exists after warmup progress was observed.',
+      ));
+    $runtimeManager->expects($this->once())
+      ->method('waitForWorkloadReady')
+      ->with('666', $this->anything())
+      ->willReturn($goodInfo);
+
+    $state = new PoolManagerTestState();
+    $manager = new VllmPoolManager(
+      $repository,
+      $this->catalogForWorkload('whisper', 'openai/whisper-large-v3-turbo'),
+      $runtimeManager,
+      $lifecycleClient,
+      $vastClient,
+      $state,
+      new BadHostRegistry($state),
+      3,
+      0,
+    );
+
+    $leased = $manager->acquire('whisper', NULL, FALSE);
+    $lost = $repository->get('555');
+
+    $this->assertSame('666', $leased['contract_id']);
+    $this->assertNotNull($lost);
+    $this->assertSame('unavailable', $lost['lease_status']);
+    $this->assertSame('runtime_lost', $lost['last_phase']);
+    $this->assertSame('host-loses-process-after-warmup', $lost['bad_host_id']);
+    $this->assertSame(
+      ['host-loses-process-after-warmup'],
+      $state->get('compute_orchestrator.workload_bad_hosts', [])['whisper'] ?? [],
+    );
   }
 
   /**

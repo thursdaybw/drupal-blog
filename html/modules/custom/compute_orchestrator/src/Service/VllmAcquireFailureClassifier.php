@@ -47,7 +47,7 @@ final class VllmAcquireFailureClassifier {
     // process/GPU
     // probes, but also a transient SSH reset string from one probe. That must
     // remain pending on the same contract, not poison the host.
-    if ($this->hasWarmupForwardProgressEvidence($message)) {
+    if ($this->hasWarmupForwardProgress($exception)) {
       return self::WARMUP_PENDING;
     }
 
@@ -64,6 +64,22 @@ final class VllmAcquireFailureClassifier {
     }
 
     return self::FATAL_RUNTIME;
+  }
+
+  /**
+   * Returns TRUE when a failure includes positive warmup-progress evidence.
+   */
+  public function hasWarmupForwardProgress(\Throwable $exception): bool {
+    if ($exception instanceof WorkloadReadinessException) {
+      return in_array($exception->getFailureClass(), [
+        FailureClass::WARMUP,
+        FailureClass::UNKNOWN,
+      ], TRUE);
+    }
+
+    return $this->hasWarmupForwardProgressEvidence(
+      strtolower($exception->getMessage()),
+    );
   }
 
   /**

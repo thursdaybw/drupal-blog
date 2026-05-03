@@ -55,12 +55,14 @@ trait FramesmithBrowserSmokeFlowTrait {
     $this->assertSession()->waitForText('Captions ready', $timeoutSeconds * 1000);
 
     $transcriptButton = $this->waitForTranscriptButton($timeoutSeconds);
-    $statusText = $this->getFramesmithStatusText();
+    $transcriptionDiagnostic = $this->getFramesmithTranscriptionDiagnosticState();
+    $statusText = (string) ($transcriptionDiagnostic['statusText'] ?? $this->getFramesmithStatusText());
 
     $this->assertNotNull($transcriptButton, 'Transcript button should exist.');
     $this->assertFalse(
       $transcriptButton->hasAttribute('disabled'),
-      "Transcript button never enabled. Status text: {$statusText}",
+      'Transcript button never enabled. Diagnostics: '
+        . $this->formatFramesmithUploadDiagnostic($transcriptionDiagnostic),
     );
 
     $transcriptButton->click();
@@ -535,6 +537,56 @@ JS);
     }
 
     return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'on'], TRUE);
+  }
+
+  /**
+   * Captures frontend and backend transcription state for smoke failures.
+   *
+   * @return array<string,mixed>
+   *   Browser globals plus a same-origin backend task status snapshot.
+   */
+  private function getFramesmithTranscriptionDiagnosticState(): array {
+    $diagnostic = $this->getSession()->evaluateScript(<<<'JS'
+(function () {
+  const harness = window.__framesmithSmokeUpload || {};
+  const taskId = String(window.__lastWhisperDrupalTaskId || '');
+  let statusPayload = null;
+  let statusError = '';
+  if (taskId.length > 0) {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/framesmith/transcription/status?task_id=' + encodeURIComponent(taskId), false);
+      xhr.withCredentials = true;
+      xhr.send(null);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        statusPayload = JSON.parse(xhr.responseText || '{}');
+      }
+      else {
+        statusError = 'status endpoint returned HTTP ' + xhr.status;
+      }
+    }
+    catch (error) {
+      statusError = error && error.message ? error.message : String(error);
+    }
+  }
+  const transcriptButton = document.querySelector('#showTranscriptBtn');
+  const statusPollCalls = Array.isArray(harness.statusPollCalls)
+    ? harness.statusPollCalls.slice(-10)
+    : [];
+  return {
+    taskId,
+    statusText: document.querySelector('#videoSourceStatus')?.textContent || '',
+    transcriptButtonDisabled: transcriptButton ? Boolean(transcriptButton.disabled) : null,
+    transcriptionResult: window.__lastWhisperTranscriptionResult || null,
+    pollState: window.__lastWhisperTranscriptionPollState || null,
+    statusPayload,
+    statusError,
+    statusPollCalls
+  };
+}())
+JS);
+
+    return is_array($diagnostic) ? $diagnostic : [];
   }
 
   /**

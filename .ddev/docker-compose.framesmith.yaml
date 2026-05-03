@@ -2,5 +2,7 @@ services:
   web:
     volumes:
       - type: bind
-        source: ../../webcodecs-test
+        # Keep local dev aligned with staging/prod: serve the checked-out
+        # FrameSmith submodule from this repository, not an external workspace.
+        source: ../html/framesmith
         target: /var/www/html/html/framesmith

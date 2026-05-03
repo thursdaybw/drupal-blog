@@ -836,6 +836,10 @@ final class VllmPoolAdminForm extends FormBase {
       return 'No — only available instances are reaped';
     }
 
+    if ($this->isStoppedRuntimeRecord($record)) {
+      return 'Stopped — already stopped';
+    }
+
     if ($idleSeconds <= 0) {
       return 'Disabled — post-lease reap is turned off';
     }
@@ -851,6 +855,33 @@ final class VllmPoolAdminForm extends FormBase {
     }
 
     return 'Not yet — warm until ' . $this->formatTimestamp($warmUntil) . ' (' . $this->formatRelativeDeadline($warmUntil, $now) . ')';
+  }
+
+  /**
+   * Detects available pool records whose Vast runtime is already stopped.
+   *
+   * Reap means "stop this available runtime". When the runtime is already
+   * stopped, the admin table should say so instead of presenting it as eligible
+   * for another stop action.
+   *
+   * @param array<string,mixed> $record
+   *   Pool record.
+   */
+  private function isStoppedRuntimeRecord(array $record): bool {
+    $states = [
+      strtolower((string) ($record['runtime_state'] ?? '')),
+      strtolower((string) ($record['vast_cur_state'] ?? '')),
+      strtolower((string) ($record['vast_actual_status'] ?? '')),
+    ];
+
+    foreach ($states as $state) {
+      if (in_array($state, ['stopped', 'inactive', 'exited'], TRUE)) {
+        return TRUE;
+      }
+    }
+
+    return (int) ($record['last_stopped_at'] ?? 0) > 0
+      && (string) ($record['last_phase'] ?? '') === 'idle_reap';
   }
 
   /**

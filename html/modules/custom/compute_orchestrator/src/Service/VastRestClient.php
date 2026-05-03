@@ -737,6 +737,10 @@ final class VastRestClient implements VastRestClientInterface {
 
         $contractId = (string) $create['new_contract'];
 
+        if (isset($createOptions['on_contract_created']) && is_callable($createOptions['on_contract_created'])) {
+          $createOptions['on_contract_created']($contractId, $offer, $create);
+        }
+
         if ($bootstrapOnly) {
           $this->logWithTime('Waiting for SSH bootstrap for contract ' . $contractId);
           $info = $this->waitForSshBootstrapOnly($contractId, $bootTimeoutSeconds);

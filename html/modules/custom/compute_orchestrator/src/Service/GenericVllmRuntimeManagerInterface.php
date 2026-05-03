@@ -12,7 +12,7 @@ interface GenericVllmRuntimeManagerInterface {
   /**
    * Provisions a fresh generic image instance and waits for SSH bootstrap.
    *
-   * @param array<string, int|string> $workloadDefinition
+   * @param array<string, mixed> $workloadDefinition
    *   Normalized workload definition.
    * @param string $image
    *   Generic image tag to provision.
@@ -35,7 +35,7 @@ interface GenericVllmRuntimeManagerInterface {
    *
    * @param array<string,mixed> $instanceInfo
    *   Vast instance metadata including SSH connection fields.
-   * @param array<string, int|string> $workloadDefinition
+   * @param array<string, mixed> $workloadDefinition
    *   Normalized workload definition.
    */
   public function startWorkload(array $instanceInfo, array $workloadDefinition): void;

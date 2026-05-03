@@ -23,6 +23,7 @@ use Drupal\compute_orchestrator\Service\SshProbeRequest;
 use Drupal\compute_orchestrator\Service\VastRestClientInterface;
 use Drupal\compute_orchestrator\Service\Workload\FailureClass;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -33,6 +34,88 @@ use Psr\Log\NullLogger;
  * @group compute_orchestrator
  */
 final class GenericVllmRuntimeManagerTest extends TestCase {
+
+  /**
+   * @covers ::provisionFresh
+   */
+  public function testProvisionFreshForwardsContractCreatedCallback(): void {
+    $config = $this->createMock(ImmutableConfig::class);
+    $config->method('get')
+      ->with('max_hourly_price')
+      ->willReturn(0.5);
+    $configFactory = $this->createMock(ConfigFactoryInterface::class);
+    $configFactory->method('get')
+      ->with('compute_orchestrator.settings')
+      ->willReturn($config);
+
+    $callbackCalls = [];
+    $vastClient = $this->createMock(VastRestClientInterface::class);
+    $vastClient->expects($this->once())
+      ->method('provisionInstanceFromOffers')
+      ->willReturnCallback(static function (
+        array $filters,
+        array $excludeRegions,
+        int $limit,
+        ?float $maxPrice,
+        ?float $minPrice,
+        array $createOptions,
+        int $maxAttempts,
+        int $bootTimeoutSeconds,
+      ) use (&$callbackCalls): array {
+        self::assertSame(20 * 1024, $filters['gpu_ram']['gte']);
+        self::assertSame(0.5, $maxPrice);
+        self::assertNull($minPrice);
+        self::assertSame(20, $limit);
+        self::assertSame(5, $maxAttempts);
+        self::assertSame(600, $bootTimeoutSeconds);
+        self::assertIsCallable($createOptions['on_contract_created'] ?? NULL);
+        $createOptions['on_contract_created'](
+          '777',
+          ['id' => 'offer-777', 'host_id' => 'host-777'],
+          ['new_contract' => '777'],
+        );
+        $callbackCalls[] = 'vast-client-returned';
+        return [
+          'contract_id' => '777',
+          'instance_info' => ['id' => '777'],
+          'offer' => ['id' => 'offer-777'],
+        ];
+      });
+
+    $manager = new GenericVllmRuntimeManager(
+      $vastClient,
+      new RecordingSshProbeExecutor([]),
+      $this->keyPathResolver('/tmp/test-key'),
+      $configFactory,
+      $this->loggerFactory(),
+    );
+
+    $result = $manager->provisionFresh([
+      'mode' => 'whisper',
+      'gpu_ram_gte' => 20,
+      'on_contract_created' => static function (
+        string $contractId,
+        array $offer,
+        array $createResponse,
+      ) use (&$callbackCalls): void {
+        $callbackCalls[] = [
+          'contract_id' => $contractId,
+          'offer_id' => $offer['id'] ?? '',
+          'new_contract' => $createResponse['new_contract'] ?? '',
+        ];
+      },
+    ], 'test-image:latest');
+
+    self::assertSame('777', $result['contract_id']);
+    self::assertSame([
+      [
+        'contract_id' => '777',
+        'offer_id' => 'offer-777',
+        'new_contract' => '777',
+      ],
+      'vast-client-returned',
+    ], $callbackCalls);
+  }
 
   /**
    * @covers ::startWorkload

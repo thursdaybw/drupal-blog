@@ -45,25 +45,31 @@ final class GenericVllmRuntimeManager implements GenericVllmRuntimeManagerInterf
 
     $maxHourlyPrice = (float) ($this->configFactory->get('compute_orchestrator.settings')->get('max_hourly_price') ?? 0.5);
 
+    $createOptions = [
+      'workload' => (string) ($workloadDefinition['mode'] ?? 'generic'),
+      'image' => $image,
+      'bootstrap_only' => TRUE,
+      'options' => [
+        'disk' => 40,
+        'runtype' => 'ssh',
+        'target_state' => 'running',
+        'env' => [
+          '-p 8000:8000' => '1',
+        ],
+      ],
+    ];
+
+    if (isset($workloadDefinition['on_contract_created']) && is_callable($workloadDefinition['on_contract_created'])) {
+      $createOptions['on_contract_created'] = $workloadDefinition['on_contract_created'];
+    }
+
     return $this->vastClient->provisionInstanceFromOffers(
       $filters,
       ['RU', 'CN', 'IR', 'KP', 'SY'],
       20,
       $maxHourlyPrice,
       NULL,
-      [
-        'workload' => (string) ($workloadDefinition['mode'] ?? 'generic'),
-        'image' => $image,
-        'bootstrap_only' => TRUE,
-        'options' => [
-          'disk' => 40,
-          'runtype' => 'ssh',
-          'target_state' => 'running',
-          'env' => [
-            '-p 8000:8000' => '1',
-          ],
-        ],
-      ],
+      $createOptions,
       5,
       600,
     );

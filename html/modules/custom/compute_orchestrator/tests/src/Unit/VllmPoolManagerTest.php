@@ -397,6 +397,81 @@ final class VllmPoolManagerTest extends TestCase {
   }
 
   /**
+   * Tests fresh provisioning is visible in the pool before SSH bootstrap ends.
+   */
+  public function testFreshProvisionRecordsProvisionalPoolRowBeforeBootstrapReturns(): void {
+    $repository = $this->newInMemoryRepository([]);
+
+    $catalog = $this->createMock(VllmWorkloadCatalogInterface::class);
+    $catalog->expects($this->once())
+      ->method('getDefinition')
+      ->with('whisper', NULL)
+      ->willReturn([
+        'mode' => 'whisper',
+        'model' => 'openai/whisper-large-v3-turbo',
+        'gpu_ram_gte' => 20,
+        'max_model_len' => 16384,
+      ]);
+    $catalog->expects($this->once())
+      ->method('getDefaultGenericImage')
+      ->willReturn('thursdaybw/vllm-generic:2026-04-generic-node');
+
+    $runtimeManager = $this->createMock(GenericVllmRuntimeManagerInterface::class);
+    $runtimeManager->expects($this->once())
+      ->method('provisionFresh')
+      ->willReturnCallback(static function (array $definition, string $image): array {
+        self::assertSame('thursdaybw/vllm-generic:2026-04-generic-node', $image);
+        self::assertIsCallable($definition['on_contract_created'] ?? NULL);
+        $definition['on_contract_created'](
+          '777',
+          [
+            'id' => 'offer-777',
+            'host_id' => 'host-777',
+          ],
+          [
+            'new_contract' => '777',
+          ],
+        );
+        throw new \RuntimeException('Instance exceeded SSH bootstrap timeout.');
+      });
+    $runtimeManager->expects($this->never())->method('startWorkload');
+    $runtimeManager->expects($this->never())->method('waitForWorkloadReady');
+
+    $manager = new VllmPoolManager(
+      $repository,
+      $catalog,
+      $runtimeManager,
+      $this->createMock(VastInstanceLifecycleClientInterface::class),
+      $this->createMock(VastRestClientInterface::class),
+      $this->createMock(StateInterface::class),
+      new BadHostRegistry($this->createMock(StateInterface::class)),
+      3,
+      0,
+    );
+
+    try {
+      $manager->acquire('whisper', NULL, TRUE);
+      $this->fail('Fresh provisioning should still surface the bootstrap failure.');
+    }
+    catch (\RuntimeException $exception) {
+      $this->assertSame('Instance exceeded SSH bootstrap timeout.', $exception->getMessage());
+    }
+
+    $record = $repository->get('777');
+    $this->assertNotNull($record);
+    $this->assertSame('bootstrapping', $record['lease_status']);
+    $this->assertSame('starting', $record['runtime_state']);
+    $this->assertSame('fresh_fallback', $record['source']);
+    $this->assertSame('whisper', $record['current_workload_mode']);
+    $this->assertSame('openai/whisper-large-v3-turbo', $record['current_model']);
+    $this->assertSame('host-777', $record['host_id']);
+    $this->assertSame('offer-777', $record['vast_offer_id']);
+    $this->assertSame('fresh_provision', $record['last_phase']);
+    $this->assertSame('Vast contract created; waiting for SSH bootstrap', $record['last_action']);
+    $this->assertStringContainsString('waiting for SSH bootstrap', $record['last_error']);
+  }
+
+  /**
    * Tests acquire switches running instance to requested workload.
    */
   public function testAcquireSwitchesRunningInstanceToRequestedWorkload(): void {

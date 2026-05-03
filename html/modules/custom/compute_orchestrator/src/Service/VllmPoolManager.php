@@ -1011,30 +1011,34 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
     int $freshBootstrapRetriesRemaining = 1,
   ): array {
     $image = $this->workloadCatalog->getDefaultGenericImage();
-    $fresh = $this->runtimeManager->provisionFresh($definition, $image);
+    $definitionForProvision = $definition;
+    $definitionForProvision['on_contract_created'] = function (
+      string $contractId,
+      array $offer = [],
+      array $createResponse = [],
+    ) use ($definition, $image): void {
+      $this->recordFreshProvisioningStarted(
+        $contractId,
+        $definition,
+        $image,
+        $offer,
+        $createResponse,
+      );
+    };
+
+    $fresh = $this->runtimeManager->provisionFresh($definitionForProvision, $image);
     $contractId = (string) ($fresh['contract_id'] ?? '');
     $instanceInfo = (array) ($fresh['instance_info'] ?? []);
     if ($contractId === '') {
       throw new \RuntimeException('Fresh provisioning did not return a contract ID.');
     }
 
-    $record = [
-      'contract_id' => $contractId,
-      'image' => $image,
-      'current_workload_mode' => (string) ($definition['mode'] ?? ''),
-      'current_model' => (string) ($definition['model'] ?? ''),
-      'lease_status' => 'bootstrapping',
-      'host' => trim((string) ($instanceInfo['public_ipaddr'] ?? '')),
-      'host_id' => trim((string) ($instanceInfo['host_id'] ?? '')),
-      'port' => $this->extractPublicPort($instanceInfo),
-      'url' => $this->buildPublicUrl($instanceInfo),
-      'source' => 'fresh_fallback',
-      'runtime_state' => 'running',
-      'last_seen_at' => time(),
-      'last_used_at' => time(),
-      'last_error' => '',
-    ];
-    $this->poolRepository->save($record);
+    $record = $this->recordFreshProvisioningBootstrapped(
+      $contractId,
+      $definition,
+      $image,
+      $instanceInfo,
+    );
 
     try {
       $bootstrapCompleted = TRUE;
@@ -1124,6 +1128,110 @@ final class VllmPoolManager implements VllmPoolLeaseBrokerInterface {
         $exception
       );
     }
+  }
+
+  /**
+   * Records a fresh paid Vast contract as soon as Vast returns its ID.
+   *
+   * This keeps the pool admin visible during the expensive gap between
+   * `createInstance` and SSH bootstrap. The row is provisional and will be
+   * updated with SSH/public URL metadata once bootstrap returns.
+   *
+   * @param string $contractId
+   *   Vast contract ID.
+   * @param array<string,mixed> $definition
+   *   Requested workload definition.
+   * @param string $image
+   *   Generic image tag.
+   * @param array<string,mixed> $offer
+   *   Vast offer selected for this contract.
+   * @param array<string,mixed> $createResponse
+   *   Vast create response.
+   */
+  private function recordFreshProvisioningStarted(
+    string $contractId,
+    array $definition,
+    string $image,
+    array $offer = [],
+    array $createResponse = [],
+  ): void {
+    $contractId = trim($contractId);
+    if ($contractId === '') {
+      return;
+    }
+
+    $record = $this->poolRepository->get($contractId) ?? [];
+    $record = array_merge($record, [
+      'contract_id' => $contractId,
+      'image' => $image,
+      'current_workload_mode' => (string) ($definition['mode'] ?? ''),
+      'current_model' => (string) ($definition['model'] ?? ''),
+      'lease_status' => 'bootstrapping',
+      'runtime_state' => 'starting',
+      'host' => (string) ($record['host'] ?? ''),
+      'host_id' => trim((string) ($offer['host_id'] ?? ($record['host_id'] ?? ''))),
+      'port' => (string) ($record['port'] ?? ''),
+      'url' => (string) ($record['url'] ?? ''),
+      'source' => 'fresh_fallback',
+      'vast_offer_id' => (string) ($offer['id'] ?? ($record['vast_offer_id'] ?? '')),
+      'vast_create_response' => $createResponse,
+      'last_phase' => 'fresh_provision',
+      'last_action' => 'Vast contract created; waiting for SSH bootstrap',
+      'last_error' => 'Fresh Vast contract created; waiting for SSH bootstrap.',
+      'last_seen_at' => time(),
+      'last_used_at' => time(),
+    ]);
+    $this->poolRepository->save($record);
+    $this->logger->notice('POOL fresh provision started contract={contract} host={host}', [
+      'contract' => $contractId,
+      'host' => (string) ($record['host_id'] ?? ''),
+    ]);
+  }
+
+  /**
+   * Updates a provisional fresh contract row after SSH bootstrap completes.
+   *
+   * @param string $contractId
+   *   Vast contract ID.
+   * @param array<string,mixed> $definition
+   *   Requested workload definition.
+   * @param string $image
+   *   Generic image tag.
+   * @param array<string,mixed> $instanceInfo
+   *   Vast instance metadata returned after bootstrap.
+   *
+   * @return array<string,mixed>
+   *   Updated pool record.
+   */
+  private function recordFreshProvisioningBootstrapped(
+    string $contractId,
+    array $definition,
+    string $image,
+    array $instanceInfo,
+  ): array {
+    $record = $this->poolRepository->get($contractId) ?? [];
+    $record = array_merge($record, [
+      'contract_id' => $contractId,
+      'image' => $image,
+      'current_workload_mode' => (string) ($definition['mode'] ?? ''),
+      'current_model' => (string) ($definition['model'] ?? ''),
+      'lease_status' => 'bootstrapping',
+      'host' => trim((string) ($instanceInfo['public_ipaddr'] ?? ($record['host'] ?? ''))),
+      'host_id' => trim((string) ($instanceInfo['host_id'] ?? ($record['host_id'] ?? ''))),
+      'port' => $this->extractPublicPort($instanceInfo) ?: (string) ($record['port'] ?? ''),
+      'url' => $this->buildPublicUrl($instanceInfo) ?: (string) ($record['url'] ?? ''),
+      'source' => 'fresh_fallback',
+      'runtime_state' => 'running',
+      'vast_cur_state' => (string) ($instanceInfo['cur_state'] ?? ($record['vast_cur_state'] ?? '')),
+      'vast_actual_status' => (string) ($instanceInfo['actual_status'] ?? ($record['vast_actual_status'] ?? '')),
+      'last_phase' => 'ssh_bootstrap',
+      'last_action' => 'SSH bootstrap complete',
+      'last_seen_at' => time(),
+      'last_used_at' => time(),
+      'last_error' => '',
+    ]);
+    $this->poolRepository->save($record);
+    return $record;
   }
 
   /**

@@ -59,6 +59,94 @@ final class FramesmithVllmPoolLeaseManagerTest extends TestCase {
   }
 
   /**
+   * @covers ::acquireWhisperRuntime
+   */
+  public function testAcquireWhisperRuntimeDoesNotSpendProgressingHostBudgetOnPriorVastWork(): void {
+    $clock = new ScriptedAcquireClock();
+    $readyRecord = [
+      'contract_id' => '36045574',
+      'lease_token' => 'lease-token-36045574',
+      'host' => '1.2.3.4',
+      'port' => '22097',
+      'url' => 'http://1.2.3.4:22097',
+      'current_workload_mode' => 'whisper',
+      'current_model' => 'openai/whisper-large-v3-turbo',
+    ];
+    $broker = new ScriptedVastLifecycleLeaseBroker($clock, [
+      [
+        'advance' => 540,
+        'exception' => $this->pendingProgress(
+          '36045449',
+          'ssh_bootstrap',
+          'Waiting for first Vast host to bootstrap',
+        ),
+      ],
+      [
+        'advance' => 320,
+        'exception' => $this->pendingProgress(
+          '36045574',
+          'ssh_bootstrap',
+          'Waiting for replacement Vast host to bootstrap',
+        ),
+      ],
+      [
+        'advance' => 30,
+        'exception' => $this->pendingProgress(
+          '36045574',
+          'start_workload',
+          'start-model succeeded; waiting for /v1/models',
+        ),
+      ],
+      [
+        'advance' => 60,
+        'exception' => $this->pendingProgress(
+          '36045574',
+          'workload_ready_probe',
+          'API not listening yet on :8000',
+        ),
+      ],
+      [
+        'advance' => 40,
+        'result' => $readyRecord,
+      ],
+    ]);
+
+    $manager = new FramesmithVllmPoolLeaseManager(
+      $broker,
+      900,
+      0,
+      1800,
+      [$clock, 'now'],
+      [$clock, 'sleep'],
+    );
+
+    $lease = $manager->acquireWhisperRuntime();
+
+    self::assertSame('36045574', $lease['contract_id']);
+    self::assertSame(990, $clock->now());
+    self::assertSame(5, $broker->acquireCallCount());
+  }
+
+  /**
+   * Builds a retryable progress exception for scripted Vast lifecycle tests.
+   */
+  private function pendingProgress(string $contractId, string $phase, string $result): AcquirePendingException {
+    return AcquirePendingException::fromProgress(
+      'Step pending: ' . $result,
+      $contractId,
+      [
+        'step' => $phase === 'workload_ready_probe' ? 4 : 2,
+        'step_total' => 4,
+        'label' => $phase,
+        'result' => $result,
+        'next' => 'retry',
+        'phase' => $phase,
+        'action' => $result,
+      ],
+    );
+  }
+
+  /**
    * @covers ::releaseRuntime
    */
   public function testReleaseRuntimeDelegatesToPoolBroker(): void {
@@ -190,6 +278,107 @@ final class QueuedVllmPoolLeaseBroker implements VllmPoolLeaseBrokerInterface {
    */
   public function releaseCalls(): array {
     return $this->releaseCalls;
+  }
+
+}
+
+/**
+ * Deterministic clock for Vast lifecycle tests.
+ */
+final class ScriptedAcquireClock {
+
+  public function __construct(private int $now = 0) {}
+
+  /**
+   * Returns current simulated timestamp.
+   */
+  public function now(): int {
+    return $this->now;
+  }
+
+  /**
+   * Advances simulated time.
+   */
+  public function advance(int $seconds): void {
+    $this->now += max(0, $seconds);
+  }
+
+  /**
+   * Sleep callback used by FramesmithVllmPoolLeaseManager.
+   */
+  public function sleep(int $seconds): void {
+    $this->advance($seconds);
+  }
+
+}
+
+/**
+ * Scripted Vast/vLLM lease broker for progress-budget tests.
+ */
+final class ScriptedVastLifecycleLeaseBroker implements VllmPoolLeaseBrokerInterface {
+
+  /**
+   * Recorded acquire calls.
+   *
+   * @var array<int,array<string,mixed>>
+   */
+  private array $acquireCalls = [];
+
+  /**
+   * Constructs the scripted broker.
+   *
+   * @param \Drupal\Tests\compute_orchestrator\Unit\ScriptedAcquireClock $clock
+   *   Simulated clock shared with the lease manager.
+   * @param array<int,array<string,mixed>> $events
+   *   Each event may contain advance, exception, or result.
+   */
+  public function __construct(
+    private readonly ScriptedAcquireClock $clock,
+    private array $events,
+  ) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public function acquire(
+    string $workload,
+    ?string $modelOverride = NULL,
+    bool $allowFresh = TRUE,
+    ?int $bootstrapTimeoutSeconds = NULL,
+    ?int $workloadTimeoutSeconds = NULL,
+  ): array {
+    $this->acquireCalls[] = [
+      'workload' => $workload,
+      'bootstrap_timeout' => $bootstrapTimeoutSeconds,
+      'workload_timeout' => $workloadTimeoutSeconds,
+      'at' => $this->clock->now(),
+    ];
+    if ($this->events === []) {
+      throw new \RuntimeException('Scripted Vast lifecycle exhausted.');
+    }
+    $event = array_shift($this->events);
+    $this->clock->advance((int) ($event['advance'] ?? 0));
+    if (($event['exception'] ?? NULL) instanceof \Throwable) {
+      throw $event['exception'];
+    }
+    if (isset($event['result']) && is_array($event['result'])) {
+      return $event['result'];
+    }
+    throw new \RuntimeException('Invalid scripted Vast lifecycle event.');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function release(string $contractId): array {
+    return ['contract_id' => $contractId, 'lease_status' => 'available'];
+  }
+
+  /**
+   * Returns acquire call count.
+   */
+  public function acquireCallCount(): int {
+    return count($this->acquireCalls);
   }
 
 }

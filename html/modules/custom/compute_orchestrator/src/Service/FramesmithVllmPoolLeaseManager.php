@@ -11,11 +11,27 @@ use Drupal\compute_orchestrator\Exception\AcquirePendingException;
  */
 final class FramesmithVllmPoolLeaseManager implements FramesmithRuntimeLeaseManagerInterface {
 
+  /**
+   * Current-time provider used by deterministic Vast lifecycle tests.
+   */
+  private \Closure $now;
+
+  /**
+   * Sleep function used between acquire slices.
+   */
+  private \Closure $sleep;
+
   public function __construct(
     private readonly VllmPoolLeaseBrokerInterface $poolManager,
     private readonly int $acquireTimeoutSeconds = 900,
     private readonly int $acquireRetryDelaySeconds = 5,
-  ) {}
+    private readonly int $absoluteAcquireTimeoutSeconds = 1800,
+    ?callable $now = NULL,
+    ?callable $sleep = NULL,
+  ) {
+    $this->now = \Closure::fromCallable($now ?? static fn(): int => time());
+    $this->sleep = \Closure::fromCallable($sleep ?? static fn(int $seconds): mixed => sleep($seconds));
+  }
 
   /**
    * {@inheritdoc}
@@ -39,10 +55,16 @@ final class FramesmithVllmPoolLeaseManager implements FramesmithRuntimeLeaseMana
    *   Ready pool record.
    */
   private function acquireWhisperRuntimeUntilReady(): array {
-    $deadline = time() + max(1, $this->acquireTimeoutSeconds);
+    $startedAt = $this->currentTime();
+    $stallDeadline = $startedAt + max(1, $this->acquireTimeoutSeconds);
+    $absoluteDeadline = $startedAt + max(
+      $this->acquireTimeoutSeconds,
+      $this->absoluteAcquireTimeoutSeconds,
+    );
     $lastPending = NULL;
+    $lastProgressFingerprint = '';
 
-    while (time() < $deadline) {
+    while ($this->currentTime() < $stallDeadline && $this->currentTime() < $absoluteDeadline) {
       try {
         return $this->poolManager->acquire(
           'whisper',
@@ -54,7 +76,12 @@ final class FramesmithVllmPoolLeaseManager implements FramesmithRuntimeLeaseMana
       }
       catch (AcquirePendingException $exception) {
         $lastPending = $exception;
-        $this->waitBeforeNextAcquireSlice($deadline);
+        $fingerprint = $this->progressFingerprint($exception);
+        if ($fingerprint !== '' && $fingerprint !== $lastProgressFingerprint) {
+          $lastProgressFingerprint = $fingerprint;
+          $stallDeadline = $this->currentTime() + max(1, $this->acquireTimeoutSeconds);
+        }
+        $this->waitBeforeNextAcquireSlice(min($stallDeadline, $absoluteDeadline));
       }
     }
 
@@ -62,17 +89,47 @@ final class FramesmithVllmPoolLeaseManager implements FramesmithRuntimeLeaseMana
   }
 
   /**
+   * Builds a stable fingerprint for meaningful acquire progress.
+   *
+   * The Framesmith runner should not spend one global deadline across several
+   * different Vast phases. A replacement contract, SSH bootstrap progress,
+   * start-model success, or movement into API readiness is new work and resets
+   * the stall timer. Repeating the same "API not listening" observation does
+   * not reset forever; the separate absolute deadline still prevents runaway
+   * cost if a host keeps pretending to make progress.
+   */
+  private function progressFingerprint(AcquirePendingException $exception): string {
+    $progress = $exception->getProgress();
+    $bits = [
+      (string) ($exception->getContractId() ?? ''),
+      (string) ($progress['phase'] ?? ''),
+      (string) ($progress['action'] ?? ''),
+      (string) ($progress['step'] ?? ''),
+      (string) ($progress['label'] ?? ''),
+      (string) ($progress['next'] ?? ''),
+    ];
+    return implode('|', $bits);
+  }
+
+  /**
    * Waits between retryable acquire slices without sleeping past the deadline.
    */
   private function waitBeforeNextAcquireSlice(int $deadline): void {
-    $remainingSeconds = $deadline - time();
+    $remainingSeconds = $deadline - $this->currentTime();
     if ($remainingSeconds <= 0) {
       return;
     }
     $sleepSeconds = min(max(0, $this->acquireRetryDelaySeconds), $remainingSeconds);
     if ($sleepSeconds > 0) {
-      sleep($sleepSeconds);
+      ($this->sleep)($sleepSeconds);
     }
+  }
+
+  /**
+   * Returns the current timestamp from the injected clock.
+   */
+  private function currentTime(): int {
+    return (int) ($this->now)();
   }
 
   /**
